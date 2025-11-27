@@ -1,0 +1,229 @@
+
+// components/Dashboard.tsx
+import React, { useMemo } from 'react';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import type { Entry, Settings, User, Member, MonthLock } from '../types';
+import { formatCurrency, capitalize, isMonthLocked } from '../utils';
+
+interface DashboardProps {
+    entries: Entry[];
+    members: Member[];
+    settings: Settings;
+    currentUser: User;
+    monthLocks?: MonthLock[];
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [] }) => {
+    
+    // --- Data Processing ---
+    const activeEntries = entries.filter(e => !e.deleted);
+    const totalContribution = activeEntries.reduce((acc, entry) => acc + entry.amount, 0);
+    const totalEntries = activeEntries.length;
+
+    const contributionByType: Record<string, number> = {};
+    for (const entry of activeEntries) {
+        contributionByType[entry.type] = (contributionByType[entry.type] || 0) + entry.amount;
+    }
+
+    const pieData = useMemo(() => {
+        return Object.entries(contributionByType)
+            .map(([name, value]) => ({
+                name: capitalize(name.replace('-', ' ')),
+                value,
+            }))
+            .sort((a, b) => b.value - a.value);
+    }, [contributionByType]);
+
+    const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#8b5cf6'];
+
+    const monthlyData = useMemo(() => {
+        const data: { [key: string]: number } = {};
+        for (const entry of activeEntries) {
+            const monthKey = entry.date.substring(0, 7);
+            data[monthKey] = (data[monthKey] || 0) + entry.amount;
+        }
+
+        return Object.keys(data)
+            .sort()
+            .map(monthKey => ({
+                name: new Date(`${monthKey}-02`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+                Total: data[monthKey],
+            }));
+    }, [activeEntries]);
+
+    // --- Notification / Alerts Logic ---
+    const notifications = useMemo(() => {
+        const alerts = [];
+        const currentMonth = new Date().toISOString().substring(0, 7);
+        const lastMonth = new Date();
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+        const lastMonthKey = lastMonth.toISOString().substring(0, 7);
+
+        // 1. Lock Status
+        const isCurrentLocked = isMonthLocked(currentMonth + "-01", monthLocks);
+        const isLastLocked = isMonthLocked(lastMonthKey + "-01", monthLocks);
+        
+        if (!isLastLocked) alerts.push({ type: 'warning', msg: `${lastMonth.toLocaleDateString('en-US', {month: 'long'})} is still UNLOCKED. Remember to close the month.`});
+        if (isCurrentLocked) alerts.push({ type: 'info', msg: `Current month (${new Date().toLocaleDateString('en-US', {month: 'long'})}) is LOCKED.`});
+
+        // 2. New Members
+        const recentMembers = members.filter(m => {
+            if (!m.createdAt) return false;
+            const created = new Date(m.createdAt);
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            return created > sevenDaysAgo;
+        });
+
+        if (recentMembers.length > 0) {
+            alerts.push({ type: 'success', msg: `${recentMembers.length} new member(s) added this week.`});
+        }
+
+        return alerts;
+    }, [monthLocks, members]);
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-white p-2 border border-slate-200 rounded shadow-sm">
+                    <p className="font-bold">{label}</p>
+                    <p className="text-indigo-600">{`${payload[0].name}: ${formatCurrency(payload[0].value, settings.currency)}`}</p>
+                </div>
+            );
+        }
+        return null;
+    };
+
+
+    return (
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+            
+            {/* Notification Panel (Admin/Chair Only) */}
+            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200/80 p-6 mb-6">
+                    <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                        Administrative Alerts
+                    </h3>
+                    {notifications.length > 0 ? (
+                        <div className="space-y-3">
+                            {notifications.map((n, idx) => (
+                                <div key={idx} className={`p-3 rounded-lg border flex items-center gap-3 ${
+                                    n.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                                    n.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+                                    'bg-blue-50 border-blue-200 text-blue-800'
+                                }`}>
+                                    <span className="text-lg font-bold">•</span>
+                                    <span className="font-medium">{n.msg}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-slate-400 italic">No pending alerts.</p>
+                    )}
+                </div>
+            )}
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
+                    <h3 className="text-base font-medium text-slate-500">Total Contributions</h3>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{formatCurrency(totalContribution, settings.currency)}</p>
+                </div>
+                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
+                    <h3 className="text-base font-medium text-slate-500">Total Entries</h3>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{totalEntries.toLocaleString()}</p>
+                </div>
+                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
+                    <h3 className="text-base font-medium text-slate-500">Avg. per Entry</h3>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{totalEntries > 0 ? formatCurrency(totalContribution / totalEntries, settings.currency) : '$0.00'}</p>
+                </div>
+            </div>
+            
+            {/* Monthly Trend Chart */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 px-2">Monthly Contribution Trend</h3>
+                {monthlyData.length > 0 ? (
+                    <div style={{ width: '100%', height: 300 }}>
+                        <ResponsiveContainer>
+                            <BarChart data={monthlyData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="name" />
+                                <YAxis tickFormatter={(tick) => formatCurrency(tick, settings.currency).replace('.00', '')} />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Bar dataKey="Total" fill="#4f46e5" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <p className="text-slate-500 text-center py-12">No data available to display trend chart.</p>
+                )}
+            </div>
+
+            {/* Recent Entries & Breakdown (Hidden for Pastor Role if required, but showing aggregate pie chart is usually fine) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/80">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">Contribution by Type</h3>
+                    {pieData.length > 0 ? (
+                        <div style={{ width: '100%', height: 300 }}>
+                            <ResponsiveContainer>
+                                <PieChart>
+                                    <Pie
+                                        data={pieData}
+                                        cx="50%"
+                                        cy="50%"
+                                        labelLine={false}
+                                        outerRadius={100}
+                                        fill="#8884d8"
+                                        dataKey="value"
+                                        nameKey="name"
+                                    >
+                                        {pieData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip formatter={(value: number) => formatCurrency(value, settings.currency)} />
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                         <p className="text-slate-500 text-center py-12">No contributions recorded yet.</p>
+                    )}
+                </div>
+                
+                {/* Hide recent entries list for Pastor role for privacy */}
+                {currentUser.role !== 'pastor' && (
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
+                        <h3 className="text-lg font-bold text-slate-800 mb-4 px-2">Recent Entries</h3>
+                        <div className="overflow-y-auto max-h-64">
+                            <table className="w-full text-left">
+                                <thead className="text-sm text-slate-500 sticky top-0 bg-white z-10">
+                                    <tr>
+                                        <th className="px-2 py-2">Date</th>
+                                        <th className="px-2 py-2">Member</th>
+                                        <th className="px-2 py-2">Type</th>
+                                        <th className="px-2 py-2 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {activeEntries.slice(0, 5).map(entry => (
+                                        <tr key={entry.id} className="border-t border-slate-100">
+                                            <td className="px-2 py-3 text-slate-600">{entry.date}</td>
+                                            <td className="px-2 py-3 font-medium text-slate-800">{entry.memberName}</td>
+                                            <td className="px-2 py-3 text-slate-600 capitalize">{entry.type.replace('-', ' ')}</td>
+                                            <td className="px-2 py-3 text-right font-medium text-slate-800">{formatCurrency(entry.amount, settings.currency)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default Dashboard;

@@ -1,0 +1,5 @@
+{
+  "name": "GMCT Management System",
+  "description": "A comprehensive tool for managing GMCT records, including contributions, members, and insights. Features include data import/export, dashboard summaries, and optional OneDrive synchronization.",
+  "requestFramePermissions": []
+}
