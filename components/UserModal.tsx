@@ -1,38 +1,47 @@
 
 // components/UserModal.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import type { User, UserRole, Member } from '../types';
-import { sanitizeUser, sanitizeString } from '../utils';
+import type { User, UserRole } from '../types';
 
 interface UserModalProps {
     user: User | null;
-    members: Member[];
-    onSave: (user: User) => void;
+    users: User[];
+    onSave: (user: User, originalUsername?: string | null) => void;
     onClose: () => void;
 }
 
-const UserModal: React.FC<UserModalProps> = ({ user, members, onSave, onClose }) => {
+const EMPTY_USER: User = { username: '', password: '', role: 'finance-team', classLed: '' };
+
+const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) => {
     // Fix: Default to empty object instead of sanitizing invalid to prevent "InvalidUser" default
-    const [formData, setFormData] = useState<User>(user || { username: '', password: '', role: 'finance-team', classLed: '' });
+    const [formData, setFormData] = useState<User>(user || EMPTY_USER);
+    const [showPassword, setShowPassword] = useState(false);
     const isEditing = !!user;
 
     useEffect(() => {
         if (user) {
-            setFormData(user);
+            setFormData({ ...EMPTY_USER, ...user });
+            setShowPassword(false);
+        } else {
+            setFormData(EMPTY_USER);
+            setShowPassword(false);
         }
-        // Don't reset if adding new, allows user to type
     }, [user]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        
-        // Auto-fill class number if selecting a member for Class Leader role
-        if (name === 'username' && formData.role === 'class-leader') {
-            const member = members.find(m => m.name.toLowerCase() === value.toLowerCase());
-            if (member && member.classNumber) {
-                setFormData(prev => ({ ...prev, classLed: member.classNumber }));
+
+        if (name === 'username') {
+            const matchedUser = users.find(u => u.username.toLowerCase() === value.toLowerCase());
+            if (matchedUser) {
+                setFormData(prev => ({ ...prev, role: matchedUser.role, classLed: matchedUser.classLed || '' }));
+                return;
             }
+        }
+
+        if (name === 'role' && !formData.username) {
+            setFormData(prev => ({ ...prev, username: value }));
         }
     };
 
@@ -46,13 +55,13 @@ const UserModal: React.FC<UserModalProps> = ({ user, members, onSave, onClose })
             alert("Username is required.");
             return;
         }
-        onSave(formData);
+        onSave(formData, user?.username || null);
     };
-    
-    // Sort members for dropdown
-    const sortedMembers = useMemo(() => {
-        return [...members].sort((a,b) => a.name.localeCompare(b.name));
-    }, [members]);
+
+    // Sort users for dropdown
+    const sortedUsers = useMemo(() => {
+        return [...users].sort((a, b) => a.username.localeCompare(b.username));
+    }, [users]);
 
     const ROLES: {value: UserRole, label: string, desc: string}[] = [
         { value: 'admin', label: 'Admin', desc: 'Full System & Financial Control' },
@@ -73,37 +82,45 @@ const UserModal: React.FC<UserModalProps> = ({ user, members, onSave, onClose })
                     </div>
                     <div className="p-6 space-y-4">
                         <div>
-                            <label htmlFor="username" className="block font-medium text-gray-700">Username / Member Name</label>
+                            <label htmlFor="username" className="block font-medium text-gray-700">Username</label>
                             <input
                                 id="username"
                                 name="username"
                                 type="text"
-                                list="user-member-list"
+                                list="user-list"
                                 value={formData.username}
                                 onChange={handleChange}
                                 required
-                                disabled={isEditing}
-                                placeholder="Select Member or Type Name"
+                                placeholder="Select user or type name"
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
                             />
-                            <datalist id="user-member-list">
-                                {sortedMembers.map(m => (
-                                    <option key={m.id} value={m.name}>Class {m.classNumber || 'N/A'}</option>
+                            <datalist id="user-list">
+                                {sortedUsers.map(u => (
+                                    <option key={u.username} value={u.username}>{u.role}</option>
                                 ))}
                             </datalist>
                         </div>
                         <div>
                             <label htmlFor="password" className="block font-medium text-gray-700">Password</label>
-                             <input
-                                id="password"
-                                name="password"
-                                type="password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                placeholder={isEditing ? 'Leave blank to keep unchanged' : 'Required'}
-                                required={!isEditing}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                            />
+                            <div className="relative">
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    placeholder={isEditing ? 'Leave blank to keep unchanged' : 'Required'}
+                                    required={!isEditing}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 pr-24"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(prev => !prev)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-indigo-600 hover:text-indigo-800"
+                                >
+                                    {showPassword ? 'Hide' : 'Show'}
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label htmlFor="role" className="block font-medium text-gray-700">Role</label>
@@ -122,18 +139,17 @@ const UserModal: React.FC<UserModalProps> = ({ user, members, onSave, onClose })
                         </div>
                         {formData.role === 'class-leader' && (
                             <div>
-                                <label htmlFor="classLed" className="block font-medium text-gray-700">Class Led</label>
+                                <label htmlFor="classLed" className="block font-medium text-gray-700">Class Led (optional)</label>
                                 <input
                                     id="classLed"
                                     name="classLed"
                                     type="text"
                                     value={formData.classLed || ''}
                                     onChange={handleChange}
-                                    required
                                     placeholder="e.g. 1"
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                 />
-                                <p className="text-xs text-slate-500 mt-1">If selecting a member, this may auto-fill based on their class.</p>
+                                <p className="text-xs text-slate-500 mt-1">Optional: add a class number only if you track class leaders.</p>
                             </div>
                         )}
                     </div>

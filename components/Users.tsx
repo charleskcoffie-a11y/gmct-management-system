@@ -1,7 +1,7 @@
 
 // components/Users.tsx
 import React, { useState } from 'react';
-import type { User, Member } from '../types';
+import type { User } from '../types';
 import { sanitizeString, sanitizeUserRole } from '../utils';
 import UserModal from './UserModal';
 
@@ -9,16 +9,22 @@ import UserModal from './UserModal';
 interface UsersTabProps {
     users: User[];
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-    members: Member[];
 }
 
-const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
+const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-    const handleSave = (user: User) => {
+    const handleSave = (user: User, originalUsername?: string | null) => {
         const newUsers = [...users];
-        const index = newUsers.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
+        const lookupUsername = originalUsername || user.username;
+        const index = newUsers.findIndex(u => u.username.toLowerCase() === lookupUsername.toLowerCase());
+
+        const duplicateIndex = newUsers.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
+        if (duplicateIndex > -1 && duplicateIndex !== index) {
+            alert('A user with that username already exists.');
+            return;
+        }
         
         if (index > -1) { // Edit
             const existingUser = newUsers[index];
@@ -66,7 +72,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
                             <tr key={user.username} className="bg-white border-b hover:bg-slate-50">
                                 <td className="px-6 py-4 font-medium text-slate-900">{sanitizeString(user.username)}</td>
                                 <td className="px-6 py-4 capitalize">{sanitizeUserRole(user.role).replace('-', ' ')}</td>
-                                <td className="px-6 py-4">{user.role === 'class-leader' ? `Leads Class ${sanitizeString(user.classLed)}` : ''}</td>
+                                <td className="px-6 py-4"> 
+                                    {user.role === 'class-leader' && user.classLed && (
+                                        <div className="space-y-1">
+                                            <div>Leads Class {sanitizeString(user.classLed)}</div>
+                                        </div>
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 text-right">
                                     <button onClick={() => { setSelectedUser(user); setIsModalOpen(true); }} className="font-medium text-indigo-600 hover:underline mr-4">Edit</button>
                                     <button onClick={() => handleDelete(user.username)} className="font-medium text-red-600 hover:text-red-800 hover:underline">Delete</button>
@@ -77,7 +89,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
                 </table>
             </div>
 
-            {isModalOpen && <UserModal user={selectedUser} members={members} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
+            {isModalOpen && <UserModal user={selectedUser} users={users} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
         </div>
     );
 };
