@@ -82,15 +82,11 @@ export function sanitizeMember(raw: any): Member {
 }
 
 export function sanitizeUser(raw: any): User {
-    const classNumber = sanitizeString(raw.classNumber) || sanitizeString(raw.classLed);
-    const classId = sanitizeString(raw.classId);
     return {
         username: sanitizeString(raw.username) || "InvalidUser",
         password: sanitizeString(raw.password), // Note: Password should be handled securely
         role: sanitizeUserRole(raw.role),
-        classLed: sanitizeString(raw.classLed) || classNumber,
-        classNumber,
-        classId,
+        classLed: sanitizeString(raw.classLed),
     };
 }
 

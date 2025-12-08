@@ -54,9 +54,7 @@ export interface User {
     username: string;
     password?: string; // Should be hashed in a real app, but plain for this exercise
     role: UserRole;
-    classLed?: string; // Legacy class number if role is 'class-leader'
-    classNumber?: string; // Preferred field for class number when role is class-leader
-    classId?: string; // Unique class id for class leaders (not tied to members table)
+    classLed?: string; // Class number if role is 'class-leader'
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
