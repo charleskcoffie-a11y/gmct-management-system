@@ -16,6 +16,8 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
     const [formData, setFormData] = useState<User>(user || { username: '', password: '', role: 'finance-team', classLed: '' });
     const [showPassword, setShowPassword] = useState(false);
     const isEditing = !!user;
+    const [formData, setFormData] = useState<User>({ ...EMPTY_USER, ...user, password: user ? '' : '' });
+    const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -23,6 +25,10 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
             setShowPassword(false);
         }
     }, [user]);
+
+    const sortedUsers = useMemo(() => {
+        return Array.isArray(users) ? [...users].sort((a, b) => a.username.localeCompare(b.username)) : [];
+    }, [users]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -48,12 +54,12 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!isEditing && !formData.password) {
-            alert("Password is required for new users.");
+        if (!formData.username.trim()) {
+            alert('Username is required.');
             return;
         }
-        if (!formData.username.trim()) {
-            alert("Username is required.");
+        if (!isEditing && !formData.password) {
+            alert('Password is required for new users.');
             return;
         }
         onSave(formData, user?.username || null);
@@ -64,15 +70,15 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
         return [...users].sort((a, b) => a.username.localeCompare(b.username));
     }, [users]);
 
-    const ROLES: {value: UserRole, label: string, desc: string}[] = [
-        { value: 'admin', label: 'Admin', desc: 'Full System & Financial Control' },
-        { value: 'finance-chair', label: 'Finance Chair', desc: 'Full Financial Control (No System Settings)' },
-        { value: 'finance-team', label: 'Finance Team', desc: 'Entry & Limited Edit' },
-        { value: 'data-entry', label: 'Data Entry', desc: 'Entry Only (15min edit limit)' },
-        { value: 'pastor', label: 'Pastor', desc: 'Read-Only Dashboards' },
-        { value: 'class-leader', label: 'Class Leader', desc: 'Mark Attendance Only' },
-        { value: 'statistician', label: 'Statistician', desc: 'Weekly History Only' },
-    ];
+        const payload: User = {
+            username: formData.username.trim(),
+            password: formData.password || (user?.password ?? ''),
+            role: formData.role,
+            classLed: formData.classLed || '',
+        };
+
+        onSave(payload, user?.username || null);
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
