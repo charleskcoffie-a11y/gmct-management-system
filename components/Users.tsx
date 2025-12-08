@@ -1,7 +1,7 @@
 
 // components/Users.tsx
 import React, { useState } from 'react';
-import type { User, Member } from '../types';
+import type { User } from '../types';
 import { sanitizeString, sanitizeUserRole } from '../utils';
 import UserModal from './UserModal';
 
@@ -9,16 +9,22 @@ import UserModal from './UserModal';
 interface UsersTabProps {
     users: User[];
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-    members: Member[];
 }
 
-const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
+const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-    const handleSave = (user: User) => {
+    const handleSave = (user: User, originalUsername?: string | null) => {
         const newUsers = [...users];
-        const index = newUsers.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
+        const lookupUsername = originalUsername || user.username;
+        const index = newUsers.findIndex(u => u.username.toLowerCase() === lookupUsername.toLowerCase());
+
+        const duplicateIndex = newUsers.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
+        if (duplicateIndex > -1 && duplicateIndex !== index) {
+            alert('A user with that username already exists.');
+            return;
+        }
         
         if (index > -1) { // Edit
             const existingUser = newUsers[index];
