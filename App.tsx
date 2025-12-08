@@ -22,19 +22,19 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock } from './types';
-import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES } from './constants';
+import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
     { username: 'Admin', password: 'GMCT', role: 'admin' },
 ];
-const INITIAL_SETTINGS: Settings = { 
-    currency: DEFAULT_CURRENCY, 
-    maxClasses: DEFAULT_MAX_CLASSES, 
-    enforceDirectory: true, 
-    supabaseUrl: '', 
-    supabaseKey: '' 
+const INITIAL_SETTINGS: Settings = {
+    currency: DEFAULT_CURRENCY,
+    maxClasses: DEFAULT_MAX_CLASSES,
+    enforceDirectory: true,
+    supabaseUrl: SUPABASE_URL,
+    supabaseKey: SUPABASE_KEY
 };
 
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
@@ -231,7 +231,7 @@ const App: React.FC = () => {
     };
     
     if (!currentUser) {
-        return <Login onLogin={handleLogin} error={loginError} />;
+        return <Login users={users} onLogin={handleLogin} error={loginError} />;
     }
 
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "other"];

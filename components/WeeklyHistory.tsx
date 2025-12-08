@@ -44,6 +44,8 @@ const SERVICE_TYPES = [
 const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) => {
     const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
     const [formData, setFormData] = useState<WeeklyHistoryRecord>(initialFormState());
+    const [yearFilter, setYearFilter] = useState<string>('all');
+    const [monthFilter, setMonthFilter] = useState<string>('all');
 
     // Local state for adding new visitor/donation rows
     const [newVisitor, setNewVisitor] = useState<VisitorRecord>({ name: '', from: '', position: '', reason: '' });
@@ -58,8 +60,25 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
         }
     }, [selectedRecordId, history]);
     
+    const filteredHistory = useMemo(() => {
+        return history.filter(rec => {
+            const year = rec.dateOfService.slice(0, 4);
+            const month = rec.dateOfService.slice(5, 7);
+
+            if (yearFilter !== 'all' && year !== yearFilter) return false;
+            if (monthFilter !== 'all' && month !== monthFilter) return false;
+            return true;
+        });
+    }, [history, yearFilter, monthFilter]);
+
     const sortedHistory = useMemo(() => {
-        return [...history].sort((a, b) => b.dateOfService.localeCompare(a.dateOfService));
+        return [...filteredHistory].sort((a, b) => b.dateOfService.localeCompare(a.dateOfService));
+    }, [filteredHistory]);
+
+    const availableYears = useMemo(() => {
+        const years = new Set<string>();
+        history.forEach(rec => years.add(rec.dateOfService.slice(0, 4)));
+        return Array.from(years).sort((a, b) => b.localeCompare(a));
     }, [history]);
 
     const totalAttendance = useMemo(() => {
@@ -81,7 +100,12 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
         const { value, checked } = e.target;
         const currentTypes = formData.serviceTypes;
         const newTypes = checked ? [...currentTypes, value] : currentTypes.filter(t => t !== value);
-        setFormData(prev => ({ ...prev, serviceTypes: newTypes }));
+
+        setFormData(prev => ({
+            ...prev,
+            serviceTypes: newTypes,
+            serviceTypeOther: value === 'Other' && !checked ? '' : prev.serviceTypeOther
+        }));
     };
 
     const handleAttendanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,10 +172,30 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                 <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-slate-800">History Log</h2>
                 </div>
-                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-4">
+                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-4 space-y-4">
                     <button onClick={handleAddNew} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-xl mb-6 shadow-md transition-all text-lg flex items-center justify-center gap-2">
                         <span className="text-2xl">+</span> New Record
                     </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-600 mb-1">Filter by Year</label>
+                            <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm bg-slate-50">
+                                <option value="all">All Years</option>
+                                {availableYears.map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-600 mb-1">Filter by Month</label>
+                            <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm bg-slate-50">
+                                <option value="all">All Months</option>
+                                {["01","02","03","04","05","06","07","08","09","10","11","12"].map(month => (
+                                    <option key={month} value={month}>Month {month}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
                     <ul className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
                         {sortedHistory.map(rec => (
                             <li key={rec.id}>
@@ -213,7 +257,17 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                             <span className={`ml-3 text-lg font-bold ${formData.serviceTypes.includes(type) ? 'text-indigo-900' : 'text-slate-600'}`}>{type}</span>
                                         </label>
                                     ))}
+                                    <label className={`flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.serviceTypes.includes('Other') ? 'bg-indigo-100 border-indigo-500 shadow-md' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'}`}>
+                                        <input type="checkbox" value="Other" checked={formData.serviceTypes.includes('Other')} onChange={handleServiceTypeChange} className="w-6 h-6 text-indigo-600 rounded focus:ring-indigo-500"/>
+                                        <span className={`ml-3 text-lg font-bold ${formData.serviceTypes.includes('Other') ? 'text-indigo-900' : 'text-slate-600'}`}>Other</span>
+                                    </label>
                                 </div>
+                                {formData.serviceTypes.includes('Other') && (
+                                    <div className="mt-4">
+                                        <label className={labelClass}>Other Service Type</label>
+                                        <input type="text" name="serviceTypeOther" value={formData.serviceTypeOther} onChange={handleChange} className={inputClass} placeholder="Describe other service" />
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -274,7 +328,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                             </div>
 
                             {formData.visitorsList.length > 0 ? (
-                                <div className="overflow-x-auto">
+                                <div className="overflow-x-auto max-h-96 overflow-y-auto">
                                     <table className="w-full text-base text-left text-slate-700 mb-8">
                                         <thead className="bg-slate-100 text-slate-800 font-extrabold uppercase text-sm">
                                             <tr>
