@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { ChurchIcon } from './icons';
+import type { User } from '../types';
 
 interface LoginProps {
+    users: User[];
     onLogin: (username: string, password: string) => void;
     error: string | null;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
+const Login: React.FC<LoginProps> = ({ users, onLogin, error }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
 
@@ -32,16 +34,19 @@ const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
                         <div>
                             <label htmlFor="username" className="block font-medium text-slate-700">Username</label>
                             <div className="mt-1">
-                                <input
+                                <select
                                     id="username"
                                     name="username"
-                                    type="text"
-                                    autoComplete="username"
                                     required
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-base"
-                                />
+                                    className="appearance-none block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-base bg-white"
+                                >
+                                    <option value="" disabled>Select user</option>
+                                    {users.map(user => (
+                                        <option key={user.username} value={user.username}>{user.username}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 
