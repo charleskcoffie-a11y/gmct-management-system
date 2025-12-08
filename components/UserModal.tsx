@@ -1,29 +1,25 @@
 
 // components/UserModal.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import type { User, UserRole } from '../types';
+import type { User, UserRole, Member } from '../types';
 
 interface UserModalProps {
     user: User | null;
     users: User[];
-    onSave: (user: User, originalUsername?: string | null) => void;
+    members: Member[];
+    onSave: (user: User) => void;
     onClose: () => void;
 }
 
-const EMPTY_USER: User = { username: '', password: '', role: 'finance-team', classLed: '', classNumber: '', classId: '' };
-
-const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) => {
+const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onClose }) => {
     // Fix: Default to empty object instead of sanitizing invalid to prevent "InvalidUser" default
-    const [formData, setFormData] = useState<User>(user || EMPTY_USER);
+    const [formData, setFormData] = useState<User>(user || { username: '', password: '', role: 'finance-team', classLed: '' });
     const [showPassword, setShowPassword] = useState(false);
     const isEditing = !!user;
 
     useEffect(() => {
         if (user) {
-            setFormData({ ...EMPTY_USER, ...user });
-            setShowPassword(false);
-        } else {
-            setFormData(EMPTY_USER);
+            setFormData(user);
             setShowPassword(false);
         }
     }, [user]);
@@ -35,8 +31,13 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) =
         if (name === 'username') {
             const matchedUser = users.find(u => u.username.toLowerCase() === value.toLowerCase());
             if (matchedUser) {
-                setFormData(prev => ({ ...prev, role: matchedUser.role, classLed: matchedUser.classLed || '', classNumber: matchedUser.classNumber || matchedUser.classLed || '', classId: matchedUser.classId || '' }));
+                setFormData(prev => ({ ...prev, role: matchedUser.role, classLed: matchedUser.classLed || '' }));
                 return;
+            }
+
+            const member = members.find(m => m.name.toLowerCase() === value.toLowerCase());
+            if (member) {
+                setFormData(prev => ({ ...prev, role: 'class-leader', classLed: member.classNumber || '' }));
             }
 
         }
@@ -56,19 +57,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) =
             alert("Username is required.");
             return;
         }
-        const payload: User = {
-            ...formData,
-            classLed: formData.classNumber || formData.classLed || '',
-            classNumber: formData.classNumber || formData.classLed || '',
-            classId: formData.classId || ''
-        };
-
-        if (payload.role === 'class-leader' && (!payload.classNumber || !payload.classId)) {
-            alert("Class Leaders require both a Class Number and Class ID.");
-            return;
-        }
-
-        onSave(payload, user?.username || null);
+        onSave(formData, user?.username || null);
     };
 
     // Sort users for dropdown
@@ -151,35 +140,19 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) =
                             </p>
                         </div>
                         {formData.role === 'class-leader' && (
-                            <div className="space-y-3">
-                                <div>
-                                    <label htmlFor="classNumber" className="block font-medium text-gray-700">Class Number</label>
-                                    <input
-                                        id="classNumber"
-                                        name="classNumber"
-                                        type="text"
-                                        value={formData.classNumber || ''}
-                                        onChange={handleChange}
-                                        required
-                                        placeholder="e.g. 1"
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">Provide the class number led by this user.</p>
-                                </div>
-                                <div>
-                                    <label htmlFor="classId" className="block font-medium text-gray-700">Class ID</label>
-                                    <input
-                                        id="classId"
-                                        name="classId"
-                                        type="text"
-                                        value={formData.classId || ''}
-                                        onChange={handleChange}
-                                        required
-                                        placeholder="Unique class identifier"
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">Add the class ID since users are not linked to members.</p>
-                                </div>
+                            <div>
+                                <label htmlFor="classLed" className="block font-medium text-gray-700">Class Led</label>
+                                <input
+                                    id="classLed"
+                                    name="classLed"
+                                    type="text"
+                                    value={formData.classLed || ''}
+                                    onChange={handleChange}
+                                    required
+                                    placeholder="e.g. 1"
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">Provide the class number led by this user when assigning the Class Leader role.</p>
                             </div>
                         )}
                     </div>
