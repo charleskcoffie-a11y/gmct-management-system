@@ -146,14 +146,16 @@ const mapUserToDB = (u: User) => ({
     username: u.username,
     password: u.password,
     role: u.role,
-    class_led: u.classLed
+    class_led: u.classNumber || u.classLed
 });
 
 const mapUserFromDB = (u: any): User => ({
     username: u.username,
     password: u.password,
     role: u.role,
-    classLed: u.class_led
+    classLed: u.class_led,
+    classNumber: u.class_led,
+    classId: u.class_id
 });
 
 const mapHistoryToDB = (h: WeeklyHistoryRecord) => ({

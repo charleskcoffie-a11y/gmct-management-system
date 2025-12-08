@@ -22,7 +22,6 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
             setFormData(user);
             setShowPassword(false);
         }
-        // Don't reset if adding new, allows user to type
     }, [user]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

@@ -27,7 +27,8 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
 
     const viewTitle = useMemo(() => {
         if (currentUser.role === 'class-leader') {
-            return `Attendance Report for Class ${sanitizeString(currentUser.classLed)}`;
+            const classNumber = currentUser.classNumber || currentUser.classLed;
+            return `Attendance Report for Class ${sanitizeString(classNumber)}`;
         }
         return 'Attendance Report';
     }, [currentUser]);
@@ -53,7 +54,8 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
     // 1. Filter Members based on role/selection
     const filteredMembers = useMemo(() => {
         if (currentUser.role === 'class-leader') {
-            return members.filter(m => m.classNumber === currentUser.classLed);
+            const classNumber = currentUser.classNumber || currentUser.classLed;
+            return members.filter(m => m.classNumber === classNumber);
         }
         if (classFilter === 'all') {
             return members;

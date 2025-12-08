@@ -72,7 +72,14 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
                             <tr key={user.username} className="bg-white border-b hover:bg-slate-50">
                                 <td className="px-6 py-4 font-medium text-slate-900">{sanitizeString(user.username)}</td>
                                 <td className="px-6 py-4 capitalize">{sanitizeUserRole(user.role).replace('-', ' ')}</td>
-                                <td className="px-6 py-4">{user.role === 'class-leader' ? `Leads Class ${sanitizeString(user.classLed)}` : ''}</td>
+                                <td className="px-6 py-4">
+                                    {user.role === 'class-leader' && (
+                                        <div className="space-y-1">
+                                            <div>Leads Class {sanitizeString(user.classNumber || user.classLed)}</div>
+                                            {user.classId && <div className="text-sm text-slate-500">Class ID: {sanitizeString(user.classId)}</div>}
+                                        </div>
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 text-right">
                                     <button onClick={() => { setSelectedUser(user); setIsModalOpen(true); }} className="font-medium text-indigo-600 hover:underline mr-4">Edit</button>
                                     <button onClick={() => handleDelete(user.username)} className="font-medium text-red-600 hover:text-red-800 hover:underline">Delete</button>
