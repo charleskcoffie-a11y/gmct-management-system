@@ -1,16 +1,17 @@
 
 // components/UserModal.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import type { User, UserRole } from '../types';
+import type { User, UserRole, Member } from '../types';
 
 interface UserModalProps {
     user: User | null;
     users: User[];
-    onSave: (user: User, originalUsername?: string | null) => void;
+    members: Member[];
+    onSave: (user: User) => void;
     onClose: () => void;
 }
 
-const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) => {
+const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onClose }) => {
     // Fix: Default to empty object instead of sanitizing invalid to prevent "InvalidUser" default
     const [formData, setFormData] = useState<User>(user || { username: '', password: '', role: 'finance-team', classLed: '' });
     const [showPassword, setShowPassword] = useState(false);
@@ -33,6 +34,11 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) =
             if (matchedUser) {
                 setFormData(prev => ({ ...prev, role: matchedUser.role, classLed: matchedUser.classLed || '' }));
                 return;
+            }
+
+            const member = members.find(m => m.name.toLowerCase() === value.toLowerCase());
+            if (member) {
+                setFormData(prev => ({ ...prev, role: 'class-leader', classLed: member.classNumber || '' }));
             }
 
         }
