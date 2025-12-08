@@ -2,23 +2,25 @@
 // components/UserModal.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import type { User, UserRole, Member } from '../types';
-import { sanitizeUser, sanitizeString } from '../utils';
 
 interface UserModalProps {
     user: User | null;
+    users: User[];
     members: Member[];
     onSave: (user: User) => void;
     onClose: () => void;
 }
 
-const UserModal: React.FC<UserModalProps> = ({ user, members, onSave, onClose }) => {
+const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onClose }) => {
     // Fix: Default to empty object instead of sanitizing invalid to prevent "InvalidUser" default
     const [formData, setFormData] = useState<User>(user || { username: '', password: '', role: 'finance-team', classLed: '' });
+    const [showPassword, setShowPassword] = useState(false);
     const isEditing = !!user;
 
     useEffect(() => {
         if (user) {
             setFormData(user);
+            setShowPassword(false);
         }
         // Don't reset if adding new, allows user to type
     }, [user]);
@@ -26,12 +28,17 @@ const UserModal: React.FC<UserModalProps> = ({ user, members, onSave, onClose })
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        
-        // Auto-fill class number if selecting a member for Class Leader role
-        if (name === 'username' && formData.role === 'class-leader') {
+
+        if (name === 'username') {
+            const matchedUser = users.find(u => u.username.toLowerCase() === value.toLowerCase());
+            if (matchedUser) {
+                setFormData(prev => ({ ...prev, role: matchedUser.role, classLed: matchedUser.classLed || '' }));
+                return;
+            }
+
             const member = members.find(m => m.name.toLowerCase() === value.toLowerCase());
-            if (member && member.classNumber) {
-                setFormData(prev => ({ ...prev, classLed: member.classNumber }));
+            if (member) {
+                setFormData(prev => ({ ...prev, role: 'class-leader', classLed: member.classNumber || '' }));
             }
         }
     };
@@ -94,16 +101,25 @@ const UserModal: React.FC<UserModalProps> = ({ user, members, onSave, onClose })
                         </div>
                         <div>
                             <label htmlFor="password" className="block font-medium text-gray-700">Password</label>
-                             <input
-                                id="password"
-                                name="password"
-                                type="password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                placeholder={isEditing ? 'Leave blank to keep unchanged' : 'Required'}
-                                required={!isEditing}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                            />
+                            <div className="relative">
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    placeholder={isEditing ? 'Leave blank to keep unchanged' : 'Required'}
+                                    required={!isEditing}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 pr-24"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(prev => !prev)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-indigo-600 hover:text-indigo-800"
+                                >
+                                    {showPassword ? 'Hide' : 'Show'}
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label htmlFor="role" className="block font-medium text-gray-700">Role</label>

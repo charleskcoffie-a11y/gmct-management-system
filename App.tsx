@@ -231,7 +231,7 @@ const App: React.FC = () => {
     };
     
     if (!currentUser) {
-        return <Login onLogin={handleLogin} error={loginError} />;
+        return <Login users={users} onLogin={handleLogin} error={loginError} />;
     }
 
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "other"];

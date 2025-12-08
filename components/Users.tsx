@@ -77,7 +77,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
                 </table>
             </div>
 
-            {isModalOpen && <UserModal user={selectedUser} members={members} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
+            {isModalOpen && <UserModal user={selectedUser} users={users} members={members} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
         </div>
     );
 };
