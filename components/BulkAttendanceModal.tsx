@@ -11,7 +11,16 @@ interface BulkAttendanceModalProps {
     onClose: () => void;
 }
 
-const BulkAttendanceModal: React.FC<BulkAttendanceModalProps> = ({ members, settings, onApply, onClose }) => {
+const fallbackSettings: Settings = {
+    currency: '',
+    maxClasses: 0,
+    enforceDirectory: true,
+    supabaseUrl: '',
+    supabaseKey: ''
+};
+
+const BulkAttendanceModal: React.FC<BulkAttendanceModalProps> = (props = { members: [], settings: fallbackSettings, onApply: () => {}, onClose: () => {} }) => {
+    const { members = [], settings = fallbackSettings, onApply, onClose } = props;
     const [searchTerm, setSearchTerm] = useState('');
     const [classFilter, setClassFilter] = useState('all');
     const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
