@@ -72,10 +72,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
                             <tr key={user.username} className="bg-white border-b hover:bg-slate-50">
                                 <td className="px-6 py-4 font-medium text-slate-900">{sanitizeString(user.username)}</td>
                                 <td className="px-6 py-4 capitalize">{sanitizeUserRole(user.role).replace('-', ' ')}</td>
-                                <td className="px-6 py-4"> 
-                                    {user.role === 'class-leader' && user.classLed && (
+                                <td className="px-6 py-4">
+                                    {user.role === 'class-leader' && (
                                         <div className="space-y-1">
-                                            <div>Leads Class {sanitizeString(user.classLed)}</div>
+                                            <div>Leads Class {sanitizeString(user.classNumber || user.classLed)}</div>
+                                            {user.classId && <div className="text-sm text-slate-500">Class ID: {sanitizeString(user.classId)}</div>}
                                         </div>
                                     )}
                                 </td>
@@ -89,7 +90,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
                 </table>
             </div>
 
-            {isModalOpen && <UserModal user={selectedUser} users={users} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
+            {isModalOpen && <UserModal user={selectedUser} users={users} members={members} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
         </div>
     );
 };
