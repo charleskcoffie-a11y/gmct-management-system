@@ -1,35 +1,29 @@
 
 // components/UserModal.tsx
-import React, { useEffect, useMemo, useState } from 'react';
-import type { User, UserRole } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import type { User, UserRole, Member } from '../types';
 
 interface UserModalProps {
     user: User | null;
     users: User[];
-    onSave: (user: User, originalUsername?: string | null) => void;
+    members: Member[];
+    onSave: (user: User) => void;
     onClose: () => void;
 }
 
-const EMPTY_USER: User = { username: '', password: '', role: 'finance-team', classLed: '' };
-
-const ROLES: { value: UserRole, label: string, desc: string }[] = [
-    { value: 'admin', label: 'Admin', desc: 'Full System & Financial Control' },
-    { value: 'finance-chair', label: 'Finance Chair', desc: 'Full Financial Control (No System Settings)' },
-    { value: 'finance-team', label: 'Finance Team', desc: 'Entry & Limited Edit' },
-    { value: 'data-entry', label: 'Data Entry', desc: 'Entry Only (15min edit limit)' },
-    { value: 'pastor', label: 'Pastor', desc: 'Read-Only Dashboards' },
-    { value: 'class-leader', label: 'Class Leader', desc: 'Mark Attendance Only' },
-    { value: 'statistician', label: 'Statistician', desc: 'Weekly History Only' },
-];
-
-const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) => {
+const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onClose }) => {
+    // Fix: Default to empty object instead of sanitizing invalid to prevent "InvalidUser" default
+    const [formData, setFormData] = useState<User>(user || { username: '', password: '', role: 'finance-team', classLed: '' });
+    const [showPassword, setShowPassword] = useState(false);
     const isEditing = !!user;
     const [formData, setFormData] = useState<User>({ ...EMPTY_USER, ...user, password: user ? '' : '' });
     const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
-        setFormData({ ...EMPTY_USER, ...user, password: '' });
-        setShowPassword(false);
+        if (user) {
+            setFormData(user);
+            setShowPassword(false);
+        }
     }, [user]);
 
     const sortedUsers = useMemo(() => {
@@ -41,9 +35,15 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) =
         setFormData(prev => ({ ...prev, [name]: value }));
 
         if (name === 'username') {
-            const matched = sortedUsers.find(u => u.username.toLowerCase() === value.toLowerCase());
-            if (matched) {
-                setFormData(prev => ({ ...prev, role: matched.role, classLed: matched.classLed || '' }));
+            const matchedUser = users.find(u => u.username.toLowerCase() === value.toLowerCase());
+            if (matchedUser) {
+                setFormData(prev => ({ ...prev, role: matchedUser.role, classLed: matchedUser.classLed || '' }));
+                return;
+            }
+
+            const member = members.find(m => m.name.toLowerCase() === value.toLowerCase());
+            if (member) {
+                setFormData(prev => ({ ...prev, role: 'class-leader', classLed: member.classNumber || '' }));
             }
         }
 
@@ -62,6 +62,13 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, onSave, onClose }) =
             alert('Password is required for new users.');
             return;
         }
+        onSave(formData, user?.username || null);
+    };
+
+    // Sort users for dropdown
+    const sortedUsers = useMemo(() => {
+        return [...users].sort((a, b) => a.username.localeCompare(b.username));
+    }, [users]);
 
         const payload: User = {
             username: formData.username.trim(),
