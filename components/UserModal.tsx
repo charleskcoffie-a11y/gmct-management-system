@@ -39,11 +39,6 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
             if (member) {
                 setFormData(prev => ({ ...prev, role: 'class-leader', classLed: member.classNumber || '' }));
             }
-
-        }
-
-        if (name === 'role' && !formData.username) {
-            setFormData(prev => ({ ...prev, username: value }));
         }
     };
 
@@ -57,13 +52,13 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
             alert("Username is required.");
             return;
         }
-        onSave(formData, user?.username || null);
+        onSave(formData);
     };
-
-    // Sort users for dropdown
-    const sortedUsers = useMemo(() => {
-        return [...users].sort((a, b) => a.username.localeCompare(b.username));
-    }, [users]);
+    
+    // Sort members for dropdown
+    const sortedMembers = useMemo(() => {
+        return [...members].sort((a,b) => a.name.localeCompare(b.name));
+    }, [members]);
 
     const ROLES: {value: UserRole, label: string, desc: string}[] = [
         { value: 'admin', label: 'Admin', desc: 'Full System & Financial Control' },
@@ -84,21 +79,22 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
                     </div>
                     <div className="p-6 space-y-4">
                         <div>
-                            <label htmlFor="username" className="block font-medium text-gray-700">Username</label>
+                            <label htmlFor="username" className="block font-medium text-gray-700">Username / Member Name</label>
                             <input
                                 id="username"
                                 name="username"
                                 type="text"
-                                list="user-list"
+                                list="user-member-list"
                                 value={formData.username}
                                 onChange={handleChange}
                                 required
-                                placeholder="Select user or type name"
+                                disabled={isEditing}
+                                placeholder="Select Member or Type Name"
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
                             />
-                            <datalist id="user-list">
-                                {sortedUsers.map(u => (
-                                    <option key={u.username} value={u.username}>{u.role}</option>
+                            <datalist id="user-member-list">
+                                {sortedMembers.map(m => (
+                                    <option key={m.id} value={m.name}>Class {m.classNumber || 'N/A'}</option>
                                 ))}
                             </datalist>
                         </div>
@@ -152,7 +148,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
                                     placeholder="e.g. 1"
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                 />
-                                <p className="text-xs text-slate-500 mt-1">Provide the class number led by this user when assigning the Class Leader role.</p>
+                                <p className="text-xs text-slate-500 mt-1">If selecting a member, this may auto-fill based on their class.</p>
                             </div>
                         )}
                     </div>
