@@ -22,19 +22,19 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock } from './types';
-import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES } from './constants';
+import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
     { username: 'Admin', password: 'GMCT', role: 'admin' },
 ];
-const INITIAL_SETTINGS: Settings = { 
-    currency: DEFAULT_CURRENCY, 
-    maxClasses: DEFAULT_MAX_CLASSES, 
-    enforceDirectory: true, 
-    supabaseUrl: '', 
-    supabaseKey: '' 
+const INITIAL_SETTINGS: Settings = {
+    currency: DEFAULT_CURRENCY,
+    maxClasses: DEFAULT_MAX_CLASSES,
+    enforceDirectory: true,
+    supabaseUrl: SUPABASE_URL,
+    supabaseKey: SUPABASE_KEY
 };
 
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
@@ -231,7 +231,7 @@ const App: React.FC = () => {
     };
     
     if (!currentUser) {
-        return <Login onLogin={handleLogin} error={loginError} />;
+        return <Login users={users} onLogin={handleLogin} error={loginError} />;
     }
 
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "other"];
@@ -387,7 +387,7 @@ const App: React.FC = () => {
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries.filter(e => !e.deleted)} settings={settings} />;
             case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
-            case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} />;
+            case 'users': return <UsersTab users={users} setUsers={setUsers} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, attendance, weeklyHistory, users, developmentFund, monthLocks, setEntries, setMembers, setAttendance, setWeeklyHistory, setUsers, setDevelopmentFund, setMonthLocks}}/>;
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
