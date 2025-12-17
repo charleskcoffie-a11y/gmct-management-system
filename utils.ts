@@ -188,7 +188,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
 // --- Enum Sanitizers ---
 
 export function sanitizeEntryType(type: any): EntryType {
-    const validTypes: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "other"];
+    const validTypes: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "development-fund", "other"];
     // Backward compatibility for 'first-fruit'
     if (type === 'first-fruit') return 'thanksgiving-offering';
     return validTypes.includes(type) ? type : "other";

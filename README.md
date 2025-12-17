@@ -87,18 +87,7 @@ create table if not exists public.weekly_history (
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 6. Create Development Fund Table
-create table if not exists public.development_fund (
-    id uuid primary key default uuid_generate_v4(),
-    date date not null,
-    member_id uuid references public.members(id),
-    amount numeric,
-    description text,
-    created_by text,
-    created_at timestamp with time zone default timezone('utc'::text, now())
-);
-
--- 7. Create Users Table (for app login management)
+-- 6. Create Users Table (for app login management)
 create table if not exists public.app_users (
     username text primary key,
     password text not null,
@@ -107,7 +96,7 @@ create table if not exists public.app_users (
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 8. Create Month Locks Table
+-- 7. Create Month Locks Table
 create table if not exists public.month_locks (
     month text primary key, -- Format YYYY-MM
     is_locked boolean default false,
@@ -115,7 +104,7 @@ create table if not exists public.month_locks (
     locked_at timestamp with time zone
 );
 
--- 9. Create No Name Entries Table (for anonymous/flexible entries)
+-- 8. Create No Name Entries Table (for anonymous/flexible entries)
 create table if not exists public.no_name_entries (
     id uuid primary key default uuid_generate_v4(),
     date date not null,
@@ -127,7 +116,7 @@ create table if not exists public.no_name_entries (
     data jsonb -- For flexible JSON storage if needed
 );
 
--- 10. Configure Access Policies (Row Level Security)
+-- 9. Configure Access Policies (Row Level Security)
 alter table public.members enable row level security;
 create policy "Enable all access for anon users" on public.members for all using (true) with check (true);
 
@@ -140,9 +129,6 @@ create policy "Enable all access for anon users" on public.attendance for all us
 alter table public.weekly_history enable row level security;
 create policy "Enable all access for anon users" on public.weekly_history for all using (true) with check (true);
 
-alter table public.development_fund enable row level security;
-create policy "Enable all access for anon users" on public.development_fund for all using (true) with check (true);
-
 alter table public.app_users enable row level security;
 create policy "Enable all access for anon users" on public.app_users for all using (true) with check (true);
 
@@ -152,6 +138,32 @@ create policy "Enable all access for anon users" on public.month_locks for all u
 alter table public.no_name_entries enable row level security;
 create policy "Enable all access for anon users" on public.no_name_entries for all using (true) with check (true);
 ```
+
+### Prevent Duplicate Development Fund Entries (Optional but Recommended)
+To ensure only one Development Fund contribution per member per date, add a partial unique index on the `entries` table:
+
+```sql
+-- Prevent duplicates: same member, same date, Development Fund type
+create unique index if not exists entries_unique_devfund_per_day
+    on public.entries (date, member_id)
+    where (type = 'development-fund');
+```
+
+This index blocks duplicates at the database level. The app also checks locally and will alert the user before saving.
+
+### Prevent Duplicate Entries (All Types)
+To enforce that a member can have only one entry per date per type, add this partial unique index:
+
+```sql
+-- Prevent duplicates across all types for active (non-deleted) rows
+create unique index if not exists entries_unique_member_date_type_active
+  on public.entries (member_id, date, type)
+  where (deleted IS NOT TRUE);
+```
+
+Notes:
+- This index ignores soft-deleted rows (`deleted = TRUE`).
+- If you already have duplicates, clean them up before creating the index (keep one row per member/date/type).
 
 ### MIGRATION: If you already have tables
 Run this to add the new lock table:

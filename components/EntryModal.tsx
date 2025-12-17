@@ -11,8 +11,8 @@ interface EntryModalProps {
     settings: Settings;
     currentUser?: User | null;
     monthLocks?: MonthLock[]; // Added for lock checking
-    onSave: (entry: Entry) => void;
-    onSaveAndNew: (entry: Entry) => void;
+    onSave: (entry: Entry) => void | Promise<void>;
+    onSaveAndNew: (entry: Entry) => void | Promise<void>;
     onClose: () => void;
     onDelete: (id: string) => void;
 }
@@ -23,6 +23,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
     const [classFilter, setClassFilter] = useState('all');
     const [memberNumberInput, setMemberNumberInput] = useState('');
     const [showSuccessToast, setShowSuccessToast] = useState(false);
+    const [duplicateWarning, setDuplicateWarning] = useState<{show: boolean, type: string} | null>(null);
 
     useEffect(() => {
         const initialData = entry || sanitizeEntry({});
@@ -56,103 +57,87 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
         if (numSearch.length > 0) {
             return classFilteredMembers.filter(m => m.memberNumber && m.memberNumber.toLowerCase().startsWith(numSearch));
         }
-        if (nameSearch.length > 0) {
-            return classFilteredMembers.filter(m => m.name.toLowerCase().includes(nameSearch));
-        }
-        return classFilteredMembers;
-    }, [formData.memberID, formData.memberName, memberNumberInput, classFilteredMembers]);
-
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
-            setAmountInput(value);
-            setFormData(prev => ({ ...prev, amount: parseFloat(value) || 0 }));
-        }
-    };
-    
-    const handleMemberNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newNumber = e.target.value;
-        setMemberNumberInput(newNumber);
-        setFormData(prev => ({ ...prev, memberID: '', memberName: '', classNumber: '' }));
-        
-        const matchedMember = members.find(m => m.memberNumber && m.memberNumber.toLowerCase() === newNumber.toLowerCase());
-        if (matchedMember) {
-            setFormData(prev => ({
-                ...prev,
-                memberID: matchedMember.id,
-                memberName: matchedMember.name,
-                classNumber: matchedMember.classNumber || '',
-            }));
-        }
-    };
-
-    const handleMemberNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newName = e.target.value;
-        const matchedMember = members.find(m => m.name.toLowerCase() === newName.toLowerCase());
-
-        if (matchedMember) {
-            setFormData(prev => ({
-                ...prev,
-                memberName: matchedMember.name,
-                memberID: matchedMember.id,
-                classNumber: matchedMember.classNumber || '',
-            }));
-            if (matchedMember.memberNumber) {
-                setMemberNumberInput(matchedMember.memberNumber);
+        const handleKeyDown = async (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (hasDuplicate) {
+                    const typeDisplay = formData.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    setDuplicateWarning({show: true, type: typeDisplay});
+                    return;
+                }
+                await handleSubmitAndNew(e as any);
             }
-        } else {
-            setFormData(prev => ({ ...prev, memberName: newName, memberID: '', classNumber: '' }));
-        }
-    };
+        };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        const validateAndSubmit = async (callback: (e: Entry) => void | Promise<void>) => {
+            if (hasDuplicate) {
+                const typeDisplay = formData.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                setDuplicateWarning({show: true, type: typeDisplay});
+                return false;
+            }
+            if (!formData.memberID && settings.enforceDirectory) {
+                alert("Please select a valid member from the directory.");
+                return false;
+            }
+            if (formData.amount <= 0) {
+                alert("Amount must be greater than zero.");
+                return false;
+            }
+            if (new Date(formData.date) > new Date()) {
+                if(!window.confirm("You are entering a date in the future. Is this correct?")) return false;
+            }
+
+            const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+            if (isMonthLocked(formData.date, monthLocks) && !canOverrideLock) {
+                alert(`The financial month for ${formData.date} is LOCKED. You cannot add or edit entries for this period.`);
+                return false;
+            }
+
+            if (entry && currentUser?.role === 'data-entry') {
+                const createdTime = new Date(entry.createdAt || new Date()).getTime();
+                const now = new Date().getTime();
+                const minutesDiff = (now - createdTime) / (1000 * 60);
+                if (minutesDiff > 15) {
+                    alert("Time limit exceeded. Data Entry staff can only edit records within 15 minutes of creation. Please contact a Finance Team member.");
+                    return false;
+                }
+            }
+
+            const now = new Date().toISOString();
+            const entryToSave = {
+                ...formData,
+                updatedBy: currentUser?.username || 'Unknown',
+                lastUpdated: now,
+                createdBy: formData.createdBy || currentUser?.username || 'Unknown'
+            };
+
+            try {
+                await callback(entryToSave);
+                setShowSuccessToast(true);
+                setTimeout(() => setShowSuccessToast(false), 3000);
+                return true;
+            } catch (error: any) {
+                alert(error.message || 'Failed to save entry');
+                return false;
+            }
+        };
+
+        const handleSubmit = async (e: React.FormEvent) => {
             e.preventDefault();
-            handleSubmitAndNew(e as any);
-        }
-    };
+            await validateAndSubmit(onSave);
+        };
 
-    const validateAndSubmit = (callback: (e: Entry) => void) => {
-        // 1. Validation
-        if (!formData.memberID && settings.enforceDirectory) {
-            alert("Please select a valid member from the directory.");
-            return;
-        }
-        if (formData.amount <= 0) {
-            alert("Amount must be greater than zero.");
-            return;
-        }
-        if (new Date(formData.date) > new Date()) {
-            if(!window.confirm("You are entering a date in the future. Is this correct?")) return;
-        }
-
-        // 2. Month Lock Check
-        // Only Admin and Finance Chair can override locks
-        const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
-        if (isMonthLocked(formData.date, monthLocks) && !canOverrideLock) {
-            alert(`The financial month for ${formData.date} is LOCKED. You cannot add or edit entries for this period.`);
-            return;
-        }
-
-        // 3. Edit Time Limit Check (Data Entry Role)
-        if (entry && currentUser?.role === 'data-entry') {
-            const createdTime = new Date(entry.createdAt || new Date()).getTime();
-            const now = new Date().getTime();
-            const minutesDiff = (now - createdTime) / (1000 * 60);
-            
-            if (minutesDiff > 15) {
-                alert("Time limit exceeded. Data Entry staff can only edit records within 15 minutes of creation. Please contact a Finance Team member.");
-                return;
+        const handleSubmitAndNew = async (e: React.FormEvent) => {
+            e.preventDefault();
+            const success = await validateAndSubmit(async (entry) => {
+                await onSaveAndNew(entry);
+            });
+            if (success) {
+                setFormData(prev => sanitizeEntry({ date: prev.date }));
+                setAmountInput('');
+                setMemberNumberInput('');
             }
-        }
-
-        // 4. Audit Trail
+        };
         const now = new Date().toISOString();
         const entryToSave = {
             ...formData,
@@ -160,22 +145,6 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             lastUpdated: now,
             createdBy: formData.createdBy || currentUser?.username || 'Unknown' // Keep original creator if editing
         };
-
-        // 5. Duplicate Check
-        const isDuplicate = existingEntries.some(e => 
-            e.id !== formData.id && 
-            !e.deleted &&
-            e.date === formData.date &&
-            e.memberID === formData.memberID &&
-            e.type === formData.type &&
-            Math.abs(e.amount - formData.amount) < 0.01
-        );
-
-        if (isDuplicate) {
-            if (!window.confirm(`⚠️ Possible Duplicate: An entry for $${formData.amount} on ${formData.date} already exists. Save anyway?`)) {
-                return;
-            }
-        }
 
         callback(entryToSave);
         
@@ -188,21 +157,60 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
         e.preventDefault();
         validateAndSubmit(onSave);
     };
-    
+            try {
+                await callback(entryToSave);
+                return true;
+            } catch (error: any) {
+                alert(error.message || 'Failed to save entry');
+                return false;
+            }
     const handleSubmitAndNew = (e: React.FormEvent) => {
         e.preventDefault();
         validateAndSubmit((entry) => {
             onSaveAndNew(entry);
-            // Reset for next entry
+            await validateAndSubmit(onSave);
             setFormData(prev => sanitizeEntry({ date: prev.date })); 
             setAmountInput('');
             setMemberNumberInput('');
         });
-    };
-
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "other"];
-
-    return (
+            const success = await validateAndSubmit(async (entry) => {
+                await onSaveAndNew(entry);
+            });
+            if (success) {
+                // Reset for next entry
+                setFormData(prev => sanitizeEntry({ date: prev.date })); 
+                setAmountInput('');
+                setMemberNumberInput('');
+            }
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex justify-center items-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border-2 border-red-300 animate-fadeIn">
+                    <div className="bg-gradient-to-r from-red-600 to-orange-600 p-6 rounded-t-2xl">
+                        <div className="flex items-center gap-3 text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <h3 className="text-xl font-bold">Duplicate Entry Detected</h3>
+                        </div>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-slate-700 leading-relaxed">
+                            A <span className="font-bold text-red-600">{duplicateWarning.type}</span> contribution already exists for this member on <span className="font-bold">{formData.date}</span>.
+                        </p>
+                        <p className="text-sm text-slate-600 bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
+                            💡 <strong>Tip:</strong> Please edit the existing record or choose a different date/type.
+                        </p>
+                    </div>
+                    <div className="p-6 bg-slate-50 rounded-b-2xl flex justify-end">
+                        <button
+                            onClick={() => setDuplicateWarning(null)}
+                            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-md hover:scale-105"
+                        >
+                            Got It
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex justify-center items-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl relative border-2 border-slate-200">
                 
@@ -335,14 +343,15 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                         <div className="flex gap-3">
                              <button type="button" onClick={onClose} className="bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-lg transition-all">Cancel</button>
                              {!entry && (
-                                <button type="button" onClick={handleSubmitAndNew} className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-all shadow-md hover:scale-105">Save & New</button>
+                                <button type="button" onClick={handleSubmitAndNew} disabled={hasDuplicate} className={`font-bold py-3 px-6 rounded-lg transition-all shadow-md ${hasDuplicate ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60' : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white hover:scale-105'}`}>Save & New</button>
                              )}
-                             <button type="submit" className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-6 rounded-lg transition-all shadow-md hover:scale-105">Save</button>
+                             <button type="submit" disabled={hasDuplicate} className={`font-bold py-3 px-6 rounded-lg transition-all shadow-md ${hasDuplicate ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white hover:scale-105'}`}>{hasDuplicate ? '⚠️ Duplicate Detected' : 'Save'}</button>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
+        </>
     );
 };
 

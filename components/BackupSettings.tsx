@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import type { Entry, DevelopmentFundEntry } from '../types';
+import type { Entry } from '../types';
 
 interface BackupSettingsProps {
     entries: Entry[];
-    developmentFund: DevelopmentFundEntry[];
     onClose: () => void;
 }
 
-const BackupSettings: React.FC<BackupSettingsProps> = ({ entries, developmentFund, onClose }) => {
+const BackupSettings: React.FC<BackupSettingsProps> = ({ entries, onClose }) => {
     const [backupEmails, setBackupEmails] = useState<string[]>(() => {
         const saved = localStorage.getItem('gmct-backup-emails');
         return saved ? JSON.parse(saved) : [];
@@ -63,10 +62,8 @@ const BackupSettings: React.FC<BackupSettingsProps> = ({ entries, developmentFun
             const backupData = {
                 exportDate: new Date().toISOString(),
                 entries: entries.filter(e => !e.deleted),
-                developmentFund: developmentFund,
                 backupMetadata: {
                     totalEntries: entries.filter(e => !e.deleted).length,
-                    totalFundEntries: developmentFund.length,
                     generatedAt: new Date().toLocaleString()
                 }
             };
@@ -97,10 +94,8 @@ const BackupSettings: React.FC<BackupSettingsProps> = ({ entries, developmentFun
             const backupData = {
                 exportDate: new Date().toISOString(),
                 entries: entries.filter(e => !e.deleted),
-                developmentFund: developmentFund,
                 backupMetadata: {
                     totalEntries: entries.filter(e => !e.deleted).length,
-                    totalFundEntries: developmentFund.length,
                     generatedAt: new Date().toLocaleString()
                 }
             };
@@ -226,7 +221,7 @@ const BackupSettings: React.FC<BackupSettingsProps> = ({ entries, developmentFun
                         <h4 className="font-bold text-indigo-900">📊 Backup Contents</h4>
                         <div className="text-sm text-indigo-800 space-y-1">
                             <p>✓ <strong>Entries Table:</strong> {entries.filter(e => !e.deleted).length} records</p>
-                            <p>✓ <strong>Development Fund Table:</strong> {developmentFund.length} records</p>
+                            <p>✓ <strong>Development Fund Entries:</strong> {entries.filter(e => !e.deleted && e.type === 'development-fund').length} records</p>
                             <p className="text-indigo-700 mt-2">Backup will be sent as JSON file to all registered emails</p>
                         </div>
                     </div>

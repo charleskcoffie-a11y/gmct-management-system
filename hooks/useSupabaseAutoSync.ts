@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
-import type { Settings, Entry, Member, AttendanceRecord, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry } from '../types';
+import type { Settings, Entry, Member, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry, MonthLock } from '../types';
 import { uploadDataToSupabase, downloadDataFromSupabase } from '../services/supabase';
 import { mergeUnique } from '../utils';
 
@@ -14,19 +14,18 @@ export function useSupabaseAutoSync(
     data: {
         entries: Entry[];
         members: Member[];
-        attendance: AttendanceRecord[];
         history: WeeklyHistoryRecord[];
         users: User[];
-        developmentFund: DevelopmentFundEntry[];
+        monthLocks?: MonthLock[];
     },
     // Setters are required to update local state after a pull
     setters?: {
         setEntries: (d: Entry[]) => void;
         setMembers: (d: Member[]) => void;
-        setAttendance: (d: AttendanceRecord[]) => void;
+
         setHistory: (d: WeeklyHistoryRecord[]) => void;
         setUsers: (d: User[]) => void;
-        setDevelopmentFund: (d: DevelopmentFundEntry[]) => void;
+        setMonthLocks?: (d: MonthLock[]) => void;
     }
 ): SyncStatus {
     // Initialize state based on whether credentials exist
@@ -44,12 +43,12 @@ export function useSupabaseAutoSync(
         eLen: data.entries.length,
         mLen: data.members.length,
         hLen: data.history.length,
-        aLen: data.attendance.length,
+
         uLen: data.users.length,
-        dLen: data.developmentFund.length,
+        lLen: data.monthLocks?.length || 0,
         lastEntry: data.entries.length > 0 ? data.entries[data.entries.length - 1] : null,
         lastHist: data.history.length > 0 ? data.history[data.history.length - 1] : null,
-        lastDev: data.developmentFund.length > 0 ? data.developmentFund[data.developmentFund.length - 1] : null,
+        lastLock: data.monthLocks && data.monthLocks.length > 0 ? data.monthLocks[data.monthLocks.length - 1] : null,
     });
 
     // 1. Initial Pull on Mount (Smart Merge)
@@ -69,18 +68,17 @@ export function useSupabaseAutoSync(
                 const mergedMembers = mergeUnique(data.members, cloudData.members);
                 const mergedHistory = mergeUnique(data.history, cloudData.history);
                 const mergedUsers = mergeUnique(data.users, cloudData.users, 'username');
-                const mergedDevFund = mergeUnique(data.developmentFund, cloudData.developmentFund);
+                const mergedLocks = mergeUnique(data.monthLocks || [], cloudData.monthLocks || [], 'month');
                 
-                // Attendance is array of objects with composite keys, simpler to just prefer cloud for now
-                const mergedAttendance = cloudData.attendance.length > 0 ? cloudData.attendance : data.attendance;
+
 
                 // Update UI with merged data
                 setters.setEntries(mergedEntries);
                 setters.setMembers(mergedMembers);
                 setters.setHistory(mergedHistory);
                 setters.setUsers(mergedUsers);
-                setters.setAttendance(mergedAttendance);
-                setters.setDevelopmentFund(mergedDevFund);
+                setters.setMonthLocks?.(mergedLocks);
+
 
                 hasInitialPulled.current = true;
                 setStatus({ state: 'synced', lastSynced: new Date() });
@@ -96,9 +94,34 @@ export function useSupabaseAutoSync(
         }
     }, [settings.supabaseUrl, settings.supabaseKey]); // Run when settings (keys) change or mount
 
-
-    // 2. Auto-Upload on Data Change
+    // 1.5 Periodic Pull for Multi-User Updates (every 30 seconds)
     useEffect(() => {
+        if (!isConfigured(settings) || !setters) return;
+        if (!hasInitialPulled.current) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                // For multi-user, always trust the database as source of truth
+                setters.setEntries(cloudData.entries);
+                setters.setMembers(cloudData.members);
+                setters.setHistory(cloudData.history);
+                setters.setUsers(cloudData.users);
+                setters.setMonthLocks?.(cloudData.monthLocks || []);
+                setStatus({ state: 'synced', lastSynced: new Date() });
+            } catch (e: any) {
+                console.error("Periodic sync failed:", e);
+            }
+        }, 30000); // Pull every 30 seconds
+
+        return () => clearInterval(interval);
+    }, [settings.supabaseUrl, settings.supabaseKey]);
+
+
+    // 2. Auto-Upload on Data Change (DISABLED for multi-user mode)
+    // Individual operations now save directly to database via saveEntryToSupabase()
+    // This prevents overwriting database with stale localStorage data
+    /*
         // Skip sync on initial load or if we haven't done the initial pull yet (to prevent overwriting cloud with stale local)
         if (isFirstMount.current) {
             isFirstMount.current = false;
@@ -133,10 +156,7 @@ export function useSupabaseAutoSync(
             }
         }, 2000);
 
-        return () => {
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        };
-    }, [dataDependency, settings.supabaseUrl, settings.supabaseKey]);
+    */
 
     return status;
 }

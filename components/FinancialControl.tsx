@@ -1,36 +1,50 @@
 // components/FinancialControl.tsx
 import React, { useState } from 'react';
-import type { MonthLock, User } from '../types';
+import type { MonthLock, User, Settings } from '../types';
+import { saveMonthLockToSupabase } from '../services/supabase';
 
 interface FinancialControlProps {
     monthLocks: MonthLock[];
     setMonthLocks: React.Dispatch<React.SetStateAction<MonthLock[]>>;
     currentUser: User;
+    settings: Settings;
 }
 
-const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMonthLocks, currentUser }) => {
+const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMonthLocks, currentUser, settings }) => {
     const [manageLockYear, setManageLockYear] = useState(new Date().getFullYear());
 
-    const toggleMonthLock = (monthStr: string) => {
+    const toggleMonthLock = async (monthStr: string) => {
         const locks = [...monthLocks];
         const index = locks.findIndex(l => l.month === monthStr);
         
-        if (index > -1) {
-            locks[index] = {
+        const updatedLock: MonthLock = index > -1
+            ? {
                 ...locks[index],
                 isLocked: !locks[index].isLocked,
                 lockedBy: currentUser.username,
                 lockedAt: new Date().toISOString()
-            };
-        } else {
-            locks.push({
+            }
+            : {
                 month: monthStr,
                 isLocked: true,
                 lockedBy: currentUser.username,
                 lockedAt: new Date().toISOString()
-            });
+            };
+
+        if (index > -1) {
+            locks[index] = updatedLock;
+        } else {
+            locks.push(updatedLock);
         }
-        setMonthLocks(locks);
+
+        try {
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await saveMonthLockToSupabase(settings.supabaseUrl, settings.supabaseKey, updatedLock);
+            }
+            setMonthLocks(locks);
+        } catch (error: any) {
+            alert(`Failed to update month lock: ${error.message}`);
+        }
     };
 
     const getLockStatus = (monthStr: string) => {

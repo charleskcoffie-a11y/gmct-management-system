@@ -1,7 +1,7 @@
 
 // components/Utilities.tsx
 import React, { useState, useMemo } from 'react';
-import type { Entry, Member, Settings, EntryType, WeeklyHistoryRecord, DevelopmentFundEntry } from '../types';
+import type { Entry, Member, Settings, WeeklyHistoryRecord, DevelopmentFundEntry } from '../types';
 import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeMember } from '../utils';
 import { DownloadIcon, UploadIcon } from './icons';
 import BackupSettings from './BackupSettings';
@@ -20,58 +20,9 @@ interface UtilitiesProps {
 
 const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, developmentFund, settings, setEntries, setMembers, setSettings, setDevelopmentFund }) => {
     const today = new Date().toISOString().slice(0, 10);
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState(today);
-    const [emailTo, setEmailTo] = useState('');
     const [showBackupSettings, setShowBackupSettings] = useState(false);
 
     // --- Helpers for Filtering ---
-    const entryTypes = useMemo(() => Array.from(new Set(entries.map(e => e.type))), [entries]);
-    const classNumbers = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
-    
-    const [selectedTypes, setSelectedTypes] = useState<Set<EntryType | 'all'>>(new Set(['all']));
-    const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set(['all']));
-
-    const handleTypeChange = (type: EntryType | 'all') => {
-        const newSelection = new Set(selectedTypes);
-        if (type === 'all') {
-            newSelection.clear();
-            newSelection.add('all');
-        } else {
-            newSelection.delete('all');
-            if (newSelection.has(type)) {
-                newSelection.delete(type);
-            } else {
-                newSelection.add(type);
-            }
-            if(newSelection.size === 0 || newSelection.size === entryTypes.length) {
-                 newSelection.clear();
-                 newSelection.add('all');
-            }
-        }
-        setSelectedTypes(newSelection);
-    };
-
-     const handleClassChange = (cls: string) => {
-        const newSelection = new Set(selectedClasses);
-        if (cls === 'all') {
-            newSelection.clear();
-            newSelection.add('all');
-        } else {
-            newSelection.delete('all');
-            if (newSelection.has(cls)) {
-                newSelection.delete(cls);
-            } else {
-                newSelection.add(cls);
-            }
-            if(newSelection.size === 0 || newSelection.size === classNumbers.length - 1) {
-                newSelection.clear();
-                newSelection.add('all');
-            }
-        }
-        setSelectedClasses(newSelection);
-    };
-
     const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
 
     // --- IMPORTS ---
@@ -100,25 +51,6 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
         event.target.value = ""; 
     };
 
-    const handleImportEntries = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const rows = fromCsv(String(reader.result));
-                const importedEntries = rows.map(r => sanitizeEntry(r)).filter(e => e.amount > 0);
-                setEntries(prev => [...prev, ...importedEntries]);
-                alert(`Imported ${importedEntries.length} financial records successfully.`);
-            } catch (e) {
-                alert("Failed to parse CSV.");
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = "";
-    };
-
-
     // --- EXPORTS ---
 
     const generateAndDownloadCsv = (data: any[], filename: string) => {
@@ -133,32 +65,6 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
         link.download = filename;
         link.click();
         URL.revokeObjectURL(link.href);
-    };
-
-    const exportFilteredFinancials = () => {
-        const filteredEntries = entries.filter(entry => {
-            if (startDate && entry.date < startDate) return false;
-            if (endDate && entry.date > endDate) return false;
-            if (!selectedTypes.has('all') && !selectedTypes.has(entry.type)) return false;
-            const member = membersById.get(entry.memberID);
-            if (!selectedClasses.has('all') && (!member || !member.classNumber || !selectedClasses.has(member.classNumber))) return false;
-            return true;
-        });
-
-        const reportData = filteredEntries.map(entry => {
-            const member = membersById.get(entry.memberID);
-            return {
-                Date: entry.date,
-                MemberName: sanitizeString(entry.memberName),
-                Class: member ? sanitizeString(member.classNumber) : 'N/A',
-                Type: entry.type,
-                Amount: entry.amount.toFixed(2),
-                Method: entry.method,
-                Note: sanitizeString(entry.note),
-            };
-        });
-        
-        generateAndDownloadCsv(reportData, `Financial_Report_${startDate || 'All'}_to_${endDate || 'All'}.csv`);
     };
 
     const exportMembers = () => {
@@ -182,20 +88,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
         URL.revokeObjectURL(link.href);
     }
     
-    const exportHistory = () => {
-        // Flatten simple history for CSV
-        const flatHistory = history.map(h => ({
-            Date: h.dateOfService,
-            Topic: h.sermonTopic,
-            Officiant: h.officiant,
-            TotalAttendance: h.attendance.men + h.attendance.women + h.attendance.children + h.attendance.visitors + h.attendance.catechumens,
-            Men: h.attendance.men,
-            Women: h.attendance.women,
-            Children: h.attendance.children,
-            Visitors: h.attendance.visitors
-        }));
-        generateAndDownloadCsv(flatHistory, `Weekly_History_Summary_${today}.csv`);
-    }
+    // Weekly History export moved to Reports tab
 
     // --- LOGO UPLOAD ---
     const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -400,21 +293,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                     </div>
                 </div>
 
-                {/* 2. History Utilities */}
-                <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl shadow-lg border-2 border-cyan-200 overflow-hidden">
-                    <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-4">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            📅 Weekly History
-                        </h3>
-                    </div>
-                    <div className="p-6 space-y-4">
-                         <p className="text-sm text-slate-600 font-medium">Download a summary log of all weekly services.</p>
-                         <button onClick={exportHistory} className="w-full bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-cyan-400">
-                            <DownloadIcon />
-                            <span>📥 Export History Log</span>
-                        </button>
-                    </div>
-                </div>
+                {/* Weekly History tools moved to Reports tab */}
             </div>
 
             {/* 2.5 Data Maintenance */}
@@ -436,106 +315,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                 </div>
             </div>
 
-            {/* 3. Financial Report Generator */}
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl shadow-lg border-2 border-indigo-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4">
-                    <h3 className="text-lg font-bold text-white">📊 Financial Records & Reports</h3>
-                </div>
-                
-                <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Filters Column */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <h4 className="font-bold text-indigo-800 uppercase text-sm">🔍 Filter Report Data</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <div>
-                                <label className="block text-sm font-bold text-indigo-800 mb-2">📅 Start Date</label>
-                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"/>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-indigo-800 mb-2">📅 End Date</label>
-                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"/>
-                            </div>
-                        </div>
-
-                         <fieldset>
-                             <legend className="text-sm font-bold text-indigo-800 mb-2">💷 Contribution Type</legend>
-                             <div className="flex flex-wrap gap-2">
-                                 <button 
-                                    onClick={() => handleTypeChange('all')}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedTypes.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                                >
-                                    All Types
-                                </button>
-                                 {entryTypes.map(type => (
-                                     <button 
-                                        key={type}
-                                        onClick={() => handleTypeChange(type)}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold border-2 capitalize transition-all ${selectedTypes.has(type) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                                    >
-                                        {type.replace('-', ' ')}
-                                    </button>
-                                 ))}
-                             </div>
-                        </fieldset>
-
-                        <fieldset>
-                             <legend className="text-sm font-bold text-indigo-800 mb-2">📚 Class</legend>
-                             <div className="flex flex-wrap gap-2">
-                                <button 
-                                    onClick={() => handleClassChange('all')}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedClasses.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                                >
-                                    All Classes
-                                </button>
-                                {classNumbers.slice(1).map(cls => (
-                                    <button 
-                                        key={cls}
-                                        onClick={() => handleClassChange(cls)}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedClasses.has(cls) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                                    >
-                                        Class {cls}
-                                    </button>
-                                ))}
-                            </div>
-                        </fieldset>
-                    </div>
-
-                    {/* Actions Column */}
-                    <div className="flex flex-col gap-4 border-l-2 border-indigo-200 pl-8">
-                        <h4 className="font-bold text-indigo-800 uppercase text-sm">⚡ Actions</h4>
-                        
-                        <button onClick={exportFilteredFinancials} className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 border-2 border-indigo-400">
-                            <DownloadIcon />
-                            Generate Report CSV
-                        </button>
-
-                        <label className="bg-white hover:bg-indigo-50 text-indigo-700 font-bold py-3 px-4 rounded-lg border-2 border-indigo-300 shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all">
-                            <UploadIcon />
-                            Import Financial CSV
-                            <input type="file" accept=".csv" className="hidden" onChange={handleImportEntries} />
-                        </label>
-                        
-                        <div className="mt-4 pt-4 border-t-2 border-indigo-200">
-                             <label className="block text-sm font-bold text-indigo-800 mb-2">✉️ Email Report To</label>
-                             <div className="flex gap-2">
-                                <input
-                                    type="email"
-                                    placeholder="treasurer@gmct.org"
-                                    value={emailTo}
-                                    onChange={e => setEmailTo(e.target.value)}
-                                    className="flex-1 min-w-0 border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
-                                />
-                                <button 
-                                    onClick={() => window.location.href = `mailto:${emailTo}?subject=Financial Report&body=Please attach the generated CSV.`}
-                                    className="bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-blue-400"
-                                >
-                                    📧 Email
-                                </button>
-                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {/* Financial report generator moved to Reports tab */}
 
              {/* Danger Zone */}
             <div className="bg-gradient-to-br from-red-50 to-rose-50 p-6 rounded-xl border-2 border-red-300 shadow-lg">
@@ -558,7 +338,6 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
             {showBackupSettings && (
                 <BackupSettings 
                     entries={entries}
-                    developmentFund={developmentFund}
                     onClose={() => setShowBackupSettings(false)}
                 />
             )}

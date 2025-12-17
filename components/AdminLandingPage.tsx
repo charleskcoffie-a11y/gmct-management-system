@@ -35,10 +35,10 @@ const AdminLandingPage: React.FC<AdminLandingPageProps> = ({ onNavigate, current
                     description="Maintain an up-to-date directory of all church members and track giving history."
                     onClick={() => onNavigate('members')}
                 />
-                 <InfoCard 
-                    title="Weekly History"
-                    description="Log and review weekly service history, including attendance, sermon topics, and special events."
-                    onClick={() => onNavigate('history')}
+                <InfoCard 
+                    title="Reports"
+                    description="Generate financial reports and manage weekly service history in one place."
+                    onClick={() => onNavigate('reports')}
                 />
                 <InfoCard 
                     title="User Management"

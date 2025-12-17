@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings } from '../types';
 import { formatCurrency, sanitizeString } from '../utils';
+import { saveEntryToSupabase, deleteEntryFromSupabase } from '../services/supabase';
 
 interface DevelopmentFundProps {
     members: Member[];
@@ -15,8 +16,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     // --- State ---
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)); // Jan 1st
-    const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10)); // Today
+    const [startDate, setStartDate] = useState(''); // Empty = show all
+    const [endDate, setEndDate] = useState(''); // Empty = show all
     const [showToast, setShowToast] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [historyScope, setHistoryScope] = useState<'filtered' | 'all'>('filtered');
@@ -28,10 +29,11 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [editDesc, setEditDesc] = useState<string>('');
     const [lastDeleted, setLastDeleted] = useState<Entry | null>(null);
     const quickAmountRef = useRef<HTMLInputElement | null>(null);
+    const [duplicateWarning, setDuplicateWarning] = useState(false);
 
     // Form State
     const [newAmount, setNewAmount] = useState('');
-    const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
+    const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [newDesc, setNewDesc] = useState('');
 
     // --- Derived Data ---
@@ -53,6 +55,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const displayEntries = useMemo(() => {
         let filtered = entries.filter(e => {
             if (e.type !== 'development-fund') return false;
+            if (e.deleted) return false; // Hide deleted entries
             if (startDate && e.date < startDate) return false;
             if (endDate && e.date > endDate) return false;
             if (selectedMember && e.memberID !== selectedMember.id) return false;
@@ -65,7 +68,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             return {
                 id: e.id,
                 date: e.date,
-                amount: e.amount,
+                amount: e.amount || 0,
                 description: (e as any).note || '',
                 memberId: e.memberID,
                 memberName: e.memberName || member?.name || 'Unknown',
@@ -102,8 +105,28 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
     // --- Handlers ---
 
-    const handleAddEntry = (e: React.FormEvent) => {
-        e.preventDefault();
+    // Check for duplicate in real-time - calculate directly instead of useMemo
+    const hasDuplicate = (() => {
+        if (!selectedMember || !newDate) return false;
+        
+        return entries.some(en => 
+            !en.deleted &&
+            en.type === 'development-fund' &&
+            en.memberID === selectedMember.id &&
+            en.date === newDate
+        );
+    })();
+
+    const handleAddEntry = async (e: React.FormEvent | React.MouseEvent) => {
+        if ('preventDefault' in e) e.preventDefault();
+        
+        // CRITICAL: Block submission if duplicate exists (even via keyboard shortcuts)
+        if (hasDuplicate) {
+            console.log('🚫 DUPLICATE DETECTED - Entry blocked');
+            setDuplicateWarning(true);
+            return;
+        }
+        
         if (!selectedMember) return alert("Please select a member first.");
         
         const amountVal = parseFloat(newAmount);
@@ -122,40 +145,72 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             fund: 'development-fund',
             method: 'other',
             amount: amountVal,
-            note: newDesc,
-            createdAt: new Date().toISOString()
-        } as Entry;
+            note: newDesc || undefined,
+            createdAt: new Date().toISOString(),
+            deleted: false
+        };
 
-        setEntries(prev => [...prev, newEntry]);
-        
-        // Reset form but keep date
-        setNewAmount('');
-        setNewDesc('');
-        
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
-        // Focus amount for quick batch entry
-        quickAmountRef.current?.focus();
+        // Save to database first (multi-user mode)
+        try {
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntry);
+            }
+            // Then update local state
+            setEntries(prev => [...prev, newEntry]);
+            
+            // Reset form completely
+            setNewAmount('');
+            setNewDesc('');
+            setNewDate(new Date().toISOString().slice(0, 10)); // Reset to today
+            setDuplicateWarning(false); // Clear any previous warning
+            
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+            // Focus amount for quick batch entry
+            quickAmountRef.current?.focus();
+        } catch (error: any) {
+            alert(`Failed to save: ${error.message}`);
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            // Prevent keyboard submission if duplicate exists
+            if (hasDuplicate) {
+                e.preventDefault();
+                setDuplicateWarning(true);
+                return;
+            }
             handleAddEntry(e as any);
         }
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         const entry = entries.find(e => e.id === id) || null;
         if(window.confirm("Delete this contribution?")) {
-            setEntries(prev => prev.filter(e => e.id !== id));
-            setLastDeleted(entry);
+            try {
+                if (settings.supabaseUrl && settings.supabaseKey) {
+                    await deleteEntryFromSupabase(settings.supabaseUrl, settings.supabaseKey, id);
+                }
+                setEntries(prev => prev.filter(e => e.id !== id));
+                setLastDeleted(entry);
+            } catch (error: any) {
+                alert(`Failed to delete: ${error.message}`);
+            }
         }
     };
 
-    const undoDelete = () => {
+    const undoDelete = async () => {
         if (!lastDeleted) return;
-        setEntries(prev => [...prev, lastDeleted!]);
-        setLastDeleted(null);
+        try {
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, lastDeleted);
+            }
+            setEntries(prev => [...prev, lastDeleted!]);
+            setLastDeleted(null);
+        } catch (error: any) {
+            alert(`Failed to restore: ${error.message}`);
+        }
     };
 
     const startEdit = (entryId: string, date: string, amount: number, desc: string) => {
@@ -165,15 +220,26 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         setEditDesc(desc || '');
     };
 
-    const saveEdit = () => {
+    const saveEdit = async () => {
         if (!editingId) return;
         const amountVal = parseFloat(editAmount);
         if (isNaN(amountVal) || amountVal <= 0) { alert('Enter a valid positive amount.'); return; }
         if (new Date(editDate) > new Date()) {
             if (!window.confirm('Date is in the future. Continue?')) return;
         }
-        setEntries(prev => prev.map(e => e.id === editingId ? { ...(e as any), date: editDate, amount: amountVal, note: editDesc } : e));
-        setEditingId(null);
+        try {
+            const updatedEntry = entries.find(e => e.id === editingId);
+            if (updatedEntry) {
+                const newEntry = { ...updatedEntry, date: editDate, amount: amountVal, note: editDesc };
+                if (settings.supabaseUrl && settings.supabaseKey) {
+                    await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntry);
+                }
+                setEntries(prev => prev.map(e => e.id === editingId ? newEntry : e));
+            }
+            setEditingId(null);
+        } catch (error: any) {
+            alert(`Failed to save edit: ${error.message}`);
+        }
     };
 
     const cancelEdit = () => {
@@ -260,6 +326,37 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     return (
         <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row gap-6 relative">
             
+            {duplicateWarning && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex justify-center items-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border-2 border-red-300 animate-fadeIn">
+                        <div className="bg-gradient-to-r from-red-600 to-orange-600 p-6 rounded-t-2xl">
+                            <div className="flex items-center gap-3 text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <h3 className="text-xl font-bold">Duplicate Entry Detected</h3>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-slate-700 leading-relaxed">
+                                A <span className="font-bold text-red-600">Development Fund</span> contribution already exists for <span className="font-bold">{selectedMember?.name}</span> on <span className="font-bold">{newDate}</span>.
+                            </p>
+                            <p className="text-sm text-slate-600 bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
+                                💡 <strong>Tip:</strong> Please choose a different date or edit the existing entry.
+                            </p>
+                        </div>
+                        <div className="p-6 bg-slate-50 rounded-b-2xl flex justify-end">
+                            <button
+                                onClick={() => setDuplicateWarning(false)}
+                                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-md hover:scale-105"
+                            >
+                                Got It
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showToast && (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-2 rounded-full shadow-lg font-bold animate-fadeIn z-50">
                     ✓ Contribution Added
@@ -342,13 +439,18 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                     <div className="flex-1 overflow-y-auto p-0 lg:border-r border-slate-200 relative">
                         {selectedMember && (
                             <div className="bg-indigo-50 border-b border-indigo-200 p-3 flex flex-wrap gap-2 items-end">
-                                <div>
+                                <div className="w-full">
+                                    {hasDuplicate && (
+                                        <div className="mb-2 bg-red-100 border-l-4 border-red-500 text-red-700 p-2 rounded text-sm">
+                                            <strong>⚠️ Duplicate Entry:</strong> An entry already exists for this member on {newDate}
+                                        </div>
+                                    )}
                                     <label className="block text-xs font-bold uppercase text-indigo-800 mb-1 ml-1">Quick Add</label>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                                         <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)} className="border-slate-300 rounded-md p-2" />
                                         <input ref={quickAmountRef} type="number" step="0.01" value={newAmount} onChange={e=>setNewAmount(e.target.value)} placeholder="Amount" className="border-slate-300 rounded-md p-2" />
                                         <input type="text" value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="Description" className="border-slate-300 rounded-md p-2" />
-                                        <button onClick={handleAddEntry} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 rounded-md">Save</button>
+                                        <button onClick={handleAddEntry} disabled={hasDuplicate} className={`font-bold px-4 rounded-md ${hasDuplicate ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>{hasDuplicate ? '⚠️ Duplicate' : 'Save'}</button>
                                     </div>
                                 </div>
                             </div>
@@ -468,8 +570,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                     <label className="block text-sm font-bold text-green-700 mb-1">📝 Description (Optional)</label>
                                     <textarea rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="e.g. Monthly pledge" className="w-full border-2 border-green-300 rounded-lg shadow-sm py-2 px-3 focus:ring-green-400 focus:border-green-400" />
                                 </div>
-                                <button type="submit" className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3.5 rounded-lg shadow-lg transition-all hover:scale-[1.02] active:scale-95 text-lg">
-                                    ✓ Save Contribution
+                                <button type="submit" disabled={hasDuplicate} className={`w-full font-bold py-3.5 rounded-lg shadow-lg transition-all active:scale-95 text-lg ${hasDuplicate ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white hover:scale-[1.02]'}`}>
+                                    {hasDuplicate ? '⚠️ Duplicate on this date' : '✓ Save Contribution'}
                                 </button>
                                 <p className="text-center text-xs text-green-600 font-medium">Press Ctrl+Enter to save</p>
                                 <button type="button" onClick={() => setSelectedMember(null)} className="w-full text-slate-500 text-sm hover:text-slate-700 font-medium py-2">

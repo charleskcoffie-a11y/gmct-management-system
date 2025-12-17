@@ -12,6 +12,7 @@ import UsersTab from './components/Users';
 import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
+import Reports from './components/Reports';
 import ConfirmationModal from './components/ConfirmationModal';
 import DevelopmentFund from './components/DevelopmentFund';
 import NoName from './components/NoName';
@@ -22,9 +23,10 @@ import KeyboardShortcuts from './components/KeyboardShortcuts';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { saveEntryToSupabase } from './services/supabase';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -46,7 +48,7 @@ const App: React.FC = () => {
     const [members, setMembers] = useLocalStorage<Member[]>('gmct-members', [], (data) => Array.isArray(data) ? data.map(sanitizeMember) : []);
     const [users, setUsers] = useLocalStorage<User[]>('gmct-users', INITIAL_USERS, (data) => Array.isArray(data) && data.length > 0 ? data.map(sanitizeUser) : INITIAL_USERS);
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
-    const [attendance, setAttendance] = useLocalStorage<AttendanceRecord[]>('gmct-attendance', [], (data) => Array.isArray(data) ? data : []);
+
     const [weeklyHistory, setWeeklyHistory] = useLocalStorage<WeeklyHistoryRecord[]>('gmct-weekly-history', [], (data) => Array.isArray(data) ? data.map(sanitizeWeeklyHistoryRecord) : []);
     const [developmentFund, setDevelopmentFund] = useLocalStorage<DevelopmentFundEntry[]>('gmct-dev-fund', [], (data) => Array.isArray(data) ? data.map(sanitizeDevelopmentFundEntry) : []);
     const [noNameEntries, setNoNameEntries] = useLocalStorage<NoNameEntry[]>('gmct-no-name', [], (data) => Array.isArray(data) ? data.map(sanitizeNoNameEntry) : []);
@@ -80,9 +82,9 @@ const App: React.FC = () => {
 
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, attendance, history: weeklyHistory, users, developmentFund, noName: noNameEntries
+        entries, members, history: weeklyHistory, users, monthLocks
     }, {
-        setEntries, setMembers, setAttendance, setHistory: setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks
     });
     
     // --- Safe Close Protection ---
@@ -188,7 +190,7 @@ const App: React.FC = () => {
             else if (user.role === 'finance-team') setActiveTab('records');
             else if (user.role === 'data-entry') setActiveTab('records');
             else if (user.role === 'pastor') setActiveTab('insights');
-            else if (user.role === 'statistician') setActiveTab('history');
+            else if (user.role === 'statistician') setActiveTab('reports');
             else setActiveTab('home');
         } else {
             setLoginError('Invalid username or password.');
@@ -202,16 +204,16 @@ const App: React.FC = () => {
         const tabMap: { [key: string]: Tab } = {
             'dashboard': 'home',
             'members': 'members',
-            'attendance': 'attendance',
+
             'records': 'records',
             'insights': 'insights',
-            'history': 'history'
+            'history': 'reports'
         };
         const tab = tabMap[page];
         if (tab) setActiveTab(tab);
     };
 
-    const handleSaveEntry = (entry: Entry) => {
+    const handleSaveEntry = async (entry: Entry) => {
         const newEntries = [...entries];
         const index = newEntries.findIndex(e => e.id === entry.id);
         if (index > -1) {
@@ -219,14 +221,30 @@ const App: React.FC = () => {
         } else {
             newEntries.push(entry);
         }
-        setEntries(newEntries);
-        setIsModalOpen(false);
+
+        try {
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            }
+            setEntries(newEntries);
+            setIsModalOpen(false);
+        } catch (error: any) {
+            alert(`Failed to save entry: ${error.message}`);
+        }
     };
 
-    const handleSaveAndNew = (entry: Entry) => {
+    const handleSaveAndNew = async (entry: Entry) => {
         const newEntries = [...entries];
         newEntries.push(entry);
-        setEntries(newEntries);
+
+        try {
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            }
+            setEntries(newEntries);
+        } catch (error: any) {
+            alert(`Failed to save entry: ${error.message}`);
+        }
     };
     
     const handleDeleteEntry = (id: string) => {
@@ -235,7 +253,7 @@ const App: React.FC = () => {
     };
 
     // Soft Delete Logic
-    const confirmDeleteEntry = () => {
+    const confirmDeleteEntry = async () => {
         if (entryToDeleteId) {
             const entryIndex = entries.findIndex(e => e.id === entryToDeleteId);
             if (entryIndex > -1) {
@@ -247,7 +265,15 @@ const App: React.FC = () => {
                     updatedBy: currentUser?.username || 'Unknown',
                     lastUpdated: new Date().toISOString()
                 };
-                setEntries(newEntries);
+
+                try {
+                    if (settings.supabaseUrl && settings.supabaseKey) {
+                        await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntries[entryIndex]);
+                    }
+                    setEntries(newEntries);
+                } catch (error: any) {
+                    alert(`Failed to delete entry: ${error.message}`);
+                }
             }
             setIsModalOpen(false);
         }
@@ -282,6 +308,17 @@ const App: React.FC = () => {
 
         switch (activeTab) {
             case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
+            case 'reports':
+                return (
+                    <Reports 
+                        entries={entries}
+                        members={members}
+                        settings={settings}
+                        history={weeklyHistory}
+                        setHistory={setWeeklyHistory}
+                        setEntries={setEntries}
+                    />
+                );
             case 'records':
                 return (
                     <div className="space-y-6">
@@ -576,12 +613,13 @@ const App: React.FC = () => {
             case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} />;
             case 'harvest': return <Harvest members={members} entries={harvestEntries} setEntries={setHarvestEntries} settings={settings} currentUser={currentUser} />;
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} />;
-            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} />;
+            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries.filter(e => !e.deleted)} settings={settings} />;
-            case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
+            // 'history' moved under Reports tab
+            case 'history': return <Reports entries={entries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, attendance, weeklyHistory, users, developmentFund, noName: noNameEntries, monthLocks, setEntries, setMembers, setAttendance, setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries, setMonthLocks}}/>;
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, weeklyHistory, users, developmentFund, noName: noNameEntries, monthLocks, setEntries, setMembers, setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries, setMonthLocks}}/>;
             case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
             default: return <div>Select a tab</div>;
         }
@@ -595,8 +633,8 @@ const App: React.FC = () => {
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
         { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
+        { id: 'reports', label: 'Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'] },
         { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-        { id: 'history', label: 'Weekly History', roles: ['admin', 'statistician', 'pastor'] },
         { id: 'users', label: 'Manage Users', roles: ['admin'] },
         { id: 'utilities', label: 'Utilities', roles: ['admin'] },
         { id: 'settings', label: 'Settings', roles: ['admin', 'finance-chair'] },

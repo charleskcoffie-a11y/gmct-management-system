@@ -91,7 +91,6 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 attendance: allData.attendance,
                 history: allData.weeklyHistory,
                 users: allData.users,
-                developmentFund: allData.developmentFund,
                 monthLocks: allData.monthLocks
             });
             setSyncStatus({ type: 'success', message: "Upload successful!" });
@@ -119,7 +118,6 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             allData.setUsers(data.users);
             allData.setWeeklyHistory(data.history);
             allData.setAttendance(data.attendance);
-            allData.setDevelopmentFund(data.developmentFund);
             if(data.monthLocks) allData.setMonthLocks(data.monthLocks);
 
             setSyncStatus({ type: 'success', message: "Download successful! Local data updated." });
@@ -237,6 +235,9 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             {/* 3. Local Backup - Available to all with access to Settings tab */}
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-xl shadow-lg border-2 border-amber-200">
                 <h3 className="text-xl font-bold text-amber-800 border-b-2 border-amber-100 pb-3 mb-4">💾 Local Backup & Restore</h3>
+                <p className="text-sm text-amber-900 bg-amber-100 border border-amber-200 rounded-lg p-3 mb-4 font-medium">
+                    Use Export to download a complete backup of your local data (members, entries, attendance, weekly history, users, development fund, and locks) as a JSON file. Restore replaces your current local data with a previously exported backup. This does not touch cloud data; use Cloud Sync above for Supabase.
+                </p>
                 <div className="flex flex-col md:flex-row gap-4">
                     <button onClick={() => onExport('json_all')} className="flex-1 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-slate-600">
                         📥 Export Backup (JSON)

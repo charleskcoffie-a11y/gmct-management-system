@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, AttendanceRecord, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -195,7 +195,6 @@ export const uploadDataToSupabase = async (
         attendance: AttendanceRecord[], 
         history: WeeklyHistoryRecord[], 
         users: User[],
-        developmentFund: DevelopmentFundEntry[],
         monthLocks?: MonthLock[]
     }
 ) => {
@@ -213,18 +212,18 @@ export const uploadDataToSupabase = async (
     }
 
     if (data.entries.length > 0) {
-        const { error } = await supabase.from('entries').upsert(data.entries.map(mapEntryToDB));
-        if (error) throw new Error(`Entries upload failed: ${error.message}`);
+        try {
+            const { error } = await supabase.from('entries').upsert(data.entries.map(mapEntryToDB));
+            if (error) throw new Error(`Entries upload failed: ${error.message}`);
+        } catch (e: any) {
+            console.error("Entry upload error details:", e);
+            throw e;
+        }
     }
 
     if (data.history.length > 0) {
         const { error } = await supabase.from('weekly_history').upsert(data.history.map(mapHistoryToDB));
         if (error) throw new Error(`History upload failed: ${error.message}`);
-    }
-
-    if (data.developmentFund.length > 0) {
-        const { error } = await supabase.from('development_fund').upsert(data.developmentFund.map(mapDevFundToDB));
-        if (error) throw new Error(`Development Fund upload failed: ${error.message}`);
     }
     
     if (data.monthLocks && data.monthLocks.length > 0) {
@@ -232,20 +231,7 @@ export const uploadDataToSupabase = async (
         if (error) console.warn(`Month Locks upload warning: ${error.message}`);
     }
 
-    const flatAttendance = [];
-    for (const record of data.attendance) {
-        for (const memberRec of record.records) {
-            flatAttendance.push({
-                date: record.date,
-                member_id: memberRec.memberId,
-                status: memberRec.status
-            });
-        }
-    }
-    if (flatAttendance.length > 0) {
-        const { error } = await supabase.from('attendance').upsert(flatAttendance, { onConflict: 'date, member_id' });
-        if (error) throw new Error(`Attendance upload failed: ${error.message}`);
-    }
+
 
     return { success: true };
 };
@@ -269,9 +255,6 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     const { data: historyDB, error: histErr } = await supabase.from('weekly_history').select('*');
     if (histErr) throw new Error(`Fetch History failed: ${histErr.message}`);
     const history = historyDB?.map(mapHistoryFromDB) || [];
-
-    const { data: devDB, error: devErr } = await supabase.from('development_fund').select('*');
-    const developmentFund = devDB?.map(mapDevFundFromDB) || [];
     
     let monthLocks: MonthLock[] = [];
     try {
@@ -281,25 +264,48 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
         console.log("Month locks table may not exist yet.");
     }
 
-    const { data: attDB, error: attErr } = await supabase.from('attendance').select('*');
-    if (attErr) throw new Error(`Fetch Attendance failed: ${attErr.message}`);
-    
-    const attendanceMap = new Map<string, AttendanceRecord>();
-    attDB?.forEach((row: any) => {
-        if (!attendanceMap.has(row.date)) {
-            attendanceMap.set(row.date, { date: row.date, records: [] });
-        }
-        attendanceMap.get(row.date)!.records.push({ memberId: row.member_id, status: row.status });
-    });
-    const attendance = Array.from(attendanceMap.values());
-
     return {
         members,
         entries,
         users,
         history,
-        attendance,
-        developmentFund,
         monthLocks
     };
+};
+
+// --- Individual Entry Operations (for multi-user real-time collaboration) ---
+export const saveEntryToSupabase = async (url: string, key: string, entry: Entry) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+    
+    const { error } = await supabase.from('entries').upsert([mapEntryToDB(entry)]);
+    if (error) throw new Error(`Save entry failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteEntryFromSupabase = async (url: string, key: string, entryId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+    
+    const { error } = await supabase.from('entries').delete().eq('id', entryId);
+    if (error) throw new Error(`Delete entry failed: ${error.message}`);
+    return { success: true };
+};
+
+export const saveMemberToSupabase = async (url: string, key: string, member: Member) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+    
+    const { error } = await supabase.from('members').upsert([mapMemberToDB(member)]);
+    if (error) throw new Error(`Save member failed: ${error.message}`);
+    return { success: true };
+};
+
+export const saveMonthLockToSupabase = async (url: string, key: string, lock: MonthLock) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('month_locks').upsert([mapLockToDB(lock)]);
+    if (error) throw new Error(`Save month lock failed: ${error.message}`);
+    return { success: true };
 };
