@@ -32,13 +32,8 @@ const AdminLandingPage: React.FC<AdminLandingPageProps> = ({ onNavigate, current
                 />
                 <InfoCard 
                     title="Member Directory"
-                    description="Maintain an up-to-date directory of all church members. Track giving and attendance history for each member."
+                    description="Maintain an up-to-date directory of all church members and track giving history."
                     onClick={() => onNavigate('members')}
-                />
-                <InfoCard 
-                    title="Attendance Reporting"
-                    description="Monitor attendance for all classes. View detailed reports for specific dates or individual members."
-                    onClick={() => onNavigate('admin-attendance')}
                 />
                  <InfoCard 
                     title="Weekly History"

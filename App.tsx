@@ -9,19 +9,17 @@ import Insights from './components/Insights';
 import SettingsTab from './components/Settings';
 import Login from './components/Login';
 import UsersTab from './components/Users';
-import AdminLandingPage from './components/AdminLandingPage';
-import Attendance from './components/Attendance';
-import AdminAttendanceView from './components/AdminAttendanceView';
 import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
 import DevelopmentFund from './components/DevelopmentFund';
+import NoName from './components/NoName';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
-import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock } from './types';
+import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry } from './utils';
+import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
@@ -48,6 +46,7 @@ const App: React.FC = () => {
     const [attendance, setAttendance] = useLocalStorage<AttendanceRecord[]>('gmct-attendance', [], (data) => Array.isArray(data) ? data : []);
     const [weeklyHistory, setWeeklyHistory] = useLocalStorage<WeeklyHistoryRecord[]>('gmct-weekly-history', [], (data) => Array.isArray(data) ? data.map(sanitizeWeeklyHistoryRecord) : []);
     const [developmentFund, setDevelopmentFund] = useLocalStorage<DevelopmentFundEntry[]>('gmct-dev-fund', [], (data) => Array.isArray(data) ? data.map(sanitizeDevelopmentFundEntry) : []);
+    const [noNameEntries, setNoNameEntries] = useLocalStorage<NoNameEntry[]>('gmct-no-name', [], (data) => Array.isArray(data) ? data.map(sanitizeNoNameEntry) : []);
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
@@ -74,9 +73,9 @@ const App: React.FC = () => {
 
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, attendance, history: weeklyHistory, users, developmentFund
+        entries, members, attendance, history: weeklyHistory, users, developmentFund, noName: noNameEntries
     }, {
-        setEntries, setMembers, setAttendance, setHistory: setWeeklyHistory, setUsers, setDevelopmentFund
+        setEntries, setMembers, setAttendance, setHistory: setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries
     });
     
     // --- Safe Close Protection ---
@@ -166,7 +165,6 @@ const App: React.FC = () => {
             else if (user.role === 'finance-team') setActiveTab('records');
             else if (user.role === 'data-entry') setActiveTab('records');
             else if (user.role === 'pastor') setActiveTab('insights');
-            else if (user.role === 'class-leader') setActiveTab('attendance');
             else if (user.role === 'statistician') setActiveTab('history');
             else setActiveTab('home');
         } else {
@@ -384,13 +382,12 @@ const App: React.FC = () => {
                     </div>
                 );
             case 'development-fund': return <DevelopmentFund members={members} entries={developmentFund} setEntries={setDevelopmentFund} settings={settings} />;
+            case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries.filter(e => !e.deleted)} settings={settings} />;
             case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, attendance, weeklyHistory, users, developmentFund, monthLocks, setEntries, setMembers, setAttendance, setWeeklyHistory, setUsers, setDevelopmentFund, setMonthLocks}}/>;
-            case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} />;
-            case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, attendance, weeklyHistory, users, developmentFund, noName: noNameEntries, monthLocks, setEntries, setMembers, setAttendance, setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries, setMonthLocks}}/>;
             case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} settings={settings} setEntries={setEntries} setMembers={setMembers} />;
             default: return <div>Select a tab</div>;
         }
@@ -400,10 +397,9 @@ const App: React.FC = () => {
         { id: 'home', label: 'Home', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
         { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
-        { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'class-leader', 'statistician', 'pastor'] },
+        { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
+        { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
         { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-        { id: 'attendance', label: 'Mark Attendance', roles: ['admin', 'class-leader'] },
-        { id: 'admin-attendance', label: 'Attendance Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'history', label: 'Weekly History', roles: ['admin', 'statistician', 'pastor'] },
         { id: 'users', label: 'Manage Users', roles: ['admin'] },
         { id: 'utilities', label: 'Utilities', roles: ['admin'] },

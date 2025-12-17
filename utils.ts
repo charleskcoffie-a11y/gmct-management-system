@@ -1,7 +1,7 @@
 
 // utils.ts
 import { v4 as uuidv4 } from 'uuid';
-import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, MonthLock } from './types';
+import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, MonthLock, NoNameEntry } from './types';
 
 // --- String & Sanitization ---
 
@@ -59,6 +59,22 @@ export function sanitizeDevelopmentFundEntry(raw: any): DevelopmentFundEntry {
         amount: isNaN(parseFloat(raw.amount)) ? 0 : parseFloat(raw.amount),
         description: sanitizeString(raw.description),
         createdBy: sanitizeString(raw.createdBy),
+    };
+}
+
+export function sanitizeNoNameEntry(raw: any): NoNameEntry {
+    const parsedDate = new Date(raw.date);
+    const date = (raw.date && !isNaN(parsedDate.getTime()))
+        ? parsedDate.toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+    
+    return {
+        id: sanitizeString(raw.id) || uuidv4(),
+        date: date,
+        amount: isNaN(parseFloat(raw.amount)) ? 0 : parseFloat(raw.amount),
+        notes: sanitizeString(raw.notes),
+        createdBy: sanitizeString(raw.createdBy),
+        updatedAt: sanitizeString(raw.updatedAt) || new Date().toISOString(),
     };
 }
 
@@ -161,7 +177,7 @@ export function sanitizeMethod(method: any): Method {
 }
 
 export function sanitizeUserRole(role: any): UserRole {
-    const validRoles: UserRole[] = ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor', 'class-leader', 'statistician'];
+    const validRoles: UserRole[] = ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor', 'statistician'];
     // Backward compatibility map
     if (role === 'finance') return 'finance-team';
     return validRoles.includes(role) ? role : 'finance-team';

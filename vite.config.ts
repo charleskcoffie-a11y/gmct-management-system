@@ -5,4 +5,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => ({
   base: mode === "production" ? "/gmct-management-system/" : "/",
   plugins: [react()],
+  build: {
+    // Increase chunk warning limit to reflect app size
+    chunkSizeWarningLimit: 1500,
+  },
 }));

@@ -16,9 +16,23 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-    const handleSave = (user: User) => {
+    const handleSave = (user: User, originalUsername?: string) => {
         const newUsers = [...users];
-        const index = newUsers.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
+        const matchUsername = originalUsername || user.username;
+        const index = newUsers.findIndex(u => u.username.toLowerCase() === matchUsername.toLowerCase());
+
+        // Protect default Admin account from being renamed
+        if (matchUsername.toLowerCase() === 'admin' && user.username.toLowerCase() !== matchUsername.toLowerCase()) {
+            alert('The default Admin username cannot be renamed.');
+            return;
+        }
+
+        // Prevent duplicate usernames when renaming
+        const hasDuplicate = newUsers.some((u, i) => i !== index && u.username.toLowerCase() === user.username.toLowerCase());
+        if (hasDuplicate) {
+            alert(`Username "${user.username}" is already in use.`);
+            return;
+        }
         
         if (index > -1) { // Edit
             const existingUser = newUsers[index];
@@ -66,7 +80,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
                             <tr key={user.username} className="bg-white border-b hover:bg-slate-50">
                                 <td className="px-6 py-4 font-medium text-slate-900">{sanitizeString(user.username)}</td>
                                 <td className="px-6 py-4 capitalize">{sanitizeUserRole(user.role).replace('-', ' ')}</td>
-                                <td className="px-6 py-4">{user.role === 'class-leader' ? `Leads Class ${sanitizeString(user.classLed)}` : ''}</td>
+                                <td className="px-6 py-4"></td>
                                 <td className="px-6 py-4 text-right">
                                     <button onClick={() => { setSelectedUser(user); setIsModalOpen(true); }} className="font-medium text-indigo-600 hover:underline mr-4">Edit</button>
                                     <button onClick={() => handleDelete(user.username)} className="font-medium text-red-600 hover:text-red-800 hover:underline">Delete</button>

@@ -172,7 +172,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                 <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-slate-800">History Log</h2>
                 </div>
-                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-4 space-y-4">
+                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-4 space-y-4 max-h-[75vh] overflow-y-auto">
                     <button onClick={handleAddNew} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-xl mb-6 shadow-md transition-all text-lg flex items-center justify-center gap-2">
                         <span className="text-2xl">+</span> New Record
                     </button>
@@ -196,7 +196,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                             </select>
                         </div>
                     </div>
-                    <ul className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+                    <ul className="space-y-3 pr-2">
                         {sortedHistory.map(rec => (
                             <li key={rec.id}>
                                 <button onClick={() => handleSelectRecord(rec.id)} className={`w-full text-left p-5 rounded-xl transition-all border-2 ${selectedRecordId === rec.id ? 'bg-indigo-50 border-indigo-500 text-indigo-900 shadow-md ring-2 ring-indigo-200' : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-slate-300 text-slate-700'}`}>

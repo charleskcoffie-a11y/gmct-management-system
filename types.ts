@@ -31,6 +31,15 @@ export interface DevelopmentFundEntry {
     createdBy?: string;
 }
 
+export interface NoNameEntry {
+    id: string;
+    date: string; // ISO format YYYY-MM-DD
+    amount: number;
+    notes?: string;
+    createdBy?: string;
+    updatedAt?: string;
+}
+
 export interface Member {
     id: string; // Our app's UUID
     spId?: string; // Legacy SharePoint ID, kept for compatibility if needed
@@ -48,13 +57,13 @@ export interface Settings {
     supabaseKey: string;
 }
 
-export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'class-leader' | 'statistician';
+export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician';
 
 export interface User {
     username: string;
     password?: string; // Should be hashed in a real app, but plain for this exercise
     role: UserRole;
-    classLed?: string; // Class number if role is 'class-leader'
+    classLed?: string; // Legacy: kept for older records
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
@@ -115,7 +124,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history';
+export type Tab = 'home' | 'records' | 'development-fund' | 'members' | 'insights' | 'users' | 'settings' | 'utilities' | 'history' | 'no-name';
 
 export interface CloudState {
   ready: boolean;

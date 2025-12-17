@@ -115,7 +115,19 @@ create table if not exists public.month_locks (
     locked_at timestamp with time zone
 );
 
--- 9. Configure Access Policies (Row Level Security)
+-- 9. Create No Name Entries Table (for anonymous/flexible entries)
+create table if not exists public.no_name_entries (
+    id uuid primary key default uuid_generate_v4(),
+    date date not null,
+    amount numeric not null,
+    notes text,
+    created_by text,
+    updated_at timestamp with time zone default timezone('utc'::text, now()),
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    data jsonb -- For flexible JSON storage if needed
+);
+
+-- 10. Configure Access Policies (Row Level Security)
 alter table public.members enable row level security;
 create policy "Enable all access for anon users" on public.members for all using (true) with check (true);
 
@@ -136,6 +148,9 @@ create policy "Enable all access for anon users" on public.app_users for all usi
 
 alter table public.month_locks enable row level security;
 create policy "Enable all access for anon users" on public.month_locks for all using (true) with check (true);
+
+alter table public.no_name_entries enable row level security;
+create policy "Enable all access for anon users" on public.no_name_entries for all using (true) with check (true);
 ```
 
 ### MIGRATION: If you already have tables
@@ -170,6 +185,50 @@ Can only enter new contributions and edit their own recent entries (15 minutes).
 
 **Pastor (Leadership Read-Only)**
 Can view giving summaries, trends, class totals, and Development Fund progress. Cannot edit financial records or change system settings. Individual giving view is optional based on church policy.
+
+**Statistician (Analytics & Reports)**
+Can view comprehensive analytics, reports, and trends. Cannot edit financial records or access system settings.
+
+---
+
+## Part 2.5: Core Features
+
+### Development Fund Tab
+Tracks contributions to special development projects. Allows members to be selected and contributions to be recorded with optional descriptions. Features include:
+- Quick add interface for rapid data entry
+- Inline editing of existing entries
+- Undo delete functionality with toast notification
+- Date range filters (This week, This month, QTD, YTD, Last 12 months)
+- Sortable columns (Date and Amount with persistence)
+- CSV export of member contributions
+- localStorage persistence of user preferences
+
+**Access:** Admin, Finance-Chair, Finance-Team, Data-Entry, Pastor
+
+### No Name Tab
+Flexible entry system for unnamed or miscellaneous financial contributions. Used for donations without a specific member attached or for special campaigns. Features include:
+- Amount and date entry with optional notes
+- Scrollable history with sorting by date or amount
+- Inline editing of entries with save/cancel controls
+- Undo delete with notification
+- CSV data export capability
+- Persistent sort preferences
+- JSON storage support in Supabase (via `data` column) for flexible metadata
+
+**Access:** Admin, Finance-Chair, Finance-Team only
+
+**Supabase Storage Notes:**
+The `no_name_entries` table includes a `data` JSONB column for flexible storage of additional metadata (e.g., campaign name, source, category). This allows storing unstructured data without modifying the table schema.
+
+Example JSON storage in the `data` column:
+```json
+{
+  "campaign": "Building Fund Drive 2024",
+  "source": "Online Donation",
+  "category": "Major Gift",
+  "reference": "Ref#12345"
+}
+```
 
 ---
 

@@ -7,7 +7,7 @@ interface UserModalProps {
     user: User | null;
     users: User[];
     members: Member[];
-    onSave: (user: User) => void;
+    onSave: (user: User, originalUsername?: string) => void;
     onClose: () => void;
 }
 
@@ -35,25 +35,23 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
                 setFormData(prev => ({ ...prev, role: matchedUser.role, classLed: matchedUser.classLed || '' }));
                 return;
             }
-
-            const member = members.find(m => m.name.toLowerCase() === value.toLowerCase());
-            if (member) {
-                setFormData(prev => ({ ...prev, role: 'class-leader', classLed: member.classNumber || '' }));
-            }
         }
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const trimmedUsername = formData.username.trim();
+
         if (!isEditing && !formData.password) {
             alert("Password is required for new users.");
             return;
         }
-        if (!formData.username.trim()) {
+        if (!trimmedUsername) {
             alert("Username is required.");
             return;
         }
-        onSave(formData);
+        const payload: User = { ...formData, username: trimmedUsername };
+        onSave(payload, user?.username);
     };
     
     // Sort members for dropdown
@@ -67,9 +65,16 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
         { value: 'finance-team', label: 'Finance Team', desc: 'Entry & Limited Edit' },
         { value: 'data-entry', label: 'Data Entry', desc: 'Entry Only (15min edit limit)' },
         { value: 'pastor', label: 'Pastor', desc: 'Read-Only Dashboards' },
-        { value: 'class-leader', label: 'Class Leader', desc: 'Mark Attendance Only' },
         { value: 'statistician', label: 'Statistician', desc: 'Weekly History Only' },
     ];
+    const allowedRoles = ROLES.map(r => r.value);
+
+    // Ensure legacy roles are coerced into a valid current role
+    useEffect(() => {
+        if (!allowedRoles.includes(formData.role)) {
+            setFormData(prev => ({ ...prev, role: 'finance-team' }));
+        }
+    }, [formData.role]);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
@@ -89,7 +94,6 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
                                 value={formData.username}
                                 onChange={handleChange}
                                 required
-                                disabled={isEditing}
                                 placeholder="Select Member or Type Name"
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
                             />
@@ -136,22 +140,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
                                 {ROLES.find(r => r.value === formData.role)?.desc}
                             </p>
                         </div>
-                        {formData.role === 'class-leader' && (
-                            <div>
-                                <label htmlFor="classLed" className="block font-medium text-gray-700">Class Led</label>
-                                <input
-                                    id="classLed"
-                                    name="classLed"
-                                    type="text"
-                                    value={formData.classLed || ''}
-                                    onChange={handleChange}
-                                    required
-                                    placeholder="e.g. 1"
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                                <p className="text-xs text-slate-500 mt-1">If selecting a member, this may auto-fill based on their class.</p>
-                            </div>
-                        )}
+                        {/* classLed legacy input removed since class-leader role is deprecated */}
                     </div>
                     <div className="p-4 bg-gray-50 rounded-b-lg flex justify-end gap-2">
                         <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
