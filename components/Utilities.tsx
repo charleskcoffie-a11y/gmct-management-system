@@ -213,8 +213,19 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
         const reader = new FileReader();
         reader.onload = () => {
             const base64String = reader.result as string;
-            setSettings(prev => ({ ...prev, logoUrl: base64String }));
-            alert('Logo uploaded successfully! Check the header to see your logo.');
+            console.log('Logo uploaded, size:', base64String.length, 'characters');
+            setSettings(prev => {
+                const updated = { ...prev, logoUrl: base64String };
+                console.log('Settings updated with logo');
+                return updated;
+            });
+            // Give a slight delay to ensure state updates
+            setTimeout(() => {
+                alert('Logo uploaded successfully! The logo should now appear in the header.');
+            }, 100);
+        };
+        reader.onerror = () => {
+            alert('Error reading file. Please try again.');
         };
         reader.readAsDataURL(file);
         event.target.value = '';

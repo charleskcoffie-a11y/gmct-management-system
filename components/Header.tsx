@@ -16,6 +16,14 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, settings }) => {
     
+    // Debug: Log logo status
+    React.useEffect(() => {
+        console.log('Header - Logo URL exists:', !!settings.logoUrl);
+        if (settings.logoUrl) {
+            console.log('Header - Logo URL length:', settings.logoUrl.length);
+        }
+    }, [settings.logoUrl]);
+    
     const getSyncBadge = () => {
         // Default to Offline if no status provided
         if (!syncStatus || syncStatus.state === 'offline') {
@@ -79,9 +87,9 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, sett
                     
                     {/* Title Section */}
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">GMCT Management System</h1>
+                        <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow-sm">GMCT Management System</h1>
                         <div className="flex items-center gap-4 mt-2">
-                            <p className="text-sm text-slate-300 font-medium">Comprehensive Church Management Solution</p>
+                            <p className="text-base text-slate-300 font-medium">Comprehensive Church Management Solution</p>
                             {getSyncBadge()}
                         </div>
                     </div>
@@ -90,14 +98,14 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, sett
                 {/* User Section */}
                 <div className="flex items-center gap-4">
                     {currentUser && (
-                        <div className="flex items-center gap-4 bg-slate-900/50 px-5 py-3 rounded-xl border-2 border-slate-600/40 backdrop-blur-sm shadow-lg">
+                        <div className="flex items-center gap-4 bg-slate-900/50 px-6 py-4 rounded-xl border-2 border-slate-600/40 backdrop-blur-sm shadow-lg">
                             <div className="flex flex-col items-end">
-                                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Logged in as</span>
-                                <span className="text-base font-bold text-white">{sanitizeString(currentUser.username)}</span>
-                                <span className="text-xs text-blue-300 font-medium capitalize">{currentUser.role.replace('-', ' ')}</span>
+                                <span className="text-sm text-slate-400 uppercase tracking-wider font-semibold">Logged in as</span>
+                                <span className="text-lg font-bold text-white">{sanitizeString(currentUser.username)}</span>
+                                <span className="text-sm text-blue-300 font-medium capitalize">{currentUser.role.replace('-', ' ')}</span>
                             </div>
-                            <div className="h-10 w-px bg-slate-600"></div>
-                            <button onClick={onLogout} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg hover:scale-105">
+                            <div className="h-12 w-px bg-slate-600"></div>
+                            <button onClick={onLogout} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg hover:scale-105 text-base">
                                 Logout
                             </button>
                         </div>

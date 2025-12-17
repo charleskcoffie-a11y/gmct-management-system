@@ -135,6 +135,7 @@ export function sanitizeSettings(raw: any): Settings {
         enforceDirectory: typeof raw.enforceDirectory === 'boolean' ? raw.enforceDirectory : true,
         supabaseUrl: sanitizeString(raw.supabaseUrl),
         supabaseKey: sanitizeString(raw.supabaseKey),
+        logoUrl: raw.logoUrl ? sanitizeString(raw.logoUrl) : undefined,
     }
 }
 

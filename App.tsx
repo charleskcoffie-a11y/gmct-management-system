@@ -594,16 +594,16 @@ const App: React.FC = () => {
 
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
-            <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
+            <div className="w-full px-4 sm:px-6 lg:px-8">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
-                <main className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <main className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     <aside className="lg:col-span-1 no-print">
-                        <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-4 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900">
+                        <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900">
                             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_40%),radial-gradient(ellipse_at_bottom_right,rgba(236,72,153,0.12),transparent_35%)]"></div>
-                            <div className="relative space-y-2">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <span className="text-slate-300/80 font-bold tracking-wider uppercase text-xs">Navigation</span>
-                                    <span className="px-2 py-1 rounded-full text-[10px] font-semibold text-indigo-100 bg-indigo-500/20 border border-indigo-400/30">
+                            <div className="relative space-y-3">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <span className="text-slate-300/80 font-bold tracking-wider uppercase text-sm">Navigation</span>
+                                    <span className="px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-100 bg-indigo-500/20 border border-indigo-400/30">
                                         {currentUser.role.replace(/-/g, ' ')}
                                     </span>
                                 </div>
@@ -616,7 +616,7 @@ const App: React.FC = () => {
                                         key={item.id} 
                                         onClick={() => hasAccess && setActiveTab(item.id as Tab)} 
                                         disabled={isRestricted}
-                                        className={`group w-full text-left font-bold px-5 py-4 rounded-xl transition-all duration-200 text-base tracking-wide flex items-center justify-between border ${
+                                        className={`group w-full text-left font-bold px-6 py-5 rounded-xl transition-all duration-200 text-lg tracking-wide flex items-center justify-between border ${
                                             activeTab === item.id 
                                                 ? 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow-lg ring-2 ring-indigo-400/40 border-white/10' 
                                                 : isRestricted 
@@ -640,7 +640,7 @@ const App: React.FC = () => {
                             </div>
                         </nav>
                     </aside>
-                    <section className="lg:col-span-3">{renderTabContent()}</section>
+                    <section className="lg:col-span-4">{renderTabContent()}</section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />
