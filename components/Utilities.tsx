@@ -194,91 +194,91 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
 
 
     return (
-        <div className="flex flex-col space-y-8 pb-12">
+        <div className="flex flex-col space-y-8 pb-12 max-w-6xl">
             <div>
-                <h2 className="text-3xl font-bold text-slate-800">Utilities & Tools</h2>
-                <p className="text-slate-500 mt-2">Manage data imports, exports, and generate reports.</p>
+                <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 rounded-xl shadow-lg">🛠️ Utilities & Tools</h2>
+                <p className="text-base text-slate-600 mt-3 font-medium">Import & export data, generate financial reports, and manage backups.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
                 {/* 1. Member Utilities */}
-                <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                             Member Directory
+                <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl shadow-lg border-2 border-emerald-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-emerald-600 to-green-600 p-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            👥 Member Directory
                         </h3>
                     </div>
                     <div className="p-6 space-y-4">
-                        <p className="text-sm text-slate-600">Import new members from CSV or download a backup.</p>
+                        <p className="text-sm text-slate-600 font-medium">Import new members from CSV or download a backup.</p>
                         
                         <div className="flex flex-wrap gap-4">
-                            <label className="flex-1 min-w-[140px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3 px-4 rounded-lg cursor-pointer flex justify-center items-center gap-2 transition-all">
+                            <label className="flex-1 min-w-[140px] bg-gradient-to-br from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-3 px-4 rounded-lg cursor-pointer flex justify-center items-center gap-2 transition-all shadow-md border-2 border-emerald-400">
                                 <UploadIcon />
                                 <span>Import CSV</span>
                                 <input type="file" accept=".csv" className="hidden" onChange={handleImportMembers} />
                             </label>
-                            <button onClick={exportMembers} className="flex-1 min-w-[140px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all border border-indigo-200">
+                            <button onClick={exportMembers} className="flex-1 min-w-[140px] bg-white hover:bg-emerald-50 text-emerald-700 font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all border-2 border-emerald-300">
                                 <DownloadIcon />
                                 <span>Export CSV</span>
                             </button>
                         </div>
                         
-                        <div className="pt-2 border-t border-slate-100">
-                            <button onClick={downloadMemberTemplate} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                        <div className="pt-3 border-t-2 border-emerald-100">
+                            <button onClick={downloadMemberTemplate} className="text-sm text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-2 transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                                 </svg>
-                                Download Import Template
+                                📄 Download Import Template
                             </button>
                         </div>
                     </div>
                 </div>
 
                 {/* 2. History Utilities */}
-                <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 p-4 border-b border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                             Weekly History
+                <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl shadow-lg border-2 border-cyan-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            📅 Weekly History
                         </h3>
                     </div>
                     <div className="p-6 space-y-4">
-                         <p className="text-sm text-slate-600">Download a summary log of all weekly services.</p>
-                         <button onClick={exportHistory} className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all border border-indigo-200">
+                         <p className="text-sm text-slate-600 font-medium">Download a summary log of all weekly services.</p>
+                         <button onClick={exportHistory} className="w-full bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-cyan-400">
                             <DownloadIcon />
-                            <span>Export History Log</span>
+                            <span>📥 Export History Log</span>
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* 3. Financial Report Generator */}
-            <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-                <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-slate-800">Financial Records & Reports</h3>
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl shadow-lg border-2 border-indigo-200 overflow-hidden">
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4">
+                    <h3 className="text-lg font-bold text-white">📊 Financial Records & Reports</h3>
                 </div>
                 
                 <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Filters Column */}
                     <div className="lg:col-span-2 space-y-6">
-                        <h4 className="font-semibold text-slate-700">Filter Report Data</h4>
+                        <h4 className="font-bold text-indigo-800 uppercase text-sm">🔍 Filter Report Data</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1">Start Date</label>
-                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"/>
+                                <label className="block text-sm font-bold text-indigo-800 mb-2">📅 Start Date</label>
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"/>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1">End Date</label>
-                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"/>
+                                <label className="block text-sm font-bold text-indigo-800 mb-2">📅 End Date</label>
+                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"/>
                             </div>
                         </div>
 
                          <fieldset>
-                             <legend className="text-sm font-medium text-slate-600 mb-2">Contribution Type</legend>
+                             <legend className="text-sm font-bold text-indigo-800 mb-2">💷 Contribution Type</legend>
                              <div className="flex flex-wrap gap-2">
                                  <button 
                                     onClick={() => handleTypeChange('all')}
-                                    className={`px-3 py-1 rounded-full text-xs font-semibold border ${selectedTypes.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedTypes.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
                                 >
                                     All Types
                                 </button>
@@ -286,20 +286,20 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
                                      <button 
                                         key={type}
                                         onClick={() => handleTypeChange(type)}
-                                        className={`px-3 py-1 rounded-full text-xs font-semibold border capitalize ${selectedTypes.has(type) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}
+                                        className={`px-3 py-1 rounded-full text-xs font-bold border-2 capitalize transition-all ${selectedTypes.has(type) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
                                     >
-                                        {type}
+                                        {type.replace('-', ' ')}
                                     </button>
                                  ))}
                              </div>
                         </fieldset>
 
                         <fieldset>
-                             <legend className="text-sm font-medium text-slate-600 mb-2">Class</legend>
+                             <legend className="text-sm font-bold text-indigo-800 mb-2">📚 Class</legend>
                              <div className="flex flex-wrap gap-2">
                                 <button 
                                     onClick={() => handleClassChange('all')}
-                                    className={`px-3 py-1 rounded-full text-xs font-semibold border ${selectedClasses.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedClasses.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
                                 >
                                     All Classes
                                 </button>
@@ -307,7 +307,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
                                     <button 
                                         key={cls}
                                         onClick={() => handleClassChange(cls)}
-                                        className={`px-3 py-1 rounded-full text-xs font-semibold border ${selectedClasses.has(cls) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}
+                                        className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedClasses.has(cls) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
                                     >
                                         Class {cls}
                                     </button>
@@ -317,35 +317,35 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
                     </div>
 
                     {/* Actions Column */}
-                    <div className="flex flex-col gap-4 border-l pl-0 lg:pl-8 border-slate-100">
-                        <h4 className="font-semibold text-slate-700">Actions</h4>
+                    <div className="flex flex-col gap-4 border-l-2 border-indigo-200 pl-8">
+                        <h4 className="font-bold text-indigo-800 uppercase text-sm">⚡ Actions</h4>
                         
-                        <button onClick={exportFilteredFinancials} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2">
+                        <button onClick={exportFilteredFinancials} className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 border-2 border-indigo-400">
                             <DownloadIcon />
                             Generate Report CSV
                         </button>
 
-                        <label className="bg-white hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 rounded-lg border border-slate-300 shadow-sm cursor-pointer flex items-center justify-center gap-2 transition-all">
+                        <label className="bg-white hover:bg-indigo-50 text-indigo-700 font-bold py-3 px-4 rounded-lg border-2 border-indigo-300 shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all">
                             <UploadIcon />
                             Import Financial CSV
                             <input type="file" accept=".csv" className="hidden" onChange={handleImportEntries} />
                         </label>
                         
-                        <div className="mt-4 pt-4 border-t border-slate-100">
-                             <label className="block text-sm font-medium text-slate-600 mb-1">Email Report To</label>
+                        <div className="mt-4 pt-4 border-t-2 border-indigo-200">
+                             <label className="block text-sm font-bold text-indigo-800 mb-2">✉️ Email Report To</label>
                              <div className="flex gap-2">
                                 <input
                                     type="email"
                                     placeholder="treasurer@gmct.org"
                                     value={emailTo}
                                     onChange={e => setEmailTo(e.target.value)}
-                                    className="flex-1 min-w-0 border-slate-300 rounded-lg shadow-sm text-sm"
+                                    className="flex-1 min-w-0 border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
                                 />
                                 <button 
                                     onClick={() => window.location.href = `mailto:${emailTo}?subject=Financial Report&body=Please attach the generated CSV.`}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-bold"
+                                    className="bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-blue-400"
                                 >
-                                    Email
+                                    📧 Email
                                 </button>
                              </div>
                         </div>
@@ -354,9 +354,9 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
             </div>
 
              {/* Danger Zone */}
-            <div className="bg-red-50 p-6 rounded-xl border border-red-200 mt-8">
-                <h3 className="text-xl font-bold text-red-800">Danger Zone</h3>
-                <p className="text-red-700 mt-1 mb-4">These actions are permanent and cannot be undone.</p>
+            <div className="bg-gradient-to-br from-red-50 to-rose-50 p-6 rounded-xl border-2 border-red-300 shadow-lg">
+                <h3 className="text-xl font-bold text-red-800">⚠️ Danger Zone</h3>
+                <p className="text-red-700 mt-1 mb-4 font-medium">These actions are permanent and cannot be undone.</p>
                 <button 
                     onClick={() => {
                         if (window.confirm("Are you sure you want to clear ALL local data? This will not affect your cloud data but will log you out.")) {
@@ -364,9 +364,9 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
                             window.location.reload();
                         }
                     }}
-                    className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-bold py-2 px-4 rounded-lg shadow-sm"
+                    className="bg-white text-red-700 border-2 border-red-300 hover:bg-red-50 font-bold py-3 px-6 rounded-lg shadow-md transition-all"
                 >
-                    Clear All Local Data & Logout
+                    🗑️ Clear All Local Data & Logout
                 </button>
             </div>
         </div>

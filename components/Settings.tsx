@@ -38,8 +38,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
     const [syncStatus, setSyncStatus] = useState<{type: 'success'|'error'|'info', message: string} | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
 
-    // Month Lock State
-    const [manageLockYear, setManageLockYear] = useState(new Date().getFullYear());
+    // Month Lock State removed - moved to Financial Control tab
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type, checked } = e.target as HTMLInputElement;
@@ -132,180 +131,121 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
     };
 
     const toggleMonthLock = (monthStr: string) => {
-        if (!allData) return;
-        const locks = [...allData.monthLocks];
-        const index = locks.findIndex(l => l.month === monthStr);
-        
-        if (index > -1) {
-            // Toggle
-            locks[index] = {
-                ...locks[index],
-                isLocked: !locks[index].isLocked,
-                lockedBy: currentUser.username,
-                lockedAt: new Date().toISOString()
-            };
-        } else {
-            // Create New Lock
-            locks.push({
-                month: monthStr,
-                isLocked: true,
-                lockedBy: currentUser.username,
-                lockedAt: new Date().toISOString()
-            });
-        }
-        allData.setMonthLocks(locks);
+        // This function moved to FinancialControl component
     };
 
     const getLockStatus = (monthStr: string) => {
-        return allData?.monthLocks.find(l => l.month === monthStr)?.isLocked || false;
+        // This function moved to FinancialControl component
+        return false;
     };
 
     return (
-        <div className="space-y-8 max-w-4xl">
+        <div className="space-y-8 max-w-5xl">
+            <div>
+                <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3 rounded-xl shadow-lg">⚙️ Settings</h2>
+                <p className="text-base text-slate-600 mt-3 font-medium">Configure system preferences, cloud sync, and data management.</p>
+            </div>
             
-            {/* 1. Financial Controls (Admin & Finance Chair Only) */}
-            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && allData && (
-                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/80 border-l-4 border-l-amber-500">
-                    <h3 className="text-xl font-bold text-slate-800 border-b pb-3 mb-4 flex justify-between items-center">
-                        <span>Financial Controls (Month Locking)</span>
-                        <div className="text-sm font-normal text-slate-500 flex items-center gap-2">
-                            Year: 
-                            <select value={manageLockYear} onChange={e => setManageLockYear(parseInt(e.target.value))} className="border-slate-300 rounded text-sm py-1">
-                                {[0,1].map(i => <option key={i} value={new Date().getFullYear()-i}>{new Date().getFullYear()-i}</option>)}
-                            </select>
-                        </div>
-                    </h3>
-                    <p className="text-sm text-slate-600 mb-4">Locked months cannot be edited by standard Finance Teams or Data Entry staff.</p>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                        {Array.from({ length: 12 }, (_, i) => {
-                            const date = new Date(manageLockYear, i, 1);
-                            const monthStr = date.toISOString().substring(0, 7);
-                            const isLocked = getLockStatus(monthStr);
-                            const isFuture = date > new Date();
-
-                            return (
-                                <button
-                                    key={monthStr}
-                                    onClick={() => toggleMonthLock(monthStr)}
-                                    disabled={isFuture}
-                                    className={`p-3 rounded-lg border text-center transition-all ${
-                                        isLocked 
-                                        ? 'bg-red-50 border-red-200 text-red-800' 
-                                        : 'bg-green-50 border-green-200 text-green-800'
-                                    } ${isFuture ? 'opacity-40 cursor-not-allowed' : 'hover:shadow-md'}`}
-                                >
-                                    <div className="font-bold">{date.toLocaleDateString('en-US', { month: 'short' })}</div>
-                                    <div className="text-xs uppercase font-bold mt-1">
-                                        {isLocked ? 'Locked 🔒' : 'Open 🔓'}
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* 2. System Settings (Admin Only) */}
+            {/* 1. System Settings (Admin Only) */}
             {currentUser.role === 'admin' ? (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/80">
-                    <h3 className="text-xl font-bold text-slate-800 border-b pb-3 mb-4">System Configuration</h3>
-                    <div className="space-y-4">
-                        <div>
-                            <label htmlFor="currency" className="block font-medium text-slate-700">Currency Symbol</label>
-                            <input type="text" id="currency" name="currency" value={localSettings.currency} onChange={handleChange} className="mt-1 block w-full md:w-1/2 border-slate-300 rounded-md shadow-sm py-2 px-3" />
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-blue-200">
+                    <h3 className="text-xl font-bold text-blue-800 border-b-2 border-blue-100 pb-3 mb-4">System Configuration</h3>
+                    <div className="space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="currency" className="block font-bold text-blue-800 text-sm uppercase mb-2">💷 Currency Symbol</label>
+                                <input type="text" id="currency" name="currency" value={localSettings.currency} onChange={handleChange} className="w-full border-2 border-blue-300 rounded-lg py-2 px-3 font-mono text-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400" />
+                            </div>
+                            <div>
+                                <label htmlFor="maxClasses" className="block font-bold text-blue-800 text-sm uppercase mb-2">📊 Number of Classes</label>
+                                <input type="number" id="maxClasses" name="maxClasses" value={localSettings.maxClasses} onChange={handleChange} className="w-full border-2 border-blue-300 rounded-lg py-2 px-3 font-mono text-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400" />
+                            </div>
                         </div>
-                        <div>
-                            <label htmlFor="maxClasses" className="block font-medium text-slate-700">Number of Classes</label>
-                            <input type="number" id="maxClasses" name="maxClasses" value={localSettings.maxClasses} onChange={handleChange} className="mt-1 block w-full md:w-1/2 border-slate-300 rounded-md shadow-sm py-2 px-3" />
+                        <div className="bg-white rounded-lg p-4 border border-blue-200">
+                            <label htmlFor="enforceDirectory" className="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" id="enforceDirectory" name="enforceDirectory" checked={localSettings.enforceDirectory} onChange={handleChange} className="h-6 w-6 text-blue-600 border-2 border-blue-300 rounded focus:ring-blue-500" />
+                                <span className="font-bold text-blue-800">Enforce Member Directory for new entries</span>
+                            </label>
                         </div>
-                        <div className="flex items-center gap-3 mt-4">
-                            <input type="checkbox" id="enforceDirectory" name="enforceDirectory" checked={localSettings.enforceDirectory} onChange={handleChange} className="h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
-                            <label htmlFor="enforceDirectory" className="font-medium text-slate-700">Enforce Member Directory for new entries</label>
-                        </div>
-                        <div className="pt-4 flex justify-end">
-                            <button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-md">
-                                Save System Settings
+                        <div className="flex justify-end pt-4">
+                            <button onClick={handleSave} className="bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-blue-300">
+                                ✓ Save System Settings
                             </button>
                         </div>
                     </div>
                 </div>
             ) : (
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-center text-slate-500 italic">
-                    Only Administrators can modify System Configuration.
+                <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
+                    🔒 Only Administrators can modify System Configuration.
                 </div>
             )}
             
-             {/* 3. Cloud Sync (Supabase) - Admin Only */}
+             {/* 2. Cloud Sync (Supabase) - Admin Only */}
              {currentUser.role === 'admin' && (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/80">
-                    <div className="flex items-center gap-2 mb-4 border-b pb-3">
-                        <h3 className="text-xl font-bold text-slate-800">Cloud Database (Supabase)</h3>
-                    </div>
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-purple-200">
+                    <h3 className="text-xl font-bold text-purple-800 border-b-2 border-purple-100 pb-3 mb-4">☁️ Cloud Database (Supabase)</h3>
                     
                     <div className="space-y-5">
                         <div className="grid grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700">Project URL</label>
+                                <label className="block text-sm font-bold uppercase text-purple-800 mb-2">🔗 Project URL</label>
                                 <input 
                                     type="text" 
                                     name="supabaseUrl" 
                                     value={localSettings.supabaseUrl || ''} 
                                     onChange={handleChange} 
-                                    className="mt-1 block w-full border-slate-300 rounded-md shadow-sm font-mono text-sm py-2 px-3 bg-slate-50" 
+                                    className="w-full border-2 border-purple-300 rounded-lg py-2 px-3 font-mono text-sm bg-white focus:ring-2 focus:ring-purple-400 focus:border-purple-400" 
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700">API Key</label>
+                                <label className="block text-sm font-bold uppercase text-purple-800 mb-2">🔐 API Key</label>
                                 <input 
                                     type="password" 
                                     name="supabaseKey" 
                                     value={localSettings.supabaseKey || ''} 
                                     onChange={handleChange} 
-                                    className="mt-1 block w-full border-slate-300 rounded-md shadow-sm font-mono text-sm py-2 px-3 bg-slate-50" 
+                                    className="w-full border-2 border-purple-300 rounded-lg py-2 px-3 font-mono text-sm bg-white focus:ring-2 focus:ring-purple-400 focus:border-purple-400" 
                                 />
                             </div>
                         </div>
 
-                        <div className="pt-2 flex flex-wrap gap-4 items-center border-b pb-4 mb-4 border-slate-100">
-                            <button onClick={handleTestSupabase} disabled={isTesting} className="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 px-4 rounded-lg">
-                                {isTesting ? "Testing..." : "Test Connection"}
+                        <div className="flex flex-wrap gap-4 items-center border-b-2 border-purple-100 pb-4">
+                            <button onClick={handleTestSupabase} disabled={isTesting} className="bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">
+                                {isTesting ? "🔄 Testing..." : "✓ Test Connection"}
                             </button>
                             {testResult && (
-                                <span className={`text-sm font-medium ${testResult.success ? 'text-green-700' : 'text-red-600'}`}>
+                                <span className={`text-sm font-bold ${testResult.success ? 'text-green-700' : 'text-red-600'}`}>
                                     {testResult.success ? "✓ Connected & Saved" : `✗ ${testResult.message}`}
                                 </span>
                             )}
                         </div>
                         
                         {allData && (
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                <h4 className="font-bold text-slate-700 mb-2">Manual Sync Actions</h4>
+                            <div className="bg-white rounded-lg border-2 border-purple-200 p-4">
+                                <h4 className="font-bold text-purple-800 mb-3">Manual Sync Actions</h4>
                                 <div className="flex flex-wrap gap-3">
-                                    <button onClick={handlePushToCloud} disabled={isSyncing} className="bg-indigo-600 text-white font-medium py-2 px-4 rounded-md shadow-sm">↑ Push to Cloud</button>
-                                    <button onClick={handlePullFromCloud} disabled={isSyncing} className="bg-orange-600 text-white font-medium py-2 px-4 rounded-md shadow-sm">↓ Pull from Cloud</button>
+                                    <button onClick={handlePushToCloud} disabled={isSyncing} className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">↑ Push to Cloud</button>
+                                    <button onClick={handlePullFromCloud} disabled={isSyncing} className="bg-gradient-to-br from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">↓ Pull from Cloud</button>
                                 </div>
-                                {syncStatus && <p className="mt-2 text-sm font-medium text-blue-600">{syncStatus.message}</p>}
+                                {syncStatus && <p className="mt-3 text-sm font-bold text-indigo-700 bg-indigo-50 px-3 py-2 rounded-lg">{syncStatus.message}</p>}
                             </div>
                         )}
                     </div>
                 </div>
              )}
 
-            {/* 4. Local Backup - Available to all with access to Settings tab */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/80 mt-8">
-                <h3 className="text-xl font-bold text-slate-800 border-b pb-3 mb-4">Local Backup & Restore</h3>
-                <div className="flex flex-col md:flex-row gap-4 items-start">
-                    <div className="flex-1">
-                        <button onClick={() => onExport('json_all')} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg w-full">Export Backup (JSON)</button>
-                    </div>
+            {/* 3. Local Backup - Available to all with access to Settings tab */}
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-xl shadow-lg border-2 border-amber-200">
+                <h3 className="text-xl font-bold text-amber-800 border-b-2 border-amber-100 pb-3 mb-4">💾 Local Backup & Restore</h3>
+                <div className="flex flex-col md:flex-row gap-4">
+                    <button onClick={() => onExport('json_all')} className="flex-1 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-slate-600">
+                        📥 Export Backup (JSON)
+                    </button>
                     {currentUser.role === 'admin' && (
-                        <div className="flex-1 w-full">
-                            <label className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg cursor-pointer flex justify-center w-full">
-                            <span>Restore Backup (JSON)</span>
+                        <label className="flex-1 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-slate-600 cursor-pointer flex justify-center">
+                            <span>📤 Restore Backup (JSON)</span>
                             <input type="file" accept=".json" className="hidden" onChange={handleFileImport} />
-                            </label>
-                        </div>
+                        </label>
                     )}
                 </div>
             </div>

@@ -1,9 +1,8 @@
-
-// components/WeeklyHistory.tsx
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { WeeklyHistoryRecord, VisitorRecord, ServiceDonation } from '../types';
 import { sanitizeWeeklyHistoryRecord, formatCurrency } from '../utils';
+import HistoryArchiveModal from './HistoryArchiveModal';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
@@ -31,25 +30,27 @@ const initialFormState = (): WeeklyHistoryRecord => ({
     preparedBy: '',
 });
 
-const SOCIETY_NAMES = [
-    "Ghana Methodist Church Toronto (GMCT)", "Holy Trinity Society, Montreal", "New Life International, Ottawa",
-    "Bethel, Calgary", "Wesley, Edmonton", "Redemption, Toronto", "Ebenezer, Hamilton", "St. John’s, Newfoundland", "Peniel, Vancouver"
-];
-
-const SERVICE_TYPES = [
-    "Divine Service", "Communion", "Youth Sunday", "Lay Movement / Wesley Hour",
-    "Revival / Prayer Meeting", "Thanksgiving / Harvest", "Outreach / Evangelism"
+const serviceTypeOptions = [
+    'Divine Service',
+    'Communion',
+    'Youth Sunday',
+    'Lay Movement',
+    'Revival/Prayer Sunday',
+    'Thanksgiving',
+    'Outreach',
+    'Other'
 ];
 
 const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) => {
     const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
     const [formData, setFormData] = useState<WeeklyHistoryRecord>(initialFormState());
-    const [yearFilter, setYearFilter] = useState<string>('all');
-    const [monthFilter, setMonthFilter] = useState<string>('all');
-
-    // Local state for adding new visitor/donation rows
-    const [newVisitor, setNewVisitor] = useState<VisitorRecord>({ name: '', from: '', position: '', reason: '' });
-    const [newDonation, setNewDonation] = useState<ServiceDonation>({ donor: '', amount: 0, description: '' });
+    const [showArchive, setShowArchive] = useState(false);
+    const [activeModal, setActiveModal] = useState<'details' | 'attendance' | 'visitors' | 'donations' | 'events' | null>(null);
+    const [editingArchiveId, setEditingArchiveId] = useState<string | null>(null);
+    
+    // Temporary state for new donor/visitor input
+    const [newDonor, setNewDonor] = useState({ donor: '', amount: 0, description: '' });
+    const [newVisitor, setNewVisitor] = useState({ name: '', from: '', position: '', reason: '' });
 
     useEffect(() => {
         if (selectedRecordId) {
@@ -59,375 +60,477 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
             setFormData(initialFormState());
         }
     }, [selectedRecordId, history]);
-    
-    const filteredHistory = useMemo(() => {
-        return history.filter(rec => {
-            const year = rec.dateOfService.slice(0, 4);
-            const month = rec.dateOfService.slice(5, 7);
-
-            if (yearFilter !== 'all' && year !== yearFilter) return false;
-            if (monthFilter !== 'all' && month !== monthFilter) return false;
-            return true;
-        });
-    }, [history, yearFilter, monthFilter]);
-
-    const sortedHistory = useMemo(() => {
-        return [...filteredHistory].sort((a, b) => b.dateOfService.localeCompare(a.dateOfService));
-    }, [filteredHistory]);
-
-    const availableYears = useMemo(() => {
-        const years = new Set<string>();
-        history.forEach(rec => years.add(rec.dateOfService.slice(0, 4)));
-        return Array.from(years).sort((a, b) => b.localeCompare(a));
-    }, [history]);
-
-    const totalAttendance = useMemo(() => {
-        const { men, women, junior, children, visitors, catechumens } = formData.attendance;
-        return men + women + junior + children + visitors + catechumens;
-    }, [formData.attendance]);
-
-    // -- Handlers --
-
-    const handleSelectRecord = (id: string) => setSelectedRecordId(id);
-    const handleAddNew = () => setSelectedRecordId(null);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleServiceTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { value, checked } = e.target;
-        const currentTypes = formData.serviceTypes;
-        const newTypes = checked ? [...currentTypes, value] : currentTypes.filter(t => t !== value);
+    const handleAttendanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, attendance: { ...prev.attendance, [name as keyof typeof prev.attendance]: parseInt(value) || 0 }}));
+    };
 
+    const handleAddDonation = () => {
+        if (newDonor.donor.trim() && newDonor.amount > 0) {
+            setFormData(prev => ({
+                ...prev,
+                donationsList: [...prev.donationsList, { donor: newDonor.donor, amount: newDonor.amount, description: newDonor.description }]
+            }));
+            setNewDonor({ donor: '', amount: 0, description: '' });
+        }
+    };
+
+    const handleRemoveDonation = (index: number) => {
         setFormData(prev => ({
             ...prev,
-            serviceTypes: newTypes,
-            serviceTypeOther: value === 'Other' && !checked ? '' : prev.serviceTypeOther
+            donationsList: prev.donationsList.filter((_, i) => i !== index)
         }));
     };
 
-    const handleAttendanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        const numValue = parseInt(value, 10) || 0;
-        setFormData(prev => ({ ...prev, attendance: { ...prev.attendance, [name]: numValue }}));
+    const handleAddVisitor = () => {
+        if (newVisitor.name.trim()) {
+            setFormData(prev => ({
+                ...prev,
+                visitorsList: [...prev.visitorsList, { name: newVisitor.name, from: newVisitor.from, position: newVisitor.position, reason: newVisitor.reason }]
+            }));
+            setNewVisitor({ name: '', from: '', position: '', reason: '' });
+        }
     };
 
-    // -- Visitor List Handlers --
-    const addVisitor = () => {
-        if (!newVisitor.name) return alert("Visitor Name is required");
-        setFormData(prev => ({ ...prev, visitorsList: [...prev.visitorsList, newVisitor], attendance: { ...prev.attendance, visitors: prev.attendance.visitors + 1 } }));
-        setNewVisitor({ name: '', from: '', position: '', reason: '' });
+    const handleRemoveVisitor = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            visitorsList: prev.visitorsList.filter((_, i) => i !== index)
+        }));
     };
 
-    const removeVisitor = (index: number) => {
-        setFormData(prev => ({ ...prev, visitorsList: prev.visitorsList.filter((_, i) => i !== index), attendance: { ...prev.attendance, visitors: Math.max(0, prev.attendance.visitors - 1) } }));
+    const handleServiceTypeToggle = (type: string) => {
+        setFormData(prev => ({
+            ...prev,
+            serviceTypes: prev.serviceTypes.includes(type)
+                ? prev.serviceTypes.filter(t => t !== type)
+                : [...prev.serviceTypes, type]
+        }));
     };
 
-    // -- Donation List Handlers --
-    const addDonation = () => {
-        if (!newDonation.amount || !newDonation.description) return alert("Amount and Description are required");
-        setFormData(prev => ({ ...prev, donationsList: [...prev.donationsList, newDonation] }));
-        setNewDonation({ donor: '', amount: 0, description: '' });
-    };
-
-    const removeDonation = (index: number) => {
-        setFormData(prev => ({ ...prev, donationsList: prev.donationsList.filter((_, i) => i !== index) }));
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         const sanitized = sanitizeWeeklyHistoryRecord(formData);
-        const index = history.findIndex(h => h.id === sanitized.id);
-        const newHistory = [...history];
-        if (index > -1) {
-            newHistory[index] = sanitized;
-        } else {
-            newHistory.push(sanitized);
-        }
+        const newHistory = history.findIndex(h => h.id === sanitized.id) > -1 
+            ? history.map(h => h.id === sanitized.id ? sanitized : h)
+            : [...history, sanitized];
         setHistory(newHistory);
-        alert('Record saved successfully!');
+        alert('Record saved!');
         setSelectedRecordId(sanitized.id);
+        setEditingArchiveId(null);
     };
 
-    const handleDelete = () => {
-        if (selectedRecordId && window.confirm("Are you sure you want to delete this record?")) {
-            setHistory(history.filter(h => h.id !== selectedRecordId));
-            setSelectedRecordId(null);
-        }
+    const handleEditArchiveRecord = (record: WeeklyHistoryRecord) => {
+        setSelectedRecordId(record.id);
+        setFormData(record);
+        setEditingArchiveId(record.id);
     };
-    
-    // --- Styles for larger, easier to tap inputs ---
-    const formSectionClasses = "p-6 md:p-8 rounded-2xl border-2 border-slate-200 shadow-sm space-y-6 bg-white mb-8";
-    const labelClass = "block text-lg md:text-xl font-bold text-slate-700 mb-2 tracking-wide";
-    const inputClass = "block w-full border-2 border-slate-300 rounded-xl shadow-sm py-4 px-5 text-xl bg-slate-100 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all font-medium text-slate-800 placeholder-slate-400";
-    const textareaClass = "block w-full border-2 border-slate-300 rounded-xl shadow-sm py-4 px-5 text-xl bg-slate-100 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all font-medium text-slate-800 min-h-[120px]";
-    const selectClass = "block w-full border-2 border-slate-300 rounded-xl shadow-sm py-4 px-5 text-xl bg-slate-100 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all font-medium text-slate-800 appearance-none";
+
+    const totalAttendance = useMemo(() => {
+        const { men, women, junior, children, visitors, catechumens } = formData.attendance;
+        return men + women + junior + children + visitors + catechumens;
+    }, [formData.attendance]);
+
+    // Calculate completion status - all required sections
+    const completionStatus = useMemo(() => {
+        const sections = [
+            { name: 'Service Details', filled: !!formData.dateOfService && !!formData.officiant },
+            { name: 'Attendance', filled: totalAttendance > 0 },
+            { name: 'Visitors', filled: formData.visitorsList.length > 0 },
+            { name: 'Donations', filled: formData.donationsList.length > 0 },
+            { name: 'Worship', filled: !!formData.sermonTopic || !!formData.events },
+        ];
+        const completed = sections.filter(s => s.filled).length;
+        return { sections, completed, total: sections.length };
+    }, [formData, totalAttendance]);
+
+    const canSave = completionStatus.completed === completionStatus.total;
+
+    const filteredHistory = useMemo(() => {
+        const now = new Date();
+        return history.filter(rec => {
+            const recDate = new Date(rec.dateOfService);
+            return recDate.getMonth() === now.getMonth() && recDate.getFullYear() === now.getFullYear();
+        });
+    }, [history]);
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 pb-32">
-            {/* Left Column: Record List */}
-            <aside className="lg:col-span-1 space-y-6 no-print">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-slate-800">History Log</h2>
-                </div>
-                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-4 space-y-4 max-h-[75vh] overflow-y-auto">
-                    <button onClick={handleAddNew} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-xl mb-6 shadow-md transition-all text-lg flex items-center justify-center gap-2">
-                        <span className="text-2xl">+</span> New Record
-                    </button>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-1">Filter by Year</label>
-                            <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm bg-slate-50">
-                                <option value="all">All Years</option>
-                                {availableYears.map(year => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-1">Filter by Month</label>
-                            <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg p-3 text-sm bg-slate-50">
-                                <option value="all">All Months</option>
-                                {["01","02","03","04","05","06","07","08","09","10","11","12"].map(month => (
-                                    <option key={month} value={month}>Month {month}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                    <ul className="space-y-3 pr-2">
-                        {sortedHistory.map(rec => (
-                            <li key={rec.id}>
-                                <button onClick={() => handleSelectRecord(rec.id)} className={`w-full text-left p-5 rounded-xl transition-all border-2 ${selectedRecordId === rec.id ? 'bg-indigo-50 border-indigo-500 text-indigo-900 shadow-md ring-2 ring-indigo-200' : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-slate-300 text-slate-700'}`}>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="font-bold text-xl">{rec.dateOfService}</span>
-                                        <span className="text-sm font-bold bg-slate-200 text-slate-700 px-3 py-1 rounded-full">Att: {rec.attendance.men + rec.attendance.women + rec.attendance.children + rec.attendance.visitors}</span>
-                                    </div>
-                                    <p className="text-base opacity-80 truncate font-medium">{rec.sermonTopic || "No Topic"}</p>
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </aside>
+        <div className="pb-12 max-w-6xl mx-auto p-4">
+            <h2 className="text-3xl font-bold mb-6 text-white bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-3 rounded-lg inline-block">📅 Weekly History</h2>
 
-            {/* Right Column: Form */}
-            <section className="lg:col-span-3">
-                 <form onSubmit={handleSubmit}>
-                     <div className="printable-area">
-                        
-                        {/* 1. Header & Service Details */}
-                        <div className={formSectionClasses}>
-                            <h3 className="text-2xl font-black text-indigo-900 border-b-2 border-indigo-100 pb-4 mb-6">Service Details</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className={labelClass}>Date of Service</label>
-                                    <input type="date" name="dateOfService" value={formData.dateOfService} onChange={handleChange} required className={inputClass}/>
-                                </div>
-                                 <div>
-                                    <label className={labelClass}>Society Name</label>
-                                    <div className="relative">
-                                        <select name="societyName" value={formData.societyName} onChange={handleChange} className={selectClass}>
-                                            {SOCIETY_NAMES.map(name => <option key={name} value={name}>{name}</option>)}
-                                        </select>
-                                        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-500">
-                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </div>
-                                    </div>
-                                </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                <button onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded text-sm">📚 Archives</button>
+                <button onClick={() => setSelectedRecordId(null)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded text-sm">✏️ New</button>
+                <button onClick={() => window.print()} disabled={!selectedRecordId} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🖨️ Print</button>
+                <button onClick={() => { if (selectedRecordId) { if (window.confirm('Delete?')) { setHistory(history.filter(h => h.id !== selectedRecordId)); setSelectedRecordId(null); } } }} disabled={!selectedRecordId} className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🗑️ Delete</button>
+            </div>
+
+            {/* Completion Progress Indicator */}
+            {selectedRecordId && (
+                <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold text-sm text-gray-700">Form Completion</h3>
+                        <span className="text-2xl font-bold text-purple-600">{completionStatus.completed}/{completionStatus.total}</span>
+                    </div>
+                    <div className="w-full bg-gray-300 rounded-full h-3 mb-3">
+                        <div 
+                            className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
+                            style={{ width: `${(completionStatus.completed / completionStatus.total) * 100}%` }}
+                        ></div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {completionStatus.sections.map(section => (
+                            <div key={section.name} className={`text-xs p-2 rounded font-semibold ${section.filled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {section.filled ? '✓' : '✗'} {section.name}
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                               <div>
-                                   <label className={labelClass}>Minister / Officiant</label>
-                                   <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} required className={inputClass} placeholder="e.g. Rev. John Doe"/>
-                               </div>
-                               <div>
-                                   <label className={labelClass}>Liturgist</label>
-                                   <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} required className={inputClass} placeholder="e.g. Sis. Jane Doe"/>
-                               </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <button type="button" onClick={() => setActiveModal('details')} className="bg-blue-50 border-2 border-blue-200 p-4 rounded-lg hover:shadow-lg">
+                    <div className="text-2xl mb-1">📋</div>
+                    <h3 className="font-bold text-sm text-blue-900">Service Details</h3>
+                    <p className="text-xs text-blue-600">{formData.dateOfService}</p>
+                </button>
+
+                <button type="button" onClick={() => setActiveModal('attendance')} className="bg-emerald-50 border-2 border-emerald-200 p-4 rounded-lg hover:shadow-lg">
+                    <div className="text-2xl mb-1">👥</div>
+                    <h3 className="font-bold text-sm text-emerald-900">Attendance</h3>
+                    <p className="text-lg font-bold text-emerald-700">{totalAttendance}</p>
+                </button>
+
+                <button type="button" onClick={() => setActiveModal('visitors')} className="bg-purple-50 border-2 border-purple-200 p-4 rounded-lg hover:shadow-lg">
+                    <div className="text-2xl mb-1">🤝</div>
+                    <h3 className="font-bold text-sm text-purple-900">Visitors</h3>
+                    <p className="text-lg font-bold text-purple-700">{formData.visitorsList.length}</p>
+                </button>
+
+                <button type="button" onClick={() => setActiveModal('donations')} className="bg-rose-50 border-2 border-rose-200 p-4 rounded-lg hover:shadow-lg">
+                    <div className="text-2xl mb-1">💝</div>
+                    <h3 className="font-bold text-sm text-rose-900">Donations</h3>
+                    <p className="text-lg font-bold text-rose-700">{formData.donationsList.length}</p>
+                </button>
+
+                <button type="button" onClick={() => setActiveModal('events')} className="bg-orange-50 border-2 border-orange-200 p-4 rounded-lg hover:shadow-lg sm:col-span-2 lg:col-span-1">
+                    <div className="text-2xl mb-1">🙏</div>
+                    <h3 className="font-bold text-sm text-orange-900">Worship</h3>
+                    <p className="text-xs text-orange-600 line-clamp-1">{formData.sermonTopic || 'Add topic'}</p>
+                </button>
+            </div>
+
+            <button 
+                type="button" 
+                onClick={handleSubmit} 
+                disabled={!canSave}
+                className={`w-full mt-6 font-bold py-3 rounded-lg shadow-lg transition-all ${
+                    canSave 
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer' 
+                        : 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                }`}
+            >
+                {canSave ? '💾 Save Record - Complete!' : `⚠️ Complete ${completionStatus.total - completionStatus.completed} more sections`}
+            </button>
+
+            {activeModal === 'details' && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-xl font-bold mb-4 text-gray-900">📋 Service Details</h2>
+                        <div className="space-y-3 mb-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Date of Service *</label>
+                                <input type="date" name="dateOfService" value={formData.dateOfService} onChange={handleChange} className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
-                            
-                            <div className="pt-4">
-                                <label className={labelClass}>Service Type</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-                                    {SERVICE_TYPES.map(type => (
-                                        <label key={type} className={`flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.serviceTypes.includes(type) ? 'bg-indigo-100 border-indigo-500 shadow-md' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'}`}>
-                                            <input type="checkbox" value={type} checked={formData.serviceTypes.includes(type)} onChange={handleServiceTypeChange} className="w-6 h-6 text-indigo-600 rounded focus:ring-indigo-500"/>
-                                            <span className={`ml-3 text-lg font-bold ${formData.serviceTypes.includes(type) ? 'text-indigo-900' : 'text-slate-600'}`}>{type}</span>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Officiant *</label>
+                                <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} placeholder="e.g., Rev. John Doe" className="w-full border-2 border-blue-300 rounded p-2"/>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist</label>
+                                <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="Optional" className="w-full border-2 rounded p-2"/>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-2">Service Types *</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {serviceTypeOptions.map(type => (
+                                        <label key={type} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-blue-50 border border-blue-200">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={formData.serviceTypes.includes(type)}
+                                                onChange={() => handleServiceTypeToggle(type)}
+                                                className="w-4 h-4"
+                                            />
+                                            <span className="text-xs font-bold text-gray-700">{type}</span>
                                         </label>
                                     ))}
-                                    <label className={`flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.serviceTypes.includes('Other') ? 'bg-indigo-100 border-indigo-500 shadow-md' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'}`}>
-                                        <input type="checkbox" value="Other" checked={formData.serviceTypes.includes('Other')} onChange={handleServiceTypeChange} className="w-6 h-6 text-indigo-600 rounded focus:ring-indigo-500"/>
-                                        <span className={`ml-3 text-lg font-bold ${formData.serviceTypes.includes('Other') ? 'text-indigo-900' : 'text-slate-600'}`}>Other</span>
-                                    </label>
                                 </div>
-                                {formData.serviceTypes.includes('Other') && (
-                                    <div className="mt-4">
-                                        <label className={labelClass}>Other Service Type</label>
-                                        <input type="text" name="serviceTypeOther" value={formData.serviceTypeOther} onChange={handleChange} className={inputClass} placeholder="Describe other service" />
-                                    </div>
-                                )}
+                            </div>
+                            {formData.serviceTypes.includes('Other') && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Specify Other Service Type</label>
+                                    <input type="text" name="serviceTypeOther" value={formData.serviceTypeOther} onChange={handleChange} placeholder="Please specify" className="w-full border-2 rounded p-2"/>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-gray-300 text-gray-900 py-2 rounded font-bold hover:bg-gray-400">Cancel</button>
+                            <button onClick={() => { setActiveModal(null); }} className="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700">Done</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeModal === 'attendance' && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-sm w-full p-6">
+                        <h2 className="text-xl font-bold mb-4 text-gray-900">👥 Attendance Breakdown</h2>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-700">Men</label>
+                                <input type="number" name="men" value={formData.attendance.men} onChange={handleAttendanceChange} className="w-full border-2 border-emerald-300 rounded p-1"/>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-700">Women</label>
+                                <input type="number" name="women" value={formData.attendance.women} onChange={handleAttendanceChange} className="w-full border-2 border-emerald-300 rounded p-1"/>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-700">Junior</label>
+                                <input type="number" name="junior" value={formData.attendance.junior} onChange={handleAttendanceChange} className="w-full border-2 border-emerald-300 rounded p-1"/>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-700">Children</label>
+                                <input type="number" name="children" value={formData.attendance.children} onChange={handleAttendanceChange} className="w-full border-2 border-emerald-300 rounded p-1"/>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-700">Visitors</label>
+                                <input type="number" name="visitors" value={formData.attendance.visitors} onChange={handleAttendanceChange} className="w-full border-2 border-emerald-300 rounded p-1"/>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-700">Catechumens</label>
+                                <input type="number" name="catechumens" value={formData.attendance.catechumens} onChange={handleAttendanceChange} className="w-full border-2 border-emerald-300 rounded p-1"/>
+                            </div>
+                        </div>
+                        <div className={`text-lg font-bold p-3 rounded mb-4 ${totalAttendance > 0 ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}`}>
+                            Total Attendance: {totalAttendance}
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-gray-300 text-gray-900 py-2 rounded font-bold hover:bg-gray-400">Cancel</button>
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-emerald-600 text-white py-2 rounded font-bold hover:bg-emerald-700">Done</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeModal === 'visitors' && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-xl font-bold mb-4 text-gray-900">🤝 Visitors List ({formData.visitorsList.length})</h2>
+                        
+                        {/* Add New Visitor */}
+                        <div className="bg-purple-50 border-2 border-purple-200 p-3 rounded-lg mb-4">
+                            <h3 className="font-bold text-sm text-purple-900 mb-3">Add New Visitor</h3>
+                            <div className="space-y-2">
+                                <input 
+                                    type="text" 
+                                    value={newVisitor.name}
+                                    onChange={(e) => setNewVisitor(prev => ({...prev, name: e.target.value}))}
+                                    placeholder="Visitor Name *"
+                                    className="w-full border-2 border-purple-300 rounded p-2 text-sm"
+                                />
+                                <input 
+                                    type="text" 
+                                    value={newVisitor.from}
+                                    onChange={(e) => setNewVisitor(prev => ({...prev, from: e.target.value}))}
+                                    placeholder="From (church/location)"
+                                    className="w-full border-2 rounded p-2 text-sm"
+                                />
+                                <input 
+                                    type="text" 
+                                    value={newVisitor.position}
+                                    onChange={(e) => setNewVisitor(prev => ({...prev, position: e.target.value}))}
+                                    placeholder="Position/Role (optional)"
+                                    className="w-full border-2 rounded p-2 text-sm"
+                                />
+                                <input 
+                                    type="text" 
+                                    value={newVisitor.reason}
+                                    onChange={(e) => setNewVisitor(prev => ({...prev, reason: e.target.value}))}
+                                    placeholder="Reason for visit (optional)"
+                                    className="w-full border-2 rounded p-2 text-sm"
+                                />
+                                <button 
+                                    onClick={handleAddVisitor}
+                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded text-sm"
+                                >
+                                    ➕ Add Visitor
+                                </button>
                             </div>
                         </div>
 
-                        {/* 2. Worship Content */}
-                         <div className={formSectionClasses}>
-                            <h3 className="text-2xl font-black text-indigo-900 border-b-2 border-indigo-100 pb-4 mb-6">Worship Content</h3>
-                            <div>
-                                <label className={labelClass}>Sermon Topic / Theme</label>
-                                <input type="text" name="sermonTopic" value={formData.sermonTopic} onChange={handleChange} required className={inputClass} placeholder="Main message title"/>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Worship Highlights / Notes</label>
-                                <textarea name="worshipHighlights" rows={4} value={formData.worshipHighlights} onChange={handleChange} className={textareaClass} placeholder="Key points, scriptures, or songs..."/>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Announcements By</label>
-                                <input type="text" name="announcementsBy" value={formData.announcementsBy} onChange={handleChange} className={inputClass}/>
-                            </div>
+                        {/* List of Visitors */}
+                        <div className="mb-4 space-y-2 max-h-48 overflow-y-auto">
+                            {formData.visitorsList.length > 0 ? (
+                                formData.visitorsList.map((v, i) => (
+                                    <div key={i} className="text-sm bg-purple-100 p-3 rounded border border-purple-300 flex justify-between items-start gap-2">
+                                        <div className="flex-1">
+                                            <div className="font-bold text-purple-900">{v.name}</div>
+                                            {v.from && <div className="text-xs text-purple-700">From: {v.from}</div>}
+                                            {v.position && <div className="text-xs text-purple-700">Position: {v.position}</div>}
+                                            {v.reason && <div className="text-xs text-purple-700">Reason: {v.reason}</div>}
+                                        </div>
+                                        <button 
+                                            onClick={() => handleRemoveVisitor(i)}
+                                            className="text-red-600 hover:text-red-800 font-bold text-lg"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-4 text-gray-500">No visitors recorded yet</div>
+                            )}
                         </div>
                         
-                        {/* 3. Attendance */}
-                        <div className={formSectionClasses}>
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b-2 border-indigo-100 pb-4 mb-6 gap-4">
-                                <h3 className="text-2xl font-black text-indigo-900">Attendance</h3>
-                                <div className="text-xl font-bold bg-indigo-600 text-white px-6 py-2 rounded-full shadow-md text-center">Total: {totalAttendance}</div>
-                            </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                                {(['men', 'women', 'children', 'junior', 'catechumens', 'visitors'] as const).map(key => (
-                                    <div key={key} className="bg-slate-50 p-4 rounded-xl border-2 border-slate-200 hover:border-indigo-300 transition-colors">
-                                        <label className="block text-sm font-bold uppercase text-slate-500 mb-2 tracking-wider">{key}</label>
-                                        <input type="number" min="0" name={key} value={String(formData.attendance[key])} onChange={handleAttendanceChange} className="block w-full bg-white border-2 border-slate-300 rounded-lg focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 text-center font-bold text-3xl py-3 text-slate-800"/>
-                                    </div>
-                                ))}
+                        <div className="flex gap-2">
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-gray-300 text-gray-900 py-2 rounded font-bold hover:bg-gray-400">Cancel</button>
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-purple-600 text-white py-2 rounded font-bold hover:bg-purple-700">Done</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeModal === 'donations' && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-xl font-bold mb-4 text-gray-900">💝 Donations ({formData.donationsList.length})</h2>
+                        
+                        {/* Add New Donation */}
+                        <div className="bg-rose-50 border-2 border-rose-200 p-3 rounded-lg mb-4">
+                            <h3 className="font-bold text-sm text-rose-900 mb-3">Add New Donation</h3>
+                            <div className="space-y-2">
+                                <input 
+                                    type="text" 
+                                    value={newDonor.donor}
+                                    onChange={(e) => setNewDonor(prev => ({...prev, donor: e.target.value}))}
+                                    placeholder="Donor Name *"
+                                    className="w-full border-2 border-rose-300 rounded p-2 text-sm"
+                                />
+                                <input 
+                                    type="number" 
+                                    value={newDonor.amount || ''}
+                                    onChange={(e) => setNewDonor(prev => ({...prev, amount: parseFloat(e.target.value) || 0}))}
+                                    placeholder="Amount *"
+                                    className="w-full border-2 border-rose-300 rounded p-2 text-sm"
+                                    min="0"
+                                    step="0.01"
+                                />
+                                <input 
+                                    type="text" 
+                                    value={newDonor.description}
+                                    onChange={(e) => setNewDonor(prev => ({...prev, description: e.target.value}))}
+                                    placeholder="Description/Purpose (optional)"
+                                    className="w-full border-2 rounded p-2 text-sm"
+                                />
+                                <button 
+                                    onClick={handleAddDonation}
+                                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded text-sm"
+                                >
+                                    ➕ Add Donation
+                                </button>
                             </div>
                         </div>
 
-                        {/* 4. Visitors & Donations */}
-                        <div className={formSectionClasses}>
-                            <h3 className="text-2xl font-black text-indigo-900 border-b-2 border-indigo-100 pb-4 mb-6">Visitors Log</h3>
-                            
-                            {/* New Visitor Input */}
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-indigo-50/50 p-4 rounded-xl border-2 border-indigo-100 mb-6">
-                                <div className="md:col-span-3">
-                                    <label className="block text-xs font-bold uppercase text-indigo-800 mb-1 ml-1">Name</label>
-                                    <input placeholder="Name" className="w-full border-slate-300 rounded-lg p-3 text-base shadow-sm focus:ring-indigo-500" value={newVisitor.name} onChange={e => setNewVisitor(p => ({...p, name: e.target.value}))} />
-                                </div>
-                                <div className="md:col-span-3">
-                                    <label className="block text-xs font-bold uppercase text-indigo-800 mb-1 ml-1">From</label>
-                                    <input placeholder="Location" className="w-full border-slate-300 rounded-lg p-3 text-base shadow-sm focus:ring-indigo-500" value={newVisitor.from} onChange={e => setNewVisitor(p => ({...p, from: e.target.value}))} />
-                                </div>
-                                <div className="md:col-span-3">
-                                    <label className="block text-xs font-bold uppercase text-indigo-800 mb-1 ml-1">Position/Reason</label>
-                                    <input placeholder="Details" className="w-full border-slate-300 rounded-lg p-3 text-base shadow-sm focus:ring-indigo-500" value={newVisitor.position} onChange={e => setNewVisitor(p => ({...p, position: e.target.value}))} />
-                                </div>
-                                <div className="md:col-span-3">
-                                    <button type="button" onClick={addVisitor} className="w-full h-[50px] bg-indigo-600 text-white rounded-lg text-lg font-bold hover:bg-indigo-700 shadow-md active:transform active:scale-95 transition-all">Add Visitor</button>
-                                </div>
-                            </div>
-
-                            {formData.visitorsList.length > 0 ? (
-                                <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                                    <table className="w-full text-base text-left text-slate-700 mb-8">
-                                        <thead className="bg-slate-100 text-slate-800 font-extrabold uppercase text-sm">
-                                            <tr>
-                                                <th className="p-4 rounded-tl-lg">Name</th><th className="p-4">From</th><th className="p-4">Details</th><th className="p-4 rounded-tr-lg"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-slate-100 border border-slate-200">
-                                            {formData.visitorsList.map((v, idx) => (
-                                                <tr key={idx}>
-                                                    <td className="p-4 font-bold text-lg">{v.name}</td>
-                                                    <td className="p-4">{v.from}</td>
-                                                    <td className="p-4">{v.position} {v.reason ? `(${v.reason})` : ''}</td>
-                                                    <td className="p-4 text-right"><button type="button" onClick={() => removeVisitor(idx)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 w-8 h-8 rounded-full font-bold flex items-center justify-center transition-colors">×</button></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : <p className="text-lg text-slate-400 italic mb-8 p-4 bg-slate-50 rounded-lg text-center">No visitors logged yet.</p>}
-
-                            <h3 className="text-2xl font-black text-indigo-900 border-b-2 border-indigo-100 pb-4 mb-6 mt-8">Special Donations</h3>
-                             {/* New Donation Input */}
-                             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-emerald-50/50 p-4 rounded-xl border-2 border-emerald-100 mb-6">
-                                <div className="md:col-span-3">
-                                    <label className="block text-xs font-bold uppercase text-emerald-800 mb-1 ml-1">Donor</label>
-                                    <input placeholder="Donor Name" className="w-full border-slate-300 rounded-lg p-3 text-base shadow-sm focus:ring-emerald-500" value={newDonation.donor} onChange={e => setNewDonation(p => ({...p, donor: e.target.value}))} />
-                                </div>
-                                <div className="md:col-span-3">
-                                    <label className="block text-xs font-bold uppercase text-emerald-800 mb-1 ml-1">Amount</label>
-                                    <input type="number" placeholder="0.00" className="w-full border-slate-300 rounded-lg p-3 text-base shadow-sm focus:ring-emerald-500 font-bold" value={newDonation.amount || ''} onChange={e => setNewDonation(p => ({...p, amount: parseFloat(e.target.value) || 0}))} />
-                                </div>
-                                <div className="md:col-span-3">
-                                    <label className="block text-xs font-bold uppercase text-emerald-800 mb-1 ml-1">Description</label>
-                                    <input placeholder="Reason" className="w-full border-slate-300 rounded-lg p-3 text-base shadow-sm focus:ring-emerald-500" value={newDonation.description} onChange={e => setNewDonation(p => ({...p, description: e.target.value}))} />
-                                </div>
-                                <div className="md:col-span-3">
-                                    <button type="button" onClick={addDonation} className="w-full h-[50px] bg-emerald-600 text-white rounded-lg text-lg font-bold hover:bg-emerald-700 shadow-md active:transform active:scale-95 transition-all">Add Donation</button>
-                                </div>
-                            </div>
-
+                        {/* List of Donations */}
+                        <div className="mb-4 space-y-2 max-h-48 overflow-y-auto">
                             {formData.donationsList.length > 0 ? (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-base text-left text-slate-700">
-                                        <thead className="bg-slate-100 text-slate-800 font-extrabold uppercase text-sm">
-                                            <tr>
-                                                <th className="p-4 rounded-tl-lg">Donor</th><th className="p-4">Amount</th><th className="p-4">Description</th><th className="p-4 rounded-tr-lg"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-slate-100 border border-slate-200">
-                                            {formData.donationsList.map((d, idx) => (
-                                                <tr key={idx}>
-                                                    <td className="p-4 font-bold text-lg">{d.donor}</td>
-                                                    <td className="p-4 font-bold text-emerald-700">{formatCurrency(d.amount)}</td>
-                                                    <td className="p-4">{d.description}</td>
-                                                    <td className="p-4 text-right"><button type="button" onClick={() => removeDonation(idx)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 w-8 h-8 rounded-full font-bold flex items-center justify-center transition-colors">×</button></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : <p className="text-lg text-slate-400 italic p-4 bg-slate-50 rounded-lg text-center">No ad-hoc donations logged.</p>}
+                                formData.donationsList.map((d, i) => (
+                                    <div key={i} className="text-sm bg-rose-100 p-3 rounded border border-rose-300 flex justify-between items-start gap-2">
+                                        <div className="flex-1">
+                                            <div className="font-bold text-rose-900">{formatCurrency(d.amount)}</div>
+                                            {d.donor && <div className="text-xs text-rose-700">From: {d.donor}</div>}
+                                            {d.description && <div className="text-xs text-rose-700">{d.description}</div>}
+                                        </div>
+                                        <button 
+                                            onClick={() => handleRemoveDonation(i)}
+                                            className="text-red-600 hover:text-red-800 font-bold text-lg"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-4 text-gray-500">No donations recorded yet</div>
+                            )}
                         </div>
 
-                        {/* 5. Events & Observations */}
-                        <div className={formSectionClasses}>
-                            <h3 className="text-2xl font-black text-indigo-900 border-b-2 border-indigo-100 pb-4 mb-6">Events & Observations</h3>
+                        <div className="flex gap-2">
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-gray-300 text-gray-900 py-2 rounded font-bold hover:bg-gray-400">Cancel</button>
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-rose-600 text-white py-2 rounded font-bold hover:bg-rose-700">Done</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeModal === 'events' && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-sm w-full p-6">
+                        <h2 className="text-xl font-bold mb-4 text-gray-900">🙏 Worship & Events</h2>
+                        <div className="space-y-3 mb-4">
                             <div>
-                                <label className={labelClass}>Special Events or Activities</label>
-                                <textarea name="events" rows={4} value={formData.events} onChange={handleChange} className={textareaClass} placeholder="Anything special happening today?"/>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
+                                <input 
+                                    type="text" 
+                                    name="sermonTopic" 
+                                    value={formData.sermonTopic} 
+                                    onChange={handleChange} 
+                                    placeholder="Main sermon topic"
+                                    className="w-full border-2 border-orange-300 rounded p-2"
+                                />
                             </div>
                             <div>
-                                <label className={labelClass}>Observations / Challenges</label>
-                                <textarea name="observations" rows={4} value={formData.observations} onChange={handleChange} className={textareaClass} placeholder="Notes for next week..."/>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Special Events / Announcements</label>
+                                <textarea 
+                                    name="events" 
+                                    value={formData.events} 
+                                    onChange={handleChange} 
+                                    placeholder="Special events, announcements, highlights..." 
+                                    className="w-full border-2 rounded p-2" 
+                                    rows={3}
+                                />
                             </div>
                             <div>
-                                <label className={labelClass}>Prepared By</label>
-                                <input type="text" name="preparedBy" value={formData.preparedBy} onChange={handleChange} className={inputClass} placeholder="Your Name"/>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Worship Highlights</label>
+                                <textarea 
+                                    name="worshipHighlights" 
+                                    value={formData.worshipHighlights} 
+                                    onChange={handleChange} 
+                                    placeholder="Special moments during worship..." 
+                                    className="w-full border-2 rounded p-2" 
+                                    rows={2}
+                                />
                             </div>
                         </div>
-                     </div>
-                     
-                     {/* Sticky Footer Actions */}
-                     <div className="no-print bg-white p-4 md:p-6 rounded-t-2xl shadow-[0_-5px_20px_rgba(0,0,0,0.1)] border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center fixed bottom-0 left-0 right-0 z-50 lg:static lg:shadow-none lg:border-t-0 lg:rounded-none lg:p-0 lg:bg-transparent lg:mt-8">
-                         <div className="w-full sm:w-auto mb-4 sm:mb-0">
-                            {selectedRecordId && (
-                                <button type="button" onClick={handleDelete} className="w-full sm:w-auto text-red-600 hover:text-red-800 font-bold px-6 py-4 border-2 border-red-200 rounded-xl bg-red-50 text-lg transition-colors">Delete Record</button>
-                            )}
-                         </div>
-                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button type="button" onClick={() => window.print()} disabled={!selectedRecordId} className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-6 py-4 rounded-xl text-lg border-2 border-slate-200 transition-colors">
-                                Print / PDF
-                            </button>
-                            <button type="submit" className="flex-[2] sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-xl shadow-lg transform transition hover:scale-105 active:scale-95 text-xl">
-                                Save Log
-                            </button>
-                         </div>
-                     </div>
-                 </form>
-            </section>
+                        <div className="flex gap-2">
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-gray-300 text-gray-900 py-2 rounded font-bold hover:bg-gray-400">Cancel</button>
+                            <button onClick={() => setActiveModal(null)} className="flex-1 bg-orange-600 text-white py-2 rounded font-bold hover:bg-orange-700">Done</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <HistoryArchiveModal 
+                isOpen={showArchive} 
+                onClose={() => setShowArchive(false)} 
+                history={history}
+                onEditRecord={handleEditArchiveRecord}
+            />
         </div>
     );
 };

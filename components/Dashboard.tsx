@@ -97,21 +97,24 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+            <div>
+                <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-3 rounded-xl shadow-lg">📊 Dashboard</h2>
+                <p className="text-base text-slate-600 mt-3 font-medium">A quick overview of giving, trends, and alerts.</p>
+            </div>
             
             {/* Notification Panel (Admin/Chair Only) */}
             {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200/80 p-6 mb-6">
-                    <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
+                <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-cyan-50 rounded-xl shadow-lg border-2 border-indigo-200 p-6 mb-6">
+                    <h3 className="text-lg font-bold text-indigo-800 border-b-2 border-indigo-100 pb-2 mb-4 flex items-center gap-2">
                         <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                         Administrative Alerts
                     </h3>
                     {notifications.length > 0 ? (
                         <div className="space-y-3">
                             {notifications.map((n, idx) => (
-                                <div key={idx} className={`p-3 rounded-lg border flex items-center gap-3 ${
+                                <div key={idx} className={`p-3 rounded-lg border-2 flex items-center gap-3 ${
                                     n.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                                    n.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+                                    n.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
                                     'bg-blue-50 border-blue-200 text-blue-800'
                                 }`}>
                                     <span className="text-lg font-bold">•</span>
@@ -127,23 +130,26 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
-                    <h3 className="text-base font-medium text-slate-500">Total Contributions</h3>
-                    <p className="text-3xl font-bold text-slate-800 mt-1">{formatCurrency(totalContribution, settings.currency)}</p>
+                <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-violet-600 p-5 rounded-xl shadow-lg border-2 border-indigo-300">
+                    <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10"></div>
+                    <h3 className="text-sm font-bold uppercase text-indigo-100">Total Contributions</h3>
+                    <p className="text-3xl font-extrabold text-white mt-1">{formatCurrency(totalContribution, settings.currency)}</p>
                 </div>
-                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
-                    <h3 className="text-base font-medium text-slate-500">Total Entries</h3>
-                    <p className="text-3xl font-bold text-slate-800 mt-1">{totalEntries.toLocaleString()}</p>
+                <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-green-600 p-5 rounded-xl shadow-lg border-2 border-emerald-300">
+                    <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10"></div>
+                    <h3 className="text-sm font-bold uppercase text-emerald-100">Total Entries</h3>
+                    <p className="text-3xl font-extrabold text-white mt-1">{totalEntries.toLocaleString()}</p>
                 </div>
-                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
-                    <h3 className="text-base font-medium text-slate-500">Avg. per Entry</h3>
-                    <p className="text-3xl font-bold text-slate-800 mt-1">{totalEntries > 0 ? formatCurrency(totalContribution / totalEntries, settings.currency) : '$0.00'}</p>
+                <div className="relative overflow-hidden bg-gradient-to-br from-fuchsia-600 to-rose-600 p-5 rounded-xl shadow-lg border-2 border-fuchsia-300">
+                    <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10"></div>
+                    <h3 className="text-sm font-bold uppercase text-pink-100">Avg. per Entry</h3>
+                    <p className="text-3xl font-extrabold text-white mt-1">{totalEntries > 0 ? formatCurrency(totalContribution / totalEntries, settings.currency) : '$0.00'}</p>
                 </div>
             </div>
             
             {/* Monthly Trend Chart */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 px-2">Monthly Contribution Trend</h3>
+            <div className="bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-blue-200">
+                <h3 className="text-lg font-bold text-blue-800 mb-4 px-2">Monthly Contribution Trend</h3>
                 {monthlyData.length > 0 ? (
                     <div style={{ width: '100%', height: 300 }}>
                         <ResponsiveContainer>
@@ -163,8 +169,8 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
 
             {/* Recent Entries & Breakdown (Hidden for Pastor Role if required, but showing aggregate pie chart is usually fine) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/80">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">Contribution by Type</h3>
+                 <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-violet-200">
+                    <h3 className="text-lg font-bold text-violet-800 mb-4">Contribution by Type</h3>
                     {pieData.length > 0 ? (
                         <div style={{ width: '100%', height: 300 }}>
                             <ResponsiveContainer>
@@ -195,11 +201,11 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                 
                 {/* Hide recent entries list for Pastor role for privacy */}
                 {currentUser.role !== 'pastor' && (
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80">
-                        <h3 className="text-lg font-bold text-slate-800 mb-4 px-2">Recent Entries</h3>
+                    <div className="bg-white p-4 rounded-xl shadow-lg border-2 border-cyan-200">
+                        <h3 className="text-lg font-bold text-cyan-800 mb-4 px-2">Recent Entries</h3>
                         <div className="overflow-y-auto max-h-64">
                             <table className="w-full text-left">
-                                <thead className="text-sm text-slate-500 sticky top-0 bg-white z-10">
+                                <thead className="text-sm text-slate-700 sticky top-0 bg-cyan-50 z-10 border-b border-cyan-200">
                                     <tr>
                                         <th className="px-2 py-2">Date</th>
                                         <th className="px-2 py-2">Member</th>
@@ -209,11 +215,11 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                                 </thead>
                                 <tbody>
                                     {activeEntries.slice(0, 5).map(entry => (
-                                        <tr key={entry.id} className="border-t border-slate-100">
-                                            <td className="px-2 py-3 text-slate-600">{entry.date}</td>
-                                            <td className="px-2 py-3 font-medium text-slate-800">{entry.memberName}</td>
-                                            <td className="px-2 py-3 text-slate-600 capitalize">{entry.type.replace('-', ' ')}</td>
-                                            <td className="px-2 py-3 text-right font-medium text-slate-800">{formatCurrency(entry.amount, settings.currency)}</td>
+                                        <tr key={entry.id} className="border-t border-cyan-100 hover:bg-cyan-50/50">
+                                            <td className="px-2 py-3 text-slate-700">{entry.date}</td>
+                                            <td className="px-2 py-3 font-medium text-slate-900">{entry.memberName}</td>
+                                            <td className="px-2 py-3 text-slate-700 capitalize"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">{entry.type.replace('-', ' ')}</span></td>
+                                            <td className="px-2 py-3 text-right font-bold text-slate-900">{formatCurrency(entry.amount, settings.currency)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

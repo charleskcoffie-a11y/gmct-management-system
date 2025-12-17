@@ -15,6 +15,7 @@ import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
 import DevelopmentFund from './components/DevelopmentFund';
 import NoName from './components/NoName';
+import FinancialControl from './components/FinancialControl';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
@@ -64,9 +65,12 @@ const App: React.FC = () => {
     const [searchFilter, setSearchFilter] = useState('');
     const [classFilter, setClassFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
-    const [startDateFilter, setStartDateFilter] = useState('');
-    const [endDateFilter, setEndDateFilter] = useState('');
+    const [startDateFilter, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
+    const [endDateFilter, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
     const [showDeleted, setShowDeleted] = useState(false);
+    const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
+    const [modalClassFilter, setModalClassFilter] = useState<string>('all');
+    const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
 
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
@@ -131,6 +135,22 @@ const App: React.FC = () => {
         });
         return sortableEntries;
     }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter, showDeleted]);
+
+    // Group entries by date
+    const entriesByDate = useMemo(() => {
+        const groups: Record<string, Entry[]> = {};
+        filteredAndSortedEntries.forEach(entry => {
+            if (!groups[entry.date]) {
+                groups[entry.date] = [];
+            }
+            groups[entry.date].push(entry);
+        });
+        return groups;
+    }, [filteredAndSortedEntries]);
+
+    const sortedDates = useMemo(() => {
+        return Object.keys(entriesByDate).sort((a, b) => b.localeCompare(a)); // Descending order
+    }, [entriesByDate]);
 
     // Financial Mini Dashboard Data
     const financialSummary = useMemo(() => {
@@ -248,47 +268,62 @@ const App: React.FC = () => {
             case 'records':
                 return (
                     <div className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h2 className="text-3xl font-bold text-slate-800">Financial Records</h2>
-                                <p className="text-base text-slate-500 mt-1">Manage tithes, offerings, and donations.</p>
+                        <div className="bg-gradient-to-br from-slate-50 to-blue-50 p-8 rounded-2xl shadow-lg border-2 border-slate-200">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <div className="flex items-center gap-4 mb-3">
+                                        <div className="bg-gradient-to-br from-blue-500 to-cyan-500 p-4 rounded-xl shadow-md">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                                                <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h2 className="text-3xl font-bold text-slate-800">Financial Records</h2>
+                                            <p className="text-base text-slate-500 mt-1 font-medium">Track and manage church contributions</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Hide Create Button for Pastor */}
+                                {currentUser.role !== 'pastor' && (
+                                    <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-105 text-base flex items-center gap-3 group">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                        </svg>
+                                        Record Contribution
+                                    </button>
+                                )}
                             </div>
-                            {/* Hide Create Button for Pastor */}
-                            {currentUser.role !== 'pastor' && (
-                                <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition-all hover:scale-105 text-lg">
-                                    Record Contribution
-                                </button>
-                            )}
                         </div>
 
                         {/* Filter Controls */}
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
+                        <div className="bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-blue-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
                             <div className="lg:col-span-1">
-                                <label className="block text-sm font-bold uppercase text-slate-500 mb-1">Search Member</label>
-                                <input type="text" placeholder="Name..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="block w-full border-slate-300 rounded-lg shadow-sm py-3"/>
+                                <label className="block text-sm font-bold uppercase text-blue-700 mb-1">🔍 Search Member</label>
+                                <input type="text" placeholder="Name..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
                             </div>
                             <div className="lg:col-span-1">
-                                <label className="block text-sm font-bold uppercase text-slate-500 mb-1">Class</label>
-                                <select value={classFilter} onChange={e => setClassFilter(e.target.value)} className="block w-full border-slate-300 rounded-lg shadow-sm py-3">
+                                <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📚 Class</label>
+                                <select value={classFilter} onChange={e => setClassFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium">
                                     <option value="all">All Classes</option>
                                     {Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1)).map(num => (<option key={num} value={num}>Class {num}</option>))}
                                 </select>
                             </div>
                             <div className="lg:col-span-1">
-                                <label className="block text-sm font-bold uppercase text-slate-500 mb-1">Type</label>
-                                <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="block w-full border-slate-300 rounded-lg shadow-sm py-3">
+                                <label className="block text-sm font-bold uppercase text-blue-700 mb-1">💷 Type</label>
+                                <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium">
                                     <option value="all">All Types</option>
                                     {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
                                 </select>
                             </div>
                             <div className="lg:col-span-2 grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-bold uppercase text-slate-500 mb-1">Start Date</label>
-                                    <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} className="block w-full border-slate-300 rounded-lg shadow-sm py-3"/>
+                                    <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 Start Date</label>
+                                    <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold uppercase text-slate-500 mb-1">End Date</label>
-                                    <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} className="block w-full border-slate-300 rounded-lg shadow-sm py-3"/>
+                                    <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 End Date</label>
+                                    <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
                                 </div>
                             </div>
                         </div>
@@ -296,12 +331,12 @@ const App: React.FC = () => {
                         {/* Mini Dashboard */}
                         {financialSummary.total > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="col-span-1 bg-gradient-to-br from-white to-slate-50 p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center">
-                                    <h3 className="text-slate-500 font-medium text-sm uppercase tracking-wider">Filtered Total</h3>
-                                    <p className="text-4xl font-bold text-slate-800 mt-2">{formatCurrency(financialSummary.total, settings.currency)}</p>
-                                    <p className="text-slate-400 text-sm mt-1">{financialSummary.count} entries</p>
+                                <div className="col-span-1 bg-gradient-to-br from-orange-300 to-amber-400 p-6 rounded-xl shadow-lg border-2 border-orange-300 flex flex-col justify-center transform hover:scale-105 transition">
+                                    <h3 className="text-white font-bold text-sm uppercase tracking-wider">💰 Filtered Total</h3>
+                                    <p className="text-4xl font-bold text-white mt-2 drop-shadow">{formatCurrency(financialSummary.total, settings.currency)}</p>
+                                    <p className="text-orange-100 text-sm mt-1 font-semibold">{financialSummary.count} entries</p>
                                 </div>
-                                <div className="col-span-2 bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center">
+                                <div className="col-span-2 bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-xl shadow-lg border-2 border-purple-200 flex items-center">
                                     <div className="h-32 w-32 flex-shrink-0">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
@@ -314,10 +349,10 @@ const App: React.FC = () => {
                                     </div>
                                     <div className="ml-6 flex-grow grid grid-cols-2 gap-x-4 gap-y-2">
                                         {financialSummary.chartData.map((item, index) => (
-                                            <div key={item.name} className="flex items-center text-sm">
-                                                <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                                                <span className="text-slate-600 flex-grow">{item.name}</span>
-                                                <span className="font-semibold text-slate-800">{formatCurrency(item.value, settings.currency)}</span>
+                                            <div key={item.name} className="flex items-center text-sm bg-white bg-opacity-80 px-2 py-1 rounded border-l-4" style={{ borderLeftColor: COLORS[index % COLORS.length] }}>
+                                                <span className="w-3 h-3 rounded-full mr-2 font-bold" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                                                <span className="text-slate-700 flex-grow font-medium">{item.name}</span>
+                                                <span className="font-bold text-slate-900">{formatCurrency(item.value, settings.currency)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -325,64 +360,205 @@ const App: React.FC = () => {
                             </div>
                         )}
 
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
                             {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && (
-                                <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-end">
-                                    <label className="flex items-center gap-2 text-xs font-bold uppercase text-slate-500 cursor-pointer">
-                                        <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-slate-300 text-red-600 focus:ring-red-500"/>
-                                        Show Deleted Records
+                                <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 border-b-2 border-red-300 flex justify-end">
+                                    <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer">
+                                        <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
+                                        🗑️ Show Deleted Records
                                     </label>
                                 </div>
                             )}
-                           <div className="overflow-x-auto max-h-[60vh]">
-                               <table className="w-full text-left text-slate-600">
-                                    <thead className="text-sm text-slate-500 uppercase bg-slate-50 sticky top-0 z-10 font-bold tracking-wider">
-                                        <tr>
-                                            <th className="px-6 py-5 border-b cursor-pointer hover:bg-slate-100" onClick={() => handleSort('date')}>Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</th>
-                                            <th className="px-6 py-5 border-b cursor-pointer hover:bg-slate-100" onClick={() => handleSort('memberName')}>Member {sortConfig.key === 'memberName' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</th>
-                                            <th className="px-6 py-5 border-b">Class #</th>
-                                            <th className="px-6 py-5 border-b text-center cursor-pointer hover:bg-slate-100" onClick={() => handleSort('classNumber')}>Class {sortConfig.key === 'classNumber' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</th>
-                                            <th className="px-6 py-5 border-b cursor-pointer hover:bg-slate-100" onClick={() => handleSort('type')}>Type {sortConfig.key === 'type' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</th>
-                                            <th className="px-6 py-5 border-b cursor-pointer hover:bg-slate-100" onClick={() => handleSort('amount')}>Amount {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</th>
-                                            <th className="px-6 py-5 border-b"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 text-lg">
-                                        {filteredAndSortedEntries.map(entry => {
-                                            const member = membersMap.get(entry.memberID);
-                                            const displayClass = entry.classNumber || member?.classNumber || '-';
-                                            const isLocked = isMonthLocked(entry.date, monthLocks);
-                                            // Permission Logic
-                                            const canEdit = !entry.deleted && currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair');
-
-                                            return (
-                                                <tr key={entry.id} className={`transition-colors ${entry.deleted ? 'bg-red-50 opacity-60' : 'bg-white hover:bg-slate-50'}`}>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        {entry.date}
-                                                        {entry.deleted && <span className="ml-2 text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded">DELETED</span>}
-                                                        {isLocked && <span className="ml-2" title="Month Locked">🔒</span>}
-                                                    </td>
-                                                    <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
-                                                    <td className="px-6 py-4 font-mono text-base text-slate-500">{member?.memberNumber || '-'}</td>
-                                                    <td className="px-6 py-4 text-center">{displayClass}</td>
-                                                    <td className="px-6 py-4 capitalize"><span className="px-3 py-1 rounded-full bg-slate-100 text-sm font-bold text-slate-600">{entry.type.replace(/-/g, ' ')}</span></td>
-                                                    <td className="px-6 py-4 font-bold text-slate-800">{formatCurrency(entry.amount, settings.currency)}</td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        {canEdit && (
-                                                            <button onClick={() => { setSelectedEntry(entry); setIsModalOpen(true); }} className="text-indigo-600 hover:text-indigo-800 font-bold text-base">Edit</button>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                               </table>
+                           <div className="max-h-[60vh] overflow-y-auto p-6 space-y-4">
+                               {sortedDates.length === 0 ? (
+                                   <div className="text-center py-16 text-slate-400">
+                                       <div className="text-6xl mb-4">📭</div>
+                                       <p className="text-xl font-bold">No records found</p>
+                                       <p className="text-sm mt-2">Try adjusting your filters</p>
+                                   </div>
+                               ) : (
+                                   sortedDates.map(date => {
+                                       const dateEntries = entriesByDate[date];
+                                       const dateTotal = dateEntries.reduce((sum, e) => sum + e.amount, 0);
+                                       const hasDeleted = dateEntries.some(e => e.deleted);
+                                       
+                                       return (
+                                           <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
+                                               <button 
+                                                   onClick={() => {
+                                                       setSelectedDateForModal(date);
+                                                       setModalClassFilter('all');
+                                                       setModalTypeFilter('all');
+                                                   }}
+                                                   className="w-full p-5 flex items-center justify-between hover:bg-blue-100 transition-colors text-left"
+                                               >
+                                                   <div className="flex items-center gap-4">
+                                                       <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-xl p-4 shadow-md">
+                                                           <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
+                                                           <div className="text-2xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
+                                                           <div className="text-xs">{new Date(date + 'T00:00:00').getFullYear()}</div>
+                                                       </div>
+                                                       <div>
+                                                           <div className="flex items-center gap-3">
+                                                               <h3 className="text-xl font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
+                                                               {hasDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">Has Deleted</span>}
+                                                           </div>
+                                                           <p className="text-sm text-slate-600 mt-1 font-medium">{dateEntries.length} contribution{dateEntries.length !== 1 ? 's' : ''}</p>
+                                                       </div>
+                                                   </div>
+                                                   <div className="text-right">
+                                                       <div className="text-2xl font-bold text-green-600">{formatCurrency(dateTotal, settings.currency)}</div>
+                                                       <div className="text-sm text-blue-600 font-semibold mt-1 flex items-center gap-1">
+                                                           Click to view details
+                                                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                           </svg>
+                                                       </div>
+                                                   </div>
+                                               </button>
+                                           </div>
+                                       );
+                                   })
+                               )}
                            </div>
                         </div>
+
+                        {/* Date Details Modal */}
+                        {selectedDateForModal && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex justify-center items-center p-4" onClick={() => setSelectedDateForModal(null)}>
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col border-2 border-slate-200" onClick={e => e.stopPropagation()}>
+                                    {/* Modal Header */}
+                                    <div className="bg-gradient-to-r from-blue-600 to-cyan-600 p-6 rounded-t-2xl text-white">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h2 className="text-2xl font-bold">{new Date(selectedDateForModal + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
+                                                <p className="text-blue-100 mt-1">{entriesByDate[selectedDateForModal].length} contribution{entriesByDate[selectedDateForModal].length !== 1 ? 's' : ''} • Total: {formatCurrency(entriesByDate[selectedDateForModal].reduce((sum, e) => sum + e.amount, 0), settings.currency)}</p>
+                                            </div>
+                                            <button onClick={() => setSelectedDateForModal(null)} className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-lg text-2xl font-bold transition-all">×</button>
+                                        </div>
+                                        
+                                        {/* Filter by Class and Type */}
+                                        <div className="flex items-center gap-4 flex-wrap">
+                                            <div className="flex items-center gap-3">
+                                                <label className="text-sm font-bold text-blue-100">Filter by Class:</label>
+                                                <select 
+                                                    value={modalClassFilter} 
+                                                    onChange={e => setModalClassFilter(e.target.value)}
+                                                    className="border-2 border-blue-400 bg-white/95 text-slate-800 rounded-lg px-4 py-2 font-semibold focus:ring-2 focus:ring-white focus:border-white transition-all"
+                                                >
+                                                    <option value="all">All Classes</option>
+                                                    {Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1)).map(num => (
+                                                        <option key={num} value={num}>Class {num}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <label className="text-sm font-bold text-blue-100">Filter by Type:</label>
+                                                <select 
+                                                    value={modalTypeFilter} 
+                                                    onChange={e => setModalTypeFilter(e.target.value as EntryType | 'all')}
+                                                    className="border-2 border-blue-400 bg-white/95 text-slate-800 rounded-lg px-4 py-2 font-semibold focus:ring-2 focus:ring-white focus:border-white transition-all capitalize"
+                                                >
+                                                    <option value="all">All Types</option>
+                                                    {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Modal Body - Scrollable */}
+                                    <div className="flex-1 overflow-y-auto p-6">
+                                        <div className="space-y-3">
+                                            {entriesByDate[selectedDateForModal]
+                                                .filter(entry => {
+                                                    // Filter by class
+                                                    if (modalClassFilter !== 'all') {
+                                                        const member = membersMap.get(entry.memberID);
+                                                        const entryClass = entry.classNumber || member?.classNumber;
+                                                        if (entryClass !== modalClassFilter) return false;
+                                                    }
+                                                    // Filter by type
+                                                    if (modalTypeFilter !== 'all' && entry.type !== modalTypeFilter) return false;
+                                                    return true;
+                                                })
+                                                .map((entry, idx) => {
+                                                const member = membersMap.get(entry.memberID);
+                                                const displayClass = entry.classNumber || member?.classNumber || '-';
+                                                const isLocked = isMonthLocked(entry.date, monthLocks);
+                                                const canEdit = !entry.deleted && currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair');
+                                                
+                                                return (
+                                                    <div key={entry.id} className={`rounded-xl border-2 p-5 transition-all ${entry.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md'}`}>
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-3 mb-2">
+                                                                    <h3 className="text-lg font-bold text-slate-800">{entry.memberName}</h3>
+                                                                    {entry.deleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">DELETED</span>}
+                                                                    {isLocked && <span title="Month Locked">🔒</span>}
+                                                                </div>
+                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                                    <div>
+                                                                        <span className="text-slate-500 font-medium">Member #:</span>
+                                                                        <span className="ml-1 font-bold text-slate-700">{member?.memberNumber || '-'}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-slate-500 font-medium">Class:</span>
+                                                                        <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-slate-500 font-medium">Type:</span>
+                                                                        <span className="ml-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold capitalize">{entry.type.replace(/-/g, ' ')}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-slate-500 font-medium">Method:</span>
+                                                                        <span className="ml-1 font-semibold text-slate-700 capitalize">{entry.method}</span>
+                                                                    </div>
+                                                                </div>
+                                                                {entry.note && (
+                                                                    <div className="mt-2 text-sm text-slate-600 italic">
+                                                                        <span className="font-medium">Note:</span> {entry.note}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-right ml-4">
+                                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
+                                                                {canEdit && (
+                                                                    <button 
+                                                                        onClick={() => { 
+                                                                            setSelectedEntry(entry); 
+                                                                            setIsModalOpen(true); 
+                                                                            setSelectedDateForModal(null);
+                                                                        }} 
+                                                                        className="mt-2 text-blue-600 hover:text-blue-800 font-bold text-sm hover:underline"
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Modal Footer */}
+                                    <div className="p-6 bg-slate-50 rounded-b-2xl border-t-2 border-slate-200 flex justify-between items-center">
+                                        <div className="text-sm text-slate-600">
+                                            <span className="font-bold">Total for this date:</span> {formatCurrency(entriesByDate[selectedDateForModal].reduce((sum, e) => sum + e.amount, 0), settings.currency)}
+                                        </div>
+                                        <button onClick={() => setSelectedDateForModal(null)} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             case 'development-fund': return <DevelopmentFund members={members} entries={developmentFund} setEntries={setDevelopmentFund} settings={settings} />;
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} />;
+            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries.filter(e => !e.deleted)} settings={settings} />;
             case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
@@ -398,6 +574,7 @@ const App: React.FC = () => {
         { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
         { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
+        { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
         { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'history', label: 'Weekly History', roles: ['admin', 'statistician', 'pastor'] },
@@ -417,8 +594,16 @@ const App: React.FC = () => {
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus}/>
                 <main className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     <aside className="lg:col-span-1 no-print">
-                        <nav className="bg-slate-900 rounded-2xl shadow-xl border border-slate-800 p-4 space-y-2 sticky top-6">
-                             {navItems.map(item => {
+                        <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-4 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900">
+                            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_40%),radial-gradient(ellipse_at_bottom_right,rgba(236,72,153,0.12),transparent_35%)]"></div>
+                            <div className="relative space-y-2">
+                                <div className="mb-2 flex items-center justify-between">
+                                    <span className="text-slate-300/80 font-bold tracking-wider uppercase text-xs">Navigation</span>
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-semibold text-indigo-100 bg-indigo-500/20 border border-indigo-400/30">
+                                        {currentUser.role.replace(/-/g, ' ')}
+                                    </span>
+                                </div>
+                                {navItems.map(item => {
                                 const hasAccess = item.roles.includes(currentUser.role);
                                 const isRestricted = !hasAccess;
 
@@ -427,26 +612,28 @@ const App: React.FC = () => {
                                         key={item.id} 
                                         onClick={() => hasAccess && setActiveTab(item.id as Tab)} 
                                         disabled={isRestricted}
-                                        className={`w-full text-left font-bold px-5 py-5 rounded-xl transition-all duration-200 text-xl tracking-wider flex items-center justify-between ${
+                                        className={`group w-full text-left font-bold px-5 py-4 rounded-xl transition-all duration-200 text-base tracking-wide flex items-center justify-between border ${
                                             activeTab === item.id 
-                                                ? 'bg-indigo-600 text-white shadow-lg transform scale-[1.03] ring-2 ring-indigo-400/50' 
+                                                ? 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow-lg ring-2 ring-indigo-400/40 border-white/10' 
                                                 : isRestricted 
-                                                    ? 'text-slate-600 cursor-not-allowed opacity-50 bg-slate-900/50' 
-                                                    : 'text-slate-400 hover:bg-slate-800 hover:text-indigo-300'
+                                                    ? 'text-slate-600/60 cursor-not-allowed opacity-50 bg-slate-900/50 border-white/5' 
+                                                    : 'text-slate-300/90 bg-white/0 hover:bg-white/[0.04] hover:text-indigo-200/90 border-white/5'
                                         }`}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            {item.label}
+                                        <div className="flex items-center gap-3">
+                                            <span className={`${activeTab === item.id ? 'h-2 w-2 bg-white/90' : 'h-2 w-2 bg-slate-400/40 group-hover:bg-indigo-300/70'} rounded-full`}></span>
+                                            <span>{item.label}</span>
                                             {isRestricted && (
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
                                                     <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                                                 </svg>
                                             )}
                                         </div>
-                                        {activeTab === item.id && <span className="text-indigo-200">›</span>}
+                                        {activeTab === item.id && <span className="text-white/90">›</span>}
                                     </button>
                                 );
                              })}
+                            </div>
                         </nav>
                     </aside>
                     <section className="lg:col-span-3">{renderTabContent()}</section>

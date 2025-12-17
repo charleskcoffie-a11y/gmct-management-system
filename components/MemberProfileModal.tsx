@@ -16,8 +16,9 @@ const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ member, entries
     const [selectedYear, setSelectedYear] = useState<number>(currentYear);
     const [viewMode, setViewMode] = useState<'summary' | 'statement'>('summary');
 
-    // Filter data for member and year
+    // Filter data for THIS member ONLY and selected year
     const yearData = useMemo(() => {
+        // CRITICAL: Filter by member.id to get only this member's data
         const filteredEntries = entries.filter(e => 
             e.memberID === member.id && 
             new Date(e.date).getFullYear() === selectedYear &&
@@ -54,45 +55,96 @@ const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ member, entries
         const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
 
         return { totals, transactions: allTransactions, grandTotal };
-    }, [member, entries, developmentEntries, selectedYear]);
+    }, [member.id, entries, developmentEntries, selectedYear]);
 
     const printStatement = () => {
+        // Add print class to body to hide background content
+        document.body.classList.add('printing-statement');
         window.print();
+        // Remove class after print dialog closes
+        setTimeout(() => document.body.classList.remove('printing-statement'), 100);
+    };
+
+    const exportToCSV = () => {
+        // Prepare CSV content
+        const headers = ['Date', 'Type', 'Note', 'Amount'];
+        const rows = yearData.transactions.map(t => [
+            t.date,
+            t.type.replace(/-/g, ' '),
+            (t.note || '').replace(/,/g, ';'), // Replace commas in notes
+            t.amount.toString()
+        ]);
+        
+        // Add total row
+        rows.push(['', '', 'TOTAL', yearData.grandTotal.toString()]);
+        
+        // Build CSV string
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.join(','))
+        ].join('\n');
+        
+        // Create blob and download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${sanitizeString(member.name)}_Statement_${selectedYear}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const getInitials = (name: string) => {
+        return name.split(' ').map(n => n.charAt(0).toUpperCase()).slice(0, 2).join('');
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 z-[70] flex justify-center items-start p-4 overflow-y-auto" onClick={onClose}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl mt-8 mb-8" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex justify-center items-start p-4 overflow-y-auto modal-overlay" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl mt-8 mb-8 border-2 border-slate-200 printable-modal" onClick={e => e.stopPropagation()}>
                 
-                {/* Screen Header (Hidden on Print) */}
-                <div className="flex justify-between items-center p-6 border-b border-slate-200 no-print">
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-800">{sanitizeString(member.name)}</h2>
-                        <div className="text-slate-500 text-sm flex gap-3 mt-1">
-                             <span className="bg-slate-100 px-2 py-0.5 rounded">Class {member.classNumber || 'N/A'}</span>
-                             <span className="bg-slate-100 px-2 py-0.5 rounded">ID: {member.memberNumber || 'N/A'}</span>
+                {/* Modern Header with Avatar */}
+                <div className="bg-gradient-to-r from-slate-700 to-slate-800 p-8 rounded-t-2xl text-white no-print">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-6">
+                            {/* Avatar Circle */}
+                            <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-3xl font-bold ring-4 ring-white/30">
+                                {getInitials(sanitizeString(member.name))}
+                            </div>
+                            <div>
+                                <h2 className="text-3xl font-bold mb-2">{sanitizeString(member.name)}</h2>
+                                <div className="flex gap-3 text-sm">
+                                    <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">Class {member.classNumber || 'N/A'}</span>
+                                    <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">Member #{member.memberNumber || 'N/A'}</span>
+                                </div>
+                            </div>
                         </div>
+                        <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg text-2xl font-bold transition-all">×</button>
                     </div>
-                    <div className="flex gap-2">
-                        <select 
-                            value={selectedYear} 
-                            onChange={e => setSelectedYear(parseInt(e.target.value))}
-                            className="border-slate-300 rounded-lg shadow-sm py-2 px-3 text-sm font-bold text-slate-700"
-                        >
-                            {Array.from({ length: 5 }, (_, i) => currentYear - i).map(year => (
-                                <option key={year} value={year}>{year}</option>
-                            ))}
-                        </select>
+                </div>
+
+                {/* Year Selector & View Toggle */}
+                <div className="bg-slate-50 px-8 py-4 border-b border-slate-200 flex justify-between items-center no-print">
+                    <select 
+                        value={selectedYear} 
+                        onChange={e => setSelectedYear(parseInt(e.target.value))}
+                        className="border-2 border-slate-300 rounded-lg shadow-sm py-2 px-4 text-base font-bold text-slate-700 focus:ring-2 focus:ring-slate-400"
+                    >
+                        {Array.from({ length: 5 }, (_, i) => currentYear - i).map(year => (
+                            <option key={year} value={year}>📅 {year}</option>
+                        ))}
+                    </select>
+                    <div className="flex gap-3">
                         {viewMode === 'summary' ? (
-                            <button onClick={() => setViewMode('statement')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm">
-                                View Yearly Statement
+                            <button onClick={() => setViewMode('statement')} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">
+                                📄 View Yearly Statement
                             </button>
                         ) : (
-                             <button onClick={() => setViewMode('summary')} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg shadow-sm">
-                                Back to Summary
+                            <button onClick={() => setViewMode('summary')} className="bg-slate-400 hover:bg-slate-500 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">
+                                ← Back to Summary
                             </button>
                         )}
-                        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 text-xl font-bold">×</button>
                     </div>
                 </div>
 
@@ -120,58 +172,84 @@ const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ member, entries
 
                     {/* Financial Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <span className="block text-xs font-bold uppercase text-slate-400">Total Giving ({selectedYear})</span>
-                            <span className="block text-2xl font-extrabold text-indigo-700 mt-1">{formatCurrency(yearData.grandTotal, settings.currency)}</span>
+                        <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-5 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold uppercase opacity-90">Total Giving</span>
+                                <span className="text-2xl">💰</span>
+                            </div>
+                            <span className="block text-3xl font-extrabold">{formatCurrency(yearData.grandTotal, settings.currency)}</span>
+                            <span className="text-xs opacity-80 mt-1 block">{selectedYear}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-xl border border-slate-100">
-                            <span className="block text-xs font-bold uppercase text-slate-400">Tithes</span>
-                            <span className="block text-xl font-bold text-slate-700 mt-1">{formatCurrency(yearData.totals['tithe'], settings.currency)}</span>
+                        <div className="bg-gradient-to-br from-green-400 to-green-600 p-5 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold uppercase opacity-90">Tithes</span>
+                                <span className="text-2xl">📊</span>
+                            </div>
+                            <span className="block text-2xl font-bold">{formatCurrency(yearData.totals['tithe'], settings.currency)}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-xl border border-slate-100">
-                            <span className="block text-xs font-bold uppercase text-slate-400">Offerings</span>
-                            <span className="block text-xl font-bold text-slate-700 mt-1">{formatCurrency(yearData.totals['offering'], settings.currency)}</span>
+                        <div className="bg-gradient-to-br from-purple-400 to-purple-600 p-5 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold uppercase opacity-90">Offerings</span>
+                                <span className="text-2xl">🙏</span>
+                            </div>
+                            <span className="block text-2xl font-bold">{formatCurrency(yearData.totals['offering'], settings.currency)}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-xl border border-slate-100">
-                            <span className="block text-xs font-bold uppercase text-slate-400">Dev. Fund</span>
-                            <span className="block text-xl font-bold text-slate-700 mt-1">{formatCurrency(yearData.totals['development'], settings.currency)}</span>
+                        <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-5 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold uppercase opacity-90">Dev. Fund</span>
+                                <span className="text-2xl">🏗️</span>
+                            </div>
+                            <span className="block text-2xl font-bold">{formatCurrency(yearData.totals['development'], settings.currency)}</span>
                         </div>
                     </div>
 
                     {/* Transaction List */}
                     <div className="mt-8">
-                         <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase tracking-wide border-b border-slate-100 pb-2">
-                             Transaction History
-                        </h3>
+                         <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-slate-800">
+                                📋 Transaction History
+                            </h3>
+                            <span className="bg-slate-100 px-3 py-1 rounded-full text-sm font-bold text-slate-600">
+                                {yearData.transactions.length} transaction{yearData.transactions.length !== 1 ? 's' : ''}
+                            </span>
+                         </div>
                         {yearData.transactions.length > 0 ? (
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-slate-100 text-slate-600 uppercase font-bold">
-                                    <tr>
-                                        <th className="px-4 py-3">Date</th>
-                                        <th className="px-4 py-3">Type</th>
-                                        <th className="px-4 py-3">Note</th>
-                                        <th className="px-4 py-3 text-right">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {yearData.transactions.map((t, idx) => (
-                                        <tr key={t.id || idx} className="hover:bg-slate-50">
-                                            <td className="px-4 py-3">{t.date}</td>
-                                            <td className="px-4 py-3 capitalize font-medium">
-                                                {t.type.replace(/-/g, ' ')}
-                                            </td>
-                                            <td className="px-4 py-3 text-slate-500 italic max-w-xs truncate">{t.note}</td>
-                                            <td className="px-4 py-3 text-right font-bold text-slate-800">{formatCurrency(t.amount, settings.currency)}</td>
+                            <div className="bg-white rounded-xl border-2 border-slate-200 overflow-hidden shadow-sm">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-100 text-slate-700 font-bold">
+                                        <tr>
+                                            <th className="px-4 py-3">Date</th>
+                                            <th className="px-4 py-3">Type</th>
+                                            <th className="px-4 py-3">Note</th>
+                                            <th className="px-4 py-3 text-right">Amount</th>
                                         </tr>
-                                    ))}
-                                    <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-300">
-                                        <td colSpan={3} className="px-4 py-4 text-right uppercase">Total</td>
-                                        <td className="px-4 py-4 text-right text-lg">{formatCurrency(yearData.grandTotal, settings.currency)}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {yearData.transactions.map((t, idx) => (
+                                            <tr key={t.id || idx} className="hover:bg-blue-50 transition-colors">
+                                                <td className="px-4 py-3 font-medium text-slate-700">{t.date}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                                                        {t.type.replace(/-/g, ' ')}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500 italic max-w-xs truncate">{t.note || '—'}</td>
+                                                <td className="px-4 py-3 text-right font-bold text-slate-800">{formatCurrency(t.amount, settings.currency)}</td>
+                                            </tr>
+                                        ))}
+                                        <tr className="bg-slate-700 text-white font-bold border-t-2 border-slate-800">
+                                            <td colSpan={3} className="px-4 py-4 text-right uppercase text-base">Total for {selectedYear}</td>
+                                            <td className="px-4 py-4 text-right text-xl">{formatCurrency(yearData.grandTotal, settings.currency)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         ) : (
-                            <p className="text-center py-12 text-slate-400 italic">No contributions found for {selectedYear}.</p>
+                            <div className="text-center py-16 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                                <div className="text-6xl mb-3">📭</div>
+                                <p className="text-xl font-bold text-slate-600">No contributions found</p>
+                                <p className="text-slate-400 mt-1">No records for {selectedYear}</p>
+                            </div>
                         )}
                     </div>
                     
@@ -184,29 +262,87 @@ const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ member, entries
                 </div>
 
                 {/* Footer Actions (Hidden on Print) */}
-                <div className="p-6 bg-slate-50 rounded-b-xl border-t border-slate-200 flex justify-end gap-3 no-print">
-                    {viewMode === 'statement' && (
-                        <button onClick={printStatement} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md flex items-center gap-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
-                            </svg>
-                            Print / Save as PDF
+                <div className="p-6 bg-gradient-to-r from-slate-50 to-slate-100 rounded-b-2xl border-t-2 border-slate-200 flex justify-between items-center gap-3 no-print">
+                    <div className="text-sm text-slate-600">
+                        <span className="font-bold">Member ID:</span> {member.id.substring(0, 12)}
+                    </div>
+                    <div className="flex gap-3">
+                        {viewMode === 'statement' && (
+                            <>
+                                <button onClick={printStatement} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md flex items-center gap-2 transition-all hover:scale-105">
+                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
+                                    </svg>
+                                    Print Statement
+                                </button>
+                                <button onClick={exportToCSV} className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md flex items-center gap-2 transition-all hover:scale-105">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                    Export CSV
+                                </button>
+                            </>
+                        )}
+                        <button onClick={onClose} className="bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-700 font-bold py-3 px-6 rounded-lg transition-all">
+                            Close
                         </button>
-                    )}
-                    <button onClick={onClose} className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold py-3 px-6 rounded-lg">
-                        Close
-                    </button>
+                    </div>
                 </div>
             </div>
 
             <style>{`
                 @media print {
+                    /* When printing, hide everything except the modal */
+                    body.printing-statement > *:not(.modal-overlay) {
+                        display: none !important;
+                    }
+                    
+                    /* Make modal overlay clean for print */
+                    body.printing-statement .modal-overlay {
+                        position: static !important;
+                        background: white !important;
+                        backdrop-filter: none !important;
+                        padding: 0 !important;
+                        overflow: visible !important;
+                        display: block !important;
+                    }
+                    
+                    /* Make modal full width for print */
+                    body.printing-statement .printable-modal {
+                        max-width: 100% !important;
+                        width: 100% !important;
+                        margin: 0 !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                    }
+                    
+                    /* Ensure all content is visible on print */
+                    .printable-statement > * {
+                        display: block !important;
+                    }
+                    
+                    /* Grid should stay as grid */
+                    .grid {
+                        display: grid !important;
+                    }
+                    
+                    /* Tables should stay as tables */
+                    table {
+                        display: table !important;
+                    }
+                    
+                    /* Hide controls and non-printable elements */
                     .no-print { display: none !important; }
+                    
+                    /* Show print-only content */
                     .block-on-print { display: block !important; }
-                    .printable-statement { padding: 0 !important; }
-                    body { background: white; }
-                    .fixed { position: static; overflow: visible; }
-                    .bg-black { background: white; }
+                    
+                    /* Clean background */
+                    body { 
+                        background: white !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
                 }
                 .hidden-on-screen { display: none; }
             `}</style>

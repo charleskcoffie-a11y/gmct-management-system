@@ -249,21 +249,21 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row gap-6 relative">
             
             {showToast && (
-                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-2 rounded-full shadow-lg font-bold animate-fadeIn z-50">
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-2 rounded-full shadow-lg font-bold animate-fadeIn z-50">
                     ✓ Contribution Added
                 </div>
             )}
 
             {/* Sidebar: Member Search */}
-            <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-200">
-                    <h3 className="font-bold text-slate-700 mb-2">Member Search</h3>
+            <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col bg-gradient-to-b from-blue-50 to-indigo-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
+                <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 border-b border-blue-300">
+                    <h3 className="font-bold text-white mb-2 text-lg">👥 Member Search</h3>
                     <input 
                         type="text" 
                         placeholder="Name, ID, or Class..." 
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-indigo-500"
+                        className="w-full border-2 border-blue-200 rounded-lg shadow-sm focus:ring-blue-400 focus:border-blue-400 py-2 px-3"
                     />
                 </div>
                 <div className="flex-1 overflow-y-auto">
@@ -271,47 +271,51 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                         <button
                             key={m.id}
                             onClick={() => setSelectedMember(m)}
-                            className={`w-full text-left p-4 border-b border-slate-100 transition-colors flex justify-between items-center ${selectedMember?.id === m.id ? 'bg-indigo-50 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50'}`}
+                            className={`w-full text-left p-4 border-b border-blue-100 transition-all flex justify-between items-center ${
+                              selectedMember?.id === m.id 
+                                ? 'bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-md border-l-4 border-l-blue-700 font-semibold' 
+                                : 'hover:bg-blue-100 text-slate-800'
+                            }`}
                         >
                             <div>
-                                <div className="font-bold text-slate-800">{sanitizeString(m.name)}</div>
-                                <div className="text-xs text-slate-500">Class {m.classNumber || '-'} • ID: {m.memberNumber || '-'}</div>
+                                <div className="font-bold">{sanitizeString(m.name)}</div>
+                                <div className={`text-xs ${selectedMember?.id === m.id ? 'text-blue-100' : 'text-slate-600'}`}>Class {m.classNumber || '-'} • ID: {m.memberNumber || '-'}</div>
                             </div>
-                            <div className="text-indigo-400">›</div>
+                            <div className="text-lg">›</div>
                         </button>
                     ))}
                     {filteredMembers.length === 0 && (
-                        <div className="p-8 text-center text-slate-400 italic">No members found.</div>
+                        <div className="p-8 text-center text-blue-400 italic">No members found.</div>
                     )}
                 </div>
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="flex-1 flex flex-col bg-gradient-to-br from-white via-purple-50 to-pink-50 rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden">
                 
                 {/* Header / Filters / Stats */}
-                <div className="p-6 border-b border-slate-200 bg-slate-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 sticky top-0 z-20">
+                <div className="p-6 border-b-2 border-purple-200 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 sticky top-0 z-20 shadow-md">
                     <div className="flex-1">
-                        <h2 className="text-2xl font-bold text-slate-800">Development Fund</h2>
-                        <p className="text-slate-500 text-sm mt-1">
+                        <h2 className="text-3xl font-bold text-white">💰 Development Fund</h2>
+                        <p className="text-purple-100 text-sm mt-1">
                             {selectedMember 
-                                ? `Showing records for ${sanitizeString(selectedMember.name)}` 
-                                : "Viewing all contributions (Select a member to add)"}
+                                ? `💎 Showing records for ${sanitizeString(selectedMember.name)}` 
+                                : "📊 Viewing all contributions (Select a member to add)"}
                         </p>
                     </div>
 
-                    <div className="bg-white px-6 py-3 rounded-xl border border-indigo-100 shadow-sm flex flex-col items-end min-w-[200px]">
-                        <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Collected</span>
-                        <span className="text-2xl font-extrabold text-indigo-600">{formatCurrency(totalContributions, settings.currency)}</span>
+                    <div className="bg-gradient-to-br from-yellow-300 to-orange-400 px-6 py-3 rounded-xl border-2 border-yellow-400 shadow-lg flex flex-col items-end min-w-[200px] transform hover:scale-105 transition">
+                        <span className="text-xs font-bold uppercase text-white tracking-wider">💵 Total Collected</span>
+                        <span className="text-2xl font-extrabold text-white">{formatCurrency(totalContributions, settings.currency)}</span>
                     </div>
 
-                    <div className="flex gap-2 items-center bg-white p-2 rounded-lg border border-slate-200 shadow-sm self-stretch xl:self-auto justify-center">
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border-none text-sm focus:ring-0 text-slate-600 bg-transparent"/>
-                        <span className="text-slate-400 font-bold">to</span>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border-none text-sm focus:ring-0 text-slate-600 bg-transparent"/>
+                    <div className="flex gap-2 items-center bg-gradient-to-r from-white to-purple-100 p-3 rounded-lg border-2 border-purple-300 shadow-lg self-stretch xl:self-auto justify-center">
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border-2 border-purple-300 text-sm focus:ring-purple-400 focus:border-purple-400 text-slate-700 bg-white rounded px-2 py-1"/>
+                        <span className="text-purple-600 font-bold">to</span>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border-2 border-purple-300 text-sm focus:ring-purple-400 focus:border-purple-400 text-slate-700 bg-white rounded px-2 py-1"/>
                         <div className="flex gap-1 ml-2">
                             {(['this-week','this-month','qtd','ytd','last-12m'] as const).map(p => (
-                                <button key={p} type="button" onClick={() => applyPreset(p)} className={`px-2 py-1 rounded-md text-xs font-bold ${datePreset===p ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>{p.replace('-', ' ')}</button>
+                                <button key={p} type="button" onClick={() => applyPreset(p)} className={`px-2 py-1 rounded-md text-xs font-bold transition transform hover:scale-110 ${datePreset===p ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' : 'bg-white text-slate-700 border border-purple-300 hover:border-purple-600'}`}>{p.replace('-', ' ')}</button>
                             ))}
                         </div>
                         {selectedMember && (
@@ -337,8 +341,9 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                 </div>
                             </div>
                         )}
-                         <table className="w-full text-left text-slate-600">
-                            <thead className="bg-slate-100 text-slate-700 text-xs uppercase font-bold sticky top-0 z-10 shadow-sm">
+                        <div className="overflow-y-auto max-h-[55vh] border-t-2 border-purple-200">
+                         <table className="w-full text-left text-slate-700">
+                            <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs uppercase font-bold sticky top-0 z-10 shadow-md">
                                 <tr>
                                     <th className="px-4 py-3 cursor-pointer" onClick={() => setSortConfig(s => ({ key: 'date', direction: s.key==='date' && s.direction==='asc' ? 'desc' : 'asc' }))}>
                                         Date {sortConfig.key==='date' ? (sortConfig.direction==='asc' ? '▲' : '▼') : ''}
@@ -352,9 +357,9 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100 text-sm">
-                                {displayEntries.map(entry => (
-                                    <tr key={entry.id} className="hover:bg-slate-50">
+                            <tbody className="divide-y divide-purple-100 text-sm">
+                                {displayEntries.map((entry, idx) => (
+                                    <tr key={entry.id} className={`transition ${idx % 2 === 0 ? 'bg-white hover:bg-purple-50' : 'bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100'}`}>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             {editingId===entry.id ? (
                                                 <input type="date" value={editDate} onChange={e=>setEditDate(e.target.value)} className="border-slate-300 rounded-md p-1" />
@@ -398,62 +403,63 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                 )}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-slate-50 border-t">
+                                <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 border-purple-300 font-bold text-slate-700">
                                     <td className="px-4 py-3" colSpan={selectedMember ? 3 : 4}>
-                                        <span className="text-xs font-bold uppercase text-slate-500">Visible:</span>
+                                        <span className="text-xs font-bold uppercase text-purple-600">Visible:</span>
                                     </td>
-                                    <td className="px-4 py-3 text-right font-bold">{formatCurrency(displayEntries.reduce((s,e)=>s+e.amount,0), settings.currency)}</td>
-                                    <td className="px-4 py-3 text-right text-slate-500">{displayEntries.length} entries</td>
+                                    <td className="px-4 py-3 text-right font-extrabold text-purple-700">{formatCurrency(displayEntries.reduce((s,e)=>s+e.amount,0), settings.currency)}</td>
+                                    <td className="px-4 py-3 text-right text-purple-600">{displayEntries.length} entries</td>
                                 </tr>
                             </tfoot>
                         </table>
+                        </div>
                         {lastDeleted && (
-                            <div className="fixed bottom-6 right-6 bg-red-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
-                                <span className="font-bold">Entry deleted.</span>
-                                <button onClick={undoDelete} className="bg-white text-red-700 font-bold px-3 py-1 rounded-md">Undo</button>
-                                <button onClick={()=>setLastDeleted(null)} className="text-red-200 hover:text-white">Dismiss</button>
+                            <div className="fixed bottom-6 right-6 bg-gradient-to-r from-red-500 to-rose-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 border-2 border-red-300">
+                                <span className="font-bold">🗑️ Entry deleted.</span>
+                                <button onClick={undoDelete} className="bg-white text-red-600 font-bold px-3 py-1 rounded-md hover:bg-red-100 transition">↩️ Undo</button>
+                                <button onClick={()=>setLastDeleted(null)} className="text-red-200 hover:text-white transition font-bold">✕</button>
                             </div>
                         )}
                     </div>
 
                     {/* Add Entry Form (Only visible if member selected) */}
                     {selectedMember ? (
-                        <div className="w-full lg:w-1/3 bg-slate-50 p-6 shadow-inner overflow-y-auto h-full border-t lg:border-t-0 border-slate-200">
-                            <h3 className="font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-                                <span className="bg-indigo-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">+</span>
+                        <div className="w-full lg:w-1/3 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-6 shadow-inner overflow-y-auto h-full border-t lg:border-t-0 border-2 border-green-200">
+                            <h3 className="font-bold text-green-800 mb-4 border-b-2 border-green-300 pb-2 flex items-center gap-2 text-lg">
+                                <span className="bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">+</span>
                                 Add Contribution
                             </h3>
-                            <div className="mb-6 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Beneficiary</span>
-                                <div className="font-bold text-xl text-indigo-700 mt-1">{sanitizeString(selectedMember.name)}</div>
-                                <div className="text-sm font-medium text-slate-500 mt-1 flex gap-3">
-                                    <span className="bg-slate-100 px-2 py-0.5 rounded">Class {selectedMember.classNumber}</span>
-                                    <span className="bg-slate-100 px-2 py-0.5 rounded">ID: {selectedMember.memberNumber || 'N/A'}</span>
+                            <div className="mb-6 bg-gradient-to-br from-white to-green-100 p-4 rounded-lg border-2 border-green-300 shadow-md">
+                                <span className="text-xs font-bold text-green-600 uppercase tracking-wide">💎 Beneficiary</span>
+                                <div className="font-bold text-xl bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mt-1">{sanitizeString(selectedMember.name)}</div>
+                                <div className="text-sm font-medium text-slate-600 mt-1 flex gap-2">
+                                    <span className="bg-gradient-to-r from-blue-400 to-cyan-400 text-white px-2 py-0.5 rounded font-bold">📚 Class {selectedMember.classNumber}</span>
+                                    <span className="bg-gradient-to-r from-purple-400 to-pink-400 text-white px-2 py-0.5 rounded font-bold">🎫 ID: {selectedMember.memberNumber || 'N/A'}</span>
                                 </div>
                             </div>
                             
                             <form onSubmit={handleAddEntry} onKeyDown={handleKeyDown} className="space-y-5">
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Date</label>
-                                    <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} required className="w-full border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500" />
+                                    <label className="block text-sm font-bold text-green-700 mb-1">📅 Date</label>
+                                    <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} required className="w-full border-2 border-green-300 rounded-lg shadow-sm py-2 px-3 focus:ring-green-400 focus:border-green-400 font-medium" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Amount</label>
+                                    <label className="block text-sm font-bold text-green-700 mb-1">💰 Amount</label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <span className="text-slate-500 font-bold">$</span>
+                                            <span className="text-green-600 font-bold text-lg">$</span>
                                         </div>
-                                        <input type="number" step="0.01" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0.00" required className="w-full pl-8 border-slate-300 rounded-lg shadow-sm font-bold text-xl py-2 focus:ring-indigo-500 focus:border-indigo-500 text-indigo-700" />
+                                        <input type="number" step="0.01" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0.00" required className="w-full pl-8 border-2 border-green-300 rounded-lg shadow-sm font-bold text-xl py-2 focus:ring-green-400 focus:border-green-400 bg-white text-green-700" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Description (Optional)</label>
-                                    <textarea rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="e.g. Monthly pledge" className="w-full border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500" />
+                                    <label className="block text-sm font-bold text-green-700 mb-1">📝 Description (Optional)</label>
+                                    <textarea rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="e.g. Monthly pledge" className="w-full border-2 border-green-300 rounded-lg shadow-sm py-2 px-3 focus:ring-green-400 focus:border-green-400" />
                                 </div>
-                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-lg shadow-lg transition-all hover:scale-[1.02] active:scale-95 text-lg">
-                                    Save Contribution
+                                <button type="submit" className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3.5 rounded-lg shadow-lg transition-all hover:scale-[1.02] active:scale-95 text-lg">
+                                    ✓ Save Contribution
                                 </button>
-                                <p className="text-center text-xs text-slate-400">Press Ctrl+Enter to save</p>
+                                <p className="text-center text-xs text-green-600 font-medium">Press Ctrl+Enter to save</p>
                                 <button type="button" onClick={() => setSelectedMember(null)} className="w-full text-slate-500 text-sm hover:text-slate-700 font-medium py-2">
                                     Cancel Selection
                                 </button>

@@ -31,6 +31,21 @@ export interface DevelopmentFundEntry {
     createdBy?: string;
 }
 
+export interface HarvestEntry {
+    id: string;
+    date: string; // ISO format YYYY-MM-DD
+    memberID: string;
+    memberName: string;
+    classNumber?: string;
+    amount: number;
+    note?: string;
+    createdBy?: string;
+    updatedBy?: string;
+    lastUpdated?: string;
+    deleted?: boolean;
+    createdAt?: string;
+}
+
 export interface NoNameEntry {
     id: string;
     date: string; // ISO format YYYY-MM-DD
@@ -124,7 +139,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'members' | 'insights' | 'users' | 'settings' | 'utilities' | 'history' | 'no-name';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'history' | 'users' | 'settings' | 'utilities';
 
 export interface CloudState {
   ready: boolean;
