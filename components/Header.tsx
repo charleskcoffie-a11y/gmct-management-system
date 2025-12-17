@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { sanitizeString } from '../utils';
-import type { Entry, User, SyncStatus } from '../types';
+import type { Entry, User, SyncStatus, Settings } from '../types';
 import { ChurchIcon } from './icons';
 
 interface HeaderProps {
@@ -11,9 +11,10 @@ interface HeaderProps {
     currentUser: User | null;
     onLogout: () => void;
     syncStatus?: SyncStatus;
+    settings: Settings;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus }) => {
+const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, settings }) => {
     
     const getSyncBadge = () => {
         // Default to Offline if no status provided
@@ -57,32 +58,51 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus }) =>
     };
 
     return (
-        <header className="no-print bg-gradient-to-r from-indigo-800 to-indigo-600 text-white rounded-xl p-5 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl border border-indigo-500/30">
-            <div className="flex items-center gap-4">
-                <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm shadow-inner">
-                    <ChurchIcon />
-                </div>
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-white">GMCT Management System</h1>
-                    <div className="flex items-center gap-4 mt-1">
-                         <p className="text-sm text-indigo-100 font-medium opacity-80">Record Keeping Made Simple</p>
-                         {getSyncBadge()}
-                    </div>
-                </div>
+        <header className="no-print bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 text-white rounded-2xl p-6 mb-8 shadow-2xl border-2 border-slate-600/40 relative overflow-hidden">
+            {/* Decorative background pattern */}
+            <div className="absolute inset-0 opacity-5">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.1)_0%,transparent_50%),radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.08)_0%,transparent_50%)]"></div>
             </div>
-            <div className="flex items-center gap-4">
-                 {currentUser && (
-                    <div className="flex items-center gap-3 bg-indigo-900/30 px-4 py-2 rounded-full border border-indigo-400/20 backdrop-blur-sm">
-                        <div className="flex flex-col items-end">
-                            <span className="text-xs text-indigo-200 uppercase tracking-wider font-semibold">Logged in as</span>
-                            <span className="text-sm font-bold text-white">{sanitizeString(currentUser.username)}</span>
+            
+            <div className="relative flex flex-col md:flex-row justify-between items-center gap-6">
+                <div className="flex items-center gap-5">
+                    {/* Logo */}
+                    {settings.logoUrl ? (
+                        <div className="bg-white p-3 rounded-xl shadow-lg border-2 border-slate-300 flex items-center justify-center">
+                            <img src={settings.logoUrl} alt="Organization Logo" className="h-16 w-16 object-contain" />
                         </div>
-                        <div className="h-8 w-px bg-indigo-400/30 mx-1"></div>
-                        <button onClick={onLogout} className="text-sm bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-all duration-200 font-medium">
-                            Logout
-                        </button>
+                    ) : (
+                        <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-xl shadow-lg border-2 border-blue-400/30">
+                            <ChurchIcon />
+                        </div>
+                    )}
+                    
+                    {/* Title Section */}
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">GMCT Management System</h1>
+                        <div className="flex items-center gap-4 mt-2">
+                            <p className="text-sm text-slate-300 font-medium">Comprehensive Church Management Solution</p>
+                            {getSyncBadge()}
+                        </div>
                     </div>
-                )}
+                </div>
+                
+                {/* User Section */}
+                <div className="flex items-center gap-4">
+                    {currentUser && (
+                        <div className="flex items-center gap-4 bg-slate-900/50 px-5 py-3 rounded-xl border-2 border-slate-600/40 backdrop-blur-sm shadow-lg">
+                            <div className="flex flex-col items-end">
+                                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Logged in as</span>
+                                <span className="text-base font-bold text-white">{sanitizeString(currentUser.username)}</span>
+                                <span className="text-xs text-blue-300 font-medium capitalize">{currentUser.role.replace('-', ' ')}</span>
+                            </div>
+                            <div className="h-10 w-px bg-slate-600"></div>
+                            <button onClick={onLogout} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg hover:scale-105">
+                                Logout
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </header>
     );

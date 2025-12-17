@@ -70,6 +70,7 @@ export interface Settings {
     enforceDirectory: boolean; // if true, member names must be selected from the directory
     supabaseUrl: string;
     supabaseKey: string;
+    logoUrl?: string; // Base64 or URL for organization logo
 }
 
 export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician';

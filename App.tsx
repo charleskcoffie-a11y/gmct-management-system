@@ -16,11 +16,12 @@ import ConfirmationModal from './components/ConfirmationModal';
 import DevelopmentFund from './components/DevelopmentFund';
 import NoName from './components/NoName';
 import FinancialControl from './components/FinancialControl';
+import Harvest from './components/Harvest';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
-import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry } from './types';
+import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
+import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
@@ -48,6 +49,7 @@ const App: React.FC = () => {
     const [weeklyHistory, setWeeklyHistory] = useLocalStorage<WeeklyHistoryRecord[]>('gmct-weekly-history', [], (data) => Array.isArray(data) ? data.map(sanitizeWeeklyHistoryRecord) : []);
     const [developmentFund, setDevelopmentFund] = useLocalStorage<DevelopmentFundEntry[]>('gmct-dev-fund', [], (data) => Array.isArray(data) ? data.map(sanitizeDevelopmentFundEntry) : []);
     const [noNameEntries, setNoNameEntries] = useLocalStorage<NoNameEntry[]>('gmct-no-name', [], (data) => Array.isArray(data) ? data.map(sanitizeNoNameEntry) : []);
+    const [harvestEntries, setHarvestEntries] = useLocalStorage<HarvestEntry[]>('gmct-harvest', [], (data) => Array.isArray(data) ? data.map(sanitizeHarvestEntry) : []);
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
@@ -557,6 +559,7 @@ const App: React.FC = () => {
                     </div>
                 );
             case 'development-fund': return <DevelopmentFund members={members} entries={developmentFund} setEntries={setDevelopmentFund} settings={settings} />;
+            case 'harvest': return <Harvest members={members} entries={harvestEntries} setEntries={setHarvestEntries} settings={settings} currentUser={currentUser} />;
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} />;
@@ -564,7 +567,7 @@ const App: React.FC = () => {
             case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, attendance, weeklyHistory, users, developmentFund, noName: noNameEntries, monthLocks, setEntries, setMembers, setAttendance, setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries, setMonthLocks}}/>;
-            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} settings={settings} setEntries={setEntries} setMembers={setMembers} />;
+            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} settings={settings} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} />;
             default: return <div>Select a tab</div>;
         }
     };
@@ -573,6 +576,7 @@ const App: React.FC = () => {
         { id: 'home', label: 'Home', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
         { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+        { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
         { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
@@ -591,7 +595,7 @@ const App: React.FC = () => {
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
             <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus}/>
+                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
                 <main className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     <aside className="lg:col-span-1 no-print">
                         <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-4 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900">

@@ -1,7 +1,7 @@
 
 // utils.ts
 import { v4 as uuidv4 } from 'uuid';
-import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, MonthLock, NoNameEntry } from './types';
+import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, MonthLock, NoNameEntry, HarvestEntry } from './types';
 
 // --- String & Sanitization ---
 
@@ -75,6 +75,28 @@ export function sanitizeNoNameEntry(raw: any): NoNameEntry {
         notes: sanitizeString(raw.notes),
         createdBy: sanitizeString(raw.createdBy),
         updatedAt: sanitizeString(raw.updatedAt) || new Date().toISOString(),
+    };
+}
+
+export function sanitizeHarvestEntry(raw: any): HarvestEntry {
+    const parsedDate = new Date(raw.date);
+    const date = (raw.date && !isNaN(parsedDate.getTime()))
+        ? parsedDate.toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+    
+    return {
+        id: sanitizeString(raw.id) || uuidv4(),
+        date: date,
+        memberID: sanitizeString(raw.memberID),
+        memberName: sanitizeString(raw.memberName),
+        classNumber: sanitizeString(raw.classNumber),
+        amount: isNaN(parseFloat(raw.amount)) ? 0 : parseFloat(raw.amount),
+        note: sanitizeString(raw.note),
+        createdBy: sanitizeString(raw.createdBy),
+        updatedBy: sanitizeString(raw.updatedBy),
+        lastUpdated: sanitizeString(raw.lastUpdated),
+        deleted: typeof raw.deleted === 'boolean' ? raw.deleted : false,
+        createdAt: sanitizeString(raw.createdAt),
     };
 }
 
