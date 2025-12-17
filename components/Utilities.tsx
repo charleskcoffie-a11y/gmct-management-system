@@ -1,25 +1,29 @@
 
 // components/Utilities.tsx
 import React, { useState, useMemo } from 'react';
-import type { Entry, Member, Settings, EntryType, WeeklyHistoryRecord } from '../types';
+import type { Entry, Member, Settings, EntryType, WeeklyHistoryRecord, DevelopmentFundEntry } from '../types';
 import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeMember } from '../utils';
 import { DownloadIcon, UploadIcon } from './icons';
+import BackupSettings from './BackupSettings';
 
 interface UtilitiesProps {
     entries: Entry[];
     members: Member[];
     history: WeeklyHistoryRecord[];
+    developmentFund: DevelopmentFundEntry[];
     settings: Settings;
     setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
     setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
     setSettings: React.Dispatch<React.SetStateAction<Settings>>;
+    setDevelopmentFund: React.Dispatch<React.SetStateAction<DevelopmentFundEntry[]>>;
 }
 
-const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settings, setEntries, setMembers, setSettings }) => {
+const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, developmentFund, settings, setEntries, setMembers, setSettings, setDevelopmentFund }) => {
     const today = new Date().toISOString().slice(0, 10);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState(today);
     const [emailTo, setEmailTo] = useState('');
+    const [showBackupSettings, setShowBackupSettings] = useState(false);
 
     // --- Helpers for Filtering ---
     const entryTypes = useMemo(() => Array.from(new Set(entries.map(e => e.type))), [entries]);
@@ -238,6 +242,51 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
         }
     };
 
+    // --- Data Maintenance: Merge Development Fund into Entries ---
+    const handleMergeDevelopmentFund = () => {
+        if (developmentFund.length === 0) {
+            alert('No Development Fund records to merge.');
+            return;
+        }
+        if (!confirm('This will copy all Development Fund records into the main Entries as type "development-fund". Continue?')) return;
+
+        const membersMap = new Map(members.map(m => [m.id, m]));
+        const newEntries: Entry[] = developmentFund.map(df => {
+            const m = membersMap.get(df.memberId);
+            return {
+                id: `df-${df.id}`,
+                date: df.date,
+                memberID: df.memberId,
+                memberName: m ? m.name : 'Unknown Member',
+                classNumber: m?.classNumber,
+                type: 'development-fund',
+                fund: 'development-fund',
+                method: 'other',
+                amount: df.amount,
+                note: df.description,
+                createdBy: df.createdBy,
+                createdAt: new Date().toISOString(),
+            } as Entry;
+        });
+
+        // Avoid duplicates by id
+        const existingIds = new Set(entries.map(e => e.id));
+        const filteredToAdd = newEntries.filter(ne => !existingIds.has(ne.id));
+
+        if (filteredToAdd.length === 0) {
+            alert('All Development Fund records already merged.');
+            return;
+        }
+
+        setEntries(prev => [...prev, ...filteredToAdd]);
+
+        if (confirm('Do you also want to archive (clear) the standalone Development Fund table after merging?')) {
+            setDevelopmentFund([]);
+        }
+
+        alert(`Merged ${filteredToAdd.length} Development Fund record(s) into Entries.`);
+    };
+
 
     return (
         <div className="flex flex-col space-y-8 pb-12 max-w-6xl">
@@ -285,6 +334,34 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
                         <div className="pt-3 border-t-2 border-purple-100">
                             <p className="text-xs text-slate-500 font-medium">
                                 📌 Supported formats: PNG, JPG, GIF • Max size: 2MB
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Database Backup Section */}
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-600 to-cyan-600 p-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            💾 Database Backup
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-slate-600 font-medium">Configure automatic backups and email delivery for critical data tables.</p>
+                        
+                        <button 
+                            onClick={() => setShowBackupSettings(true)}
+                            className="w-full bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-blue-400"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m6 2a2 2 0 11-4 0 2 2 0 014 0zm0 0h.01M18 8a2 2 0 11-4 0 2 2 0 014 0zm0 0h.01M6 8a2 2 0 11-4 0 2 2 0 014 0zm0 0h.01M6 20v-2a3 3 0 00-3-3H3a3 3 0 00-3 3v2m18 0v-2a3 3 0 00-3-3h-.5a3 3 0 00-3 3v2M9 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            Configure Backup Settings
+                        </button>
+                        
+                        <div className="pt-3 border-t-2 border-blue-100">
+                            <p className="text-xs text-slate-500 font-medium">
+                                ✓ Backs up Entries & Development Fund tables as JSON
                             </p>
                         </div>
                     </div>
@@ -337,6 +414,25 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
                             <span>📥 Export History Log</span>
                         </button>
                     </div>
+                </div>
+            </div>
+
+            {/* 2.5 Data Maintenance */}
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl shadow-lg border-2 border-amber-200 overflow-hidden">
+                <div className="bg-gradient-to-r from-amber-600 to-yellow-600 p-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        🔄 Data Maintenance
+                    </h3>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-slate-700 font-medium">Consolidate data into a single source for reporting and backups.</p>
+                    <button
+                        onClick={handleMergeDevelopmentFund}
+                        className="w-full bg-gradient-to-br from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-amber-400"
+                    >
+                        Merge Development Fund into Entries
+                    </button>
+                    <p className="text-xs text-amber-800">This creates Entries with type <strong>development-fund</strong> and optionally archives the standalone table.</p>
                 </div>
             </div>
 
@@ -457,6 +553,15 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, settin
                     🗑️ Clear All Local Data & Logout
                 </button>
             </div>
+
+            {/* Backup Settings Modal */}
+            {showBackupSettings && (
+                <BackupSettings 
+                    entries={entries}
+                    developmentFund={developmentFund}
+                    onClose={() => setShowBackupSettings(false)}
+                />
+            )}
         </div>
     );
 };

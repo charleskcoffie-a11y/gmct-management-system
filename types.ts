@@ -1,5 +1,5 @@
 
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "kofi-and-ama" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "kofi-and-ama" | "development-fund" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {

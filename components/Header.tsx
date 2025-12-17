@@ -98,17 +98,36 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, sett
                 {/* User Section */}
                 <div className="flex items-center gap-4">
                     {currentUser && (
-                        <div className="flex items-center gap-4 bg-slate-900/50 px-6 py-4 rounded-xl border-2 border-slate-600/40 backdrop-blur-sm shadow-lg">
-                            <div className="flex flex-col items-end">
-                                <span className="text-sm text-slate-400 uppercase tracking-wider font-semibold">Logged in as</span>
-                                <span className="text-lg font-bold text-white">{sanitizeString(currentUser.username)}</span>
-                                <span className="text-sm text-blue-300 font-medium capitalize">{currentUser.role.replace('-', ' ')}</span>
-                            </div>
-                            <div className="h-12 w-px bg-slate-600"></div>
-                            <button onClick={onLogout} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg hover:scale-105 text-base">
-                                Logout
+                        <>
+                            <button 
+                                onClick={() => {
+                                    const event = new KeyboardEvent('keydown', {
+                                        key: '?',
+                                        ctrlKey: true,
+                                        code: 'Slash'
+                                    });
+                                    window.dispatchEvent(event);
+                                }}
+                                className="bg-slate-700/50 hover:bg-slate-600 text-white px-4 py-3 rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg flex items-center gap-2 text-base"
+                                title="Press Ctrl+? for keyboard shortcuts"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Help
                             </button>
-                        </div>
+                            <div className="flex items-center gap-4 bg-slate-900/50 px-6 py-4 rounded-xl border-2 border-slate-600/40 backdrop-blur-sm shadow-lg">
+                                <div className="flex flex-col items-end">
+                                    <span className="text-sm text-slate-400 uppercase tracking-wider font-semibold">Logged in as</span>
+                                    <span className="text-lg font-bold text-white">{sanitizeString(currentUser.username)}</span>
+                                    <span className="text-sm text-blue-300 font-medium capitalize">{currentUser.role.replace('-', ' ')}</span>
+                                </div>
+                                <div className="h-12 w-px bg-slate-600"></div>
+                                <button onClick={onLogout} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg hover:scale-105 text-base">
+                                    Logout
+                                </button>
+                            </div>
+                        </>
                     )}
                 </div>
             </div>

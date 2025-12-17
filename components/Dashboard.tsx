@@ -1,9 +1,10 @@
 
 // components/Dashboard.tsx
-import React, { useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import React, { useMemo, useState } from 'react';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import type { Entry, Settings, User, Member, MonthLock } from '../types';
 import { formatCurrency, capitalize, isMonthLocked } from '../utils';
+import ChartModal from './ChartModal';
 
 interface DashboardProps {
     entries: Entry[];
@@ -14,6 +15,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [] }) => {
+    const [expandedChart, setExpandedChart] = useState<'trend' | 'pie' | null>(null);
     
     // --- Data Processing ---
     const activeEntries = entries.filter(e => !e.deleted);
@@ -51,6 +53,40 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
             }));
     }, [activeEntries]);
 
+    const monthlyComparisonData = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        const currentYearData: { [month: string]: number } = {};
+        const previousYearData: { [month: string]: number } = {};
+
+        // Aggregate current year
+        for (const entry of activeEntries) {
+            const entryYear = parseInt(entry.date.substring(0, 4));
+            const month = entry.date.substring(5, 7);
+            if (entryYear === currentYear) {
+                currentYearData[month] = (currentYearData[month] || 0) + entry.amount;
+            }
+        }
+
+        // Aggregate previous year
+        for (const entry of activeEntries) {
+            const entryYear = parseInt(entry.date.substring(0, 4));
+            const month = entry.date.substring(5, 7);
+            if (entryYear === currentYear - 1) {
+                previousYearData[month] = (previousYearData[month] || 0) + entry.amount;
+            }
+        }
+
+        // Create 12-month comparison
+        const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        return months.map((month, idx) => ({
+            name: monthNames[idx],
+            'Current Year': currentYearData[month] || 0,
+            'Previous Year': previousYearData[month] || 0,
+        }));
+    }, [activeEntries]);
+
     // --- Notification / Alerts Logic ---
     const notifications = useMemo(() => {
         const alerts = [];
@@ -85,9 +121,13 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
             return (
-                <div className="bg-white p-2 border border-slate-200 rounded shadow-sm">
-                    <p className="font-bold">{label}</p>
-                    <p className="text-indigo-600">{`${payload[0].name}: ${formatCurrency(payload[0].value, settings.currency)}`}</p>
+                <div className="bg-white p-3 border border-slate-200 rounded shadow-lg">
+                    <p className="font-bold text-slate-800">{label}</p>
+                    {payload.map((entry: any, idx: number) => (
+                        <p key={idx} style={{ color: entry.color }} className="font-medium">
+                            {`${entry.name}: ${formatCurrency(entry.value, settings.currency)}`}
+                        </p>
+                    ))}
                 </div>
             );
         }
@@ -149,17 +189,30 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
             
             {/* Monthly Trend Chart */}
             <div className="bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-blue-200">
-                <h3 className="text-lg font-bold text-blue-800 mb-4 px-2">Monthly Contribution Trend</h3>
-                {monthlyData.length > 0 ? (
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-blue-800">Year-to-Date Comparison: {new Date().getFullYear()} vs {new Date().getFullYear() - 1}</h3>
+                    <button 
+                        onClick={() => setExpandedChart('trend')}
+                        className="p-2 hover:bg-white/50 rounded-lg transition text-blue-600"
+                        title="Expand to full screen"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6v4m12-4h4v4M6 18h4v-4m6 4h4v-4" />
+                        </svg>
+                    </button>
+                </div>
+                {monthlyComparisonData.some(d => d['Current Year'] > 0 || d['Previous Year'] > 0) ? (
                     <div style={{ width: '100%', height: 300 }}>
                         <ResponsiveContainer>
-                            <BarChart data={monthlyData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                            <LineChart data={monthlyComparisonData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="name" />
                                 <YAxis tickFormatter={(tick) => formatCurrency(tick, settings.currency).replace('.00', '')} />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Bar dataKey="Total" fill="#4f46e5" />
-                            </BarChart>
+                                <Legend />
+                                <Line type="monotone" dataKey="Current Year" stroke="#4f46e5" strokeWidth={2} dot={{ fill: '#4f46e5', r: 4 }} />
+                                <Line type="monotone" dataKey="Previous Year" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 4 }} strokeDasharray="5 5" />
+                            </LineChart>
                         </ResponsiveContainer>
                     </div>
                 ) : (
@@ -170,7 +223,18 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
             {/* Recent Entries & Breakdown (Hidden for Pastor Role if required, but showing aggregate pie chart is usually fine) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                  <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-violet-200">
-                    <h3 className="text-lg font-bold text-violet-800 mb-4">Contribution by Type</h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-violet-800">Contribution by Type</h3>
+                        <button 
+                            onClick={() => setExpandedChart('pie')}
+                            className="p-2 hover:bg-slate-100 rounded-lg transition text-violet-600"
+                            title="Expand to full screen"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6v4m12-4h4v4M6 18h4v-4m6 4h4v-4" />
+                            </svg>
+                        </button>
+                    </div>
                     {pieData.length > 0 ? (
                         <div style={{ width: '100%', height: 300 }}>
                             <ResponsiveContainer>
@@ -228,6 +292,57 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                     </div>
                 )}
             </div>
+
+            {/* Full-screen Chart Modals */}
+            <ChartModal 
+                isOpen={expandedChart === 'trend'} 
+                onClose={() => setExpandedChart(null)}
+                title={`Year-to-Date Comparison: ${new Date().getFullYear()} vs ${new Date().getFullYear() - 1}`}
+            >
+                <div style={{ width: '100%', height: 500 }}>
+                    <ResponsiveContainer>
+                        <LineChart data={monthlyComparisonData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" />
+                            <YAxis tickFormatter={(tick) => formatCurrency(tick, settings.currency).replace('.00', '')} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend />
+                            <Line type="monotone" dataKey="Current Year" stroke="#4f46e5" strokeWidth={3} dot={{ fill: '#4f46e5', r: 6 }} />
+                            <Line type="monotone" dataKey="Previous Year" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 6 }} strokeDasharray="5 5" />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            </ChartModal>
+
+            <ChartModal 
+                isOpen={expandedChart === 'pie'} 
+                onClose={() => setExpandedChart(null)}
+                title="Contribution by Type"
+            >
+                <div style={{ width: '100%', height: 500 }}>
+                    <ResponsiveContainer>
+                        <PieChart>
+                            <Pie
+                                data={pieData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                outerRadius={150}
+                                fill="#8884d8"
+                                dataKey="value"
+                                nameKey="name"
+                                label={({ name, value }) => `${name}: ${formatCurrency(value, settings.currency)}`}
+                            >
+                                {pieData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => formatCurrency(value, settings.currency)} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </ChartModal>
         </div>
     );
 };

@@ -159,121 +159,171 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
     };
 
     return (
-        <div className="pb-12 space-y-6">
+        <div className="pb-12 space-y-8">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-4xl font-bold bg-gradient-to-r from-slate-700 to-slate-800 bg-clip-text text-transparent">👥 Member Directory</h2>
-                    <p className="text-sm text-slate-600 mt-2">
-                        Manage membership, assign classes, and view giving history.
-                    </p>
-                </div>
-                <div className="flex gap-3 flex-wrap">
-                    <button 
-                        onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                        className="bg-slate-400 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-all shadow-md hover:shadow-lg"
-                    >
-                        {viewMode === 'grid' ? '📋 List' : '🎴 Grid'}
-                    </button>
-                    <label className="bg-amber-400 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-lg cursor-pointer inline-flex items-center gap-2 transition-all shadow-md hover:shadow-lg">
-                        <UploadIcon />
-                        <span className="hidden sm:inline">Import</span>
-                        <input type="file" accept=".csv" className="hidden" onChange={handleImportMembers} />
-                    </label>
-                    <button onClick={() => { setSelectedMember(null); setIsModalOpen(true); }} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:shadow-lg transition-all hover:scale-105">
-                        ➕ Add Member
-                    </button>
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-2xl shadow-lg border-2 border-blue-200">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-4 rounded-xl shadow-md">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-4xl font-bold text-slate-800">Member Directory</h2>
+                            <p className="text-base text-slate-600 mt-1 font-medium">
+                                Manage membership, assign classes, and view giving history
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3 flex-wrap">
+                        <button 
+                            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                            className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-105 flex items-center gap-2 text-base"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                {viewMode === 'grid' ? (
+                                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                                ) : (
+                                    <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                )}
+                            </svg>
+                            {viewMode === 'grid' ? 'List View' : 'Grid View'}
+                        </button>
+                        <label className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-6 rounded-xl cursor-pointer inline-flex items-center gap-2 transition-all shadow-lg hover:shadow-xl hover:scale-105 text-base">
+                            <UploadIcon />
+                            <span>Import CSV</span>
+                            <input type="file" accept=".csv" className="hidden" onChange={handleImportMembers} />
+                        </label>
+                        <button onClick={() => { setSelectedMember(null); setIsModalOpen(true); }} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center gap-2 text-base">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                            </svg>
+                            Add Member
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-slate-100 p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+            <div className="bg-white p-6 rounded-2xl shadow-lg border-2 border-slate-200">
+                <div className="flex items-center gap-3 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                    </svg>
+                    <h3 className="text-xl font-bold text-slate-800">Filter Members</h3>
+                </div>
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="relative flex-grow">
-                        <span className="absolute left-3 top-3 text-slate-400">🔍</span>
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                            </svg>
+                        </div>
                         <input 
                             type="text"
-                            placeholder="Search Name, Member #, or Class..."
+                            placeholder="Search by name, member number, or class..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="block w-full border-2 border-slate-300 rounded-lg py-3 px-4 pl-10 focus:ring-2 focus:ring-slate-400 focus:border-transparent text-base"
+                            className="block w-full border-2 border-slate-300 rounded-xl py-3 px-4 pl-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                         />
                     </div>
-                    <div className="w-full md:w-64">
-                        <select
-                            value={classFilter}
-                            onChange={e => setClassFilter(e.target.value)}
-                            className="block w-full border-2 border-slate-300 rounded-lg py-3 px-4 focus:ring-2 focus:ring-slate-400 focus:border-transparent text-base font-semibold"
-                        >
-                             <option value="all">📚 All Classes</option>
-                            {classOptions.slice(1).map(cls => (
-                                <option key={cls} value={cls}>📚 Class {cls}</option>
-                            ))}
-                        </select>
+                    <div className="w-full md:w-72">
+                        <div className="relative">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
+                                </svg>
+                            </div>
+                            <select
+                                value={classFilter}
+                                onChange={e => setClassFilter(e.target.value)}
+                                className="block w-full border-2 border-slate-300 rounded-xl py-3 px-4 pl-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-semibold appearance-none bg-white"
+                            >
+                                <option value="all">All Classes</option>
+                                {classOptions.slice(1).map(cls => (
+                                    <option key={cls} value={cls}>Class {cls}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                     {(searchTerm || classFilter !== 'all') && (
                         <button 
                             onClick={clearFilters}
-                            className="bg-red-200 hover:bg-red-300 text-red-700 font-bold py-2 px-4 rounded-lg transition-colors"
+                            className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-3 px-6 rounded-xl transition-all hover:scale-105 shadow-lg flex items-center gap-2 text-base"
                         >
-                            ✕ Clear
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                            Clear
                         </button>
                     )}
                 </div>
                 
-                <div className="text-sm text-slate-600 pl-1">
-                    <span className="font-bold text-slate-900 text-lg">{filteredMembers.length}</span> member{filteredMembers.length !== 1 ? 's' : ''} found
+                <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                    </svg>
+                    <span className="text-base text-slate-600">
+                        Showing <span className="font-bold text-blue-600 text-lg">{filteredMembers.length}</span> of <span className="font-bold text-slate-900">{members.length}</span> member{members.length !== 1 ? 's' : ''}
+                    </span>
                 </div>
             </div>
 
             {/* Grid View */}
             {viewMode === 'grid' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                     {filteredMembers.map(member => {
                         const colors = getColorForClass(member.classNumber);
                         return (
                             <div 
                                 key={member.id} 
-                                className={`bg-gradient-to-br ${colors.gradient} rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 p-6 text-white group`}
+                                className={`bg-gradient-to-br ${colors.gradient} rounded-lg shadow-md hover:shadow-lg transition-all hover:scale-105 p-3 text-white group border border-white/20`}
                             >
                                 {/* Avatar Circle */}
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-3xl font-bold">
+                                <div className="flex items-start justify-between mb-2">
+                                    <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur flex items-center justify-center text-lg font-bold shadow-sm">
                                         {sanitizeString(member.name).charAt(0).toUpperCase()}
                                     </div>
-                                    <div className={`${colors.badge} font-bold text-xs px-3 py-1 rounded-full`}>
-                                        Class {member.classNumber || '-'}
+                                    <div className={`${colors.badge} font-bold text-[10px] px-2 py-0.5 rounded-full shadow-sm`}>
+                                        C{member.classNumber || '-'}
                                     </div>
                                 </div>
 
                                 {/* Member Info */}
-                                <div className="mb-4">
-                                    <h3 className="text-xl font-bold mb-1 truncate">{sanitizeString(member.name)}</h3>
+                                <div className="mb-2">
+                                    <h3 className="text-sm font-bold mb-0.5 truncate drop-shadow">{sanitizeString(member.name)}</h3>
                                     {member.memberNumber && (
-                                        <p className="text-sm text-white/80">Member #: {sanitizeString(member.memberNumber)}</p>
+                                        <p className="text-xs text-white/90 font-medium">#{sanitizeString(member.memberNumber)}</p>
                                     )}
-                                    <p className="text-xs text-white/70 font-mono mt-1">ID: {member.id.substring(0, 8)}</p>
+                                    <p className="text-[10px] text-white/70 font-mono">ID: {member.id.substring(0, 6)}</p>
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex gap-2 pt-4 border-t border-white/20">
+                                <div className="flex gap-1 pt-2 border-t border-white/30">
                                     <button 
                                         onClick={() => setViewProfileMember(member)} 
-                                        className="flex-1 bg-white/20 hover:bg-white/30 text-white font-bold py-2 rounded-lg transition-all text-sm"
+                                        className="flex-1 bg-white/25 hover:bg-white/40 text-white font-semibold py-1.5 rounded transition-all text-xs shadow-sm hover:shadow hover:scale-105 flex items-center justify-center"
                                     >
-                                        👤 Profile
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                        </svg>
                                     </button>
                                     <button 
                                         onClick={() => { setSelectedMember(member); setIsModalOpen(true); }} 
-                                        className="flex-1 bg-white/20 hover:bg-white/30 text-white font-bold py-2 rounded-lg transition-all text-sm"
+                                        className="flex-1 bg-white/25 hover:bg-white/40 text-white font-semibold py-1.5 rounded transition-all text-xs shadow-sm hover:shadow hover:scale-105 flex items-center justify-center"
                                     >
-                                        ✏️ Edit
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                        </svg>
                                     </button>
                                     <button 
                                         onClick={() => handleDelete(member.id)} 
-                                        className="flex-1 bg-red-400/30 hover:bg-red-500/50 text-white font-bold py-2 rounded-lg transition-all text-sm"
+                                        className="bg-red-500/40 hover:bg-red-600/60 text-white font-semibold py-1.5 px-1.5 rounded transition-all text-xs shadow-sm hover:shadow hover:scale-105 flex items-center justify-center"
                                     >
-                                        🗑️
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
                                     </button>
                                 </div>
                             </div>
@@ -284,59 +334,88 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
 
             {/* List View */}
             {viewMode === 'list' && (
-                <div className="bg-white rounded-xl shadow-lg border border-slate-200/80 overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-xl border-2 border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
                         <table className="w-full text-left">
-                            <thead className="text-base font-bold text-white sticky top-0 z-10">
-                                <tr className="bg-slate-600">
-                                    <th className="px-6 py-4">Member</th>
-                                    <th className="px-6 py-4">Class</th>
-                                    <th className="px-6 py-4">Member #</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
+                            <thead className="text-lg font-bold text-white sticky top-0 z-10">
+                                <tr className="bg-gradient-to-r from-blue-600 to-indigo-600">
+                                    <th className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                            </svg>
+                                            Member
+                                        </div>
+                                    </th>
+                                    <th className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
+                                            </svg>
+                                            Class
+                                        </div>
+                                    </th>
+                                    <th className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                                            </svg>
+                                            Member #
+                                        </div>
+                                    </th>
+                                    <th className="px-8 py-5 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredMembers.map((member, idx) => (
                                     <tr 
                                         key={member.id} 
-                                        className={`${idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'} border-b hover:bg-blue-50 transition-colors`}
+                                        className={`${idx % 2 === 0 ? 'bg-blue-50/50' : 'bg-white'} border-b border-slate-200 hover:bg-blue-100/50 transition-colors`}
                                     >
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getColorForClass(member.classNumber).gradient} flex items-center justify-center text-white font-bold`}>
+                                        <td className="px-8 py-5">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getColorForClass(member.classNumber).gradient} flex items-center justify-center text-white font-bold text-lg shadow-md`}>
                                                     {sanitizeString(member.name).charAt(0).toUpperCase()}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-slate-900">{sanitizeString(member.name)}</p>
-                                                    <p className="text-xs text-slate-500 font-mono">{member.id.substring(0, 8)}</p>
+                                                    <p className="font-bold text-slate-900 text-base">{sanitizeString(member.name)}</p>
+                                                    <p className="text-sm text-slate-500 font-mono">ID: {member.id.substring(0, 8)}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`${getColorForClass(member.classNumber).badge} font-bold px-3 py-1 rounded-full text-sm`}>
+                                        <td className="px-8 py-5">
+                                            <span className={`${getColorForClass(member.classNumber).badge} font-bold px-4 py-2 rounded-full text-base shadow-sm`}>
                                                 Class {member.classNumber || '-'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-slate-800 font-medium">{sanitizeString(member.memberNumber) || '-'}</td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-8 py-5 text-slate-800 font-semibold text-base">{sanitizeString(member.memberNumber) || '-'}</td>
+                                        <td className="px-8 py-5 text-right">
                                             <div className="flex justify-end gap-2">
                                                 <button 
                                                     onClick={() => setViewProfileMember(member)} 
-                                                    className="font-bold text-blue-600 hover:bg-blue-100 px-3 py-1 rounded transition-colors"
+                                                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold px-4 py-2 rounded-lg transition-all hover:scale-105 shadow-md flex items-center gap-2 text-sm"
                                                 >
-                                                    👤
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                                    </svg>
+                                                    Profile
                                                 </button>
                                                 <button 
                                                     onClick={() => { setSelectedMember(member); setIsModalOpen(true); }} 
-                                                    className="font-bold text-purple-600 hover:bg-purple-100 px-3 py-1 rounded transition-colors"
+                                                    className="bg-purple-500 hover:bg-purple-600 text-white font-bold px-4 py-2 rounded-lg transition-all hover:scale-105 shadow-md flex items-center gap-2 text-sm"
                                                 >
-                                                    ✏️
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                                    </svg>
+                                                    Edit
                                                 </button>
                                                 <button 
                                                     onClick={() => handleDelete(member.id)} 
-                                                    className="font-bold text-red-600 hover:bg-red-100 px-3 py-1 rounded transition-colors"
+                                                    className="bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-2 rounded-lg transition-all hover:scale-105 shadow-md"
                                                 >
-                                                    🗑️
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    </svg>
                                                 </button>
                                             </div>
                                         </td>
@@ -350,10 +429,23 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
 
             {/* Empty State */}
             {filteredMembers.length === 0 && (
-                <div className="text-center py-16">
-                    <div className="text-6xl mb-4">🔍</div>
-                    <p className="text-2xl font-bold text-slate-900 mb-2">No members found</p>
-                    <p className="text-slate-600">Try adjusting your search or filters</p>
+                <div className="text-center py-20 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl border-2 border-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto mb-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-3xl font-bold text-slate-800 mb-3">No Members Found</p>
+                    <p className="text-lg text-slate-600 mb-6">Try adjusting your search or filters</p>
+                    {(searchTerm || classFilter !== 'all') && (
+                        <button 
+                            onClick={clearFilters}
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 inline-flex items-center gap-2 text-base"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                            Clear Filters
+                        </button>
+                    )}
                 </div>
             )}
 

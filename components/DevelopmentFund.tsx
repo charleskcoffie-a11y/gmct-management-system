@@ -1,13 +1,13 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Member, DevelopmentFundEntry, Settings } from '../types';
+import type { Member, Entry, Settings } from '../types';
 import { formatCurrency, sanitizeString } from '../utils';
 
 interface DevelopmentFundProps {
     members: Member[];
-    entries: DevelopmentFundEntry[];
-    setEntries: React.Dispatch<React.SetStateAction<DevelopmentFundEntry[]>>;
+    entries: Entry[];
+    setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
     settings: Settings;
 }
 
@@ -26,7 +26,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [editDate, setEditDate] = useState<string>('');
     const [editAmount, setEditAmount] = useState<string>('');
     const [editDesc, setEditDesc] = useState<string>('');
-    const [lastDeleted, setLastDeleted] = useState<DevelopmentFundEntry | null>(null);
+    const [lastDeleted, setLastDeleted] = useState<Entry | null>(null);
     const quickAmountRef = useRef<HTMLInputElement | null>(null);
 
     // Form State
@@ -52,20 +52,25 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
     const displayEntries = useMemo(() => {
         let filtered = entries.filter(e => {
+            if (e.type !== 'development-fund') return false;
             if (startDate && e.date < startDate) return false;
             if (endDate && e.date > endDate) return false;
-            if (selectedMember && e.memberId !== selectedMember.id) return false;
+            if (selectedMember && e.memberID !== selectedMember.id) return false;
             return true;
         });
 
-        // Map with member details
+        // Map with member details and normalize fields used in UI
         const mapped = filtered.map(e => {
-            const member = members.find(m => m.id === e.memberId);
+            const member = members.find(m => m.id === e.memberID);
             return {
-                ...e,
-                memberName: member?.name || 'Unknown',
+                id: e.id,
+                date: e.date,
+                amount: e.amount,
+                description: (e as any).note || '',
+                memberId: e.memberID,
+                memberName: e.memberName || member?.name || 'Unknown',
                 memberNumber: member?.memberNumber || '-',
-                classNumber: member?.classNumber || '9999'
+                classNumber: e.classNumber || member?.classNumber || '9999'
             };
         });
 
@@ -87,10 +92,11 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const totalContributions = displayEntries.reduce((sum, e) => sum + e.amount, 0);
 
     const selectedMemberEntries = useMemo(() => {
-        if (!selectedMember) return [] as (DevelopmentFundEntry & { date: string })[];
+        if (!selectedMember) return [] as Array<Entry & { date: string }>;
+        const baseAll = entries.filter(e => e.type === 'development-fund' && e.memberID === selectedMember.id);
         const base = historyScope === 'filtered'
-            ? entries.filter(e => e.memberId === selectedMember.id && (!startDate || e.date >= startDate) && (!endDate || e.date <= endDate))
-            : entries.filter(e => e.memberId === selectedMember.id);
+            ? baseAll.filter(e => (!startDate || e.date >= startDate) && (!endDate || e.date <= endDate))
+            : baseAll;
         return base.sort((a, b) => b.date.localeCompare(a.date));
     }, [entries, selectedMember, historyScope, startDate, endDate]);
 
@@ -106,13 +112,19 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
              if(!window.confirm("Date is in the future. Continue?")) return;
         }
 
-        const newEntry: DevelopmentFundEntry = {
+        const newEntry: Entry = {
             id: uuidv4(),
             date: newDate,
+            memberID: selectedMember.id,
+            memberName: selectedMember.name,
+            classNumber: selectedMember.classNumber,
+            type: 'development-fund',
+            fund: 'development-fund',
+            method: 'other',
             amount: amountVal,
-            description: newDesc,
-            memberId: selectedMember.id
-        };
+            note: newDesc,
+            createdAt: new Date().toISOString()
+        } as Entry;
 
         setEntries(prev => [...prev, newEntry]);
         
@@ -160,7 +172,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         if (new Date(editDate) > new Date()) {
             if (!window.confirm('Date is in the future. Continue?')) return;
         }
-        setEntries(prev => prev.map(e => e.id === editingId ? { ...e, date: editDate, amount: amountVal, description: editDesc } : e));
+        setEntries(prev => prev.map(e => e.id === editingId ? { ...(e as any), date: editDate, amount: amountVal, note: editDesc } : e));
         setEditingId(null);
     };
 
@@ -234,7 +246,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         if (!selectedMember) return;
         const rows = [['Date','Amount','Description','MemberName','MemberID']];
         const member = selectedMember;
-        selectedMemberEntries.forEach(e => rows.push([e.date, String(e.amount), e.description || '', member.name, member.memberNumber || '-']));
+        selectedMemberEntries.forEach(e => rows.push([e.date, String(e.amount), (e as any).note || '', member.name, member.memberNumber || '-']))
         const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -505,7 +517,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                         {selectedMemberEntries.map(e => (
                                             <tr key={e.id} className="hover:bg-slate-50">
                                                 <td className="px-4 py-3 whitespace-nowrap">{e.date}</td>
-                                                <td className="px-4 py-3 truncate">{e.description}</td>
+                                                <td className="px-4 py-3 truncate">{(e as any).note || ''}</td>
                                                 <td className="px-4 py-3 text-right font-bold">{formatCurrency(e.amount, settings.currency)}</td>
                                             </tr>
                                         ))}

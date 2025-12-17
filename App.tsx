@@ -17,6 +17,7 @@ import DevelopmentFund from './components/DevelopmentFund';
 import NoName from './components/NoName';
 import FinancialControl from './components/FinancialControl';
 import Harvest from './components/Harvest';
+import KeyboardShortcuts from './components/KeyboardShortcuts';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
@@ -196,6 +197,20 @@ const App: React.FC = () => {
 
     const handleLogout = () => setCurrentUser(null);
 
+    // Keyboard shortcut navigation
+    const handleNavigate = (page: string) => {
+        const tabMap: { [key: string]: Tab } = {
+            'dashboard': 'home',
+            'members': 'members',
+            'attendance': 'attendance',
+            'records': 'records',
+            'insights': 'insights',
+            'history': 'history'
+        };
+        const tab = tabMap[page];
+        if (tab) setActiveTab(tab);
+    };
+
     const handleSaveEntry = (entry: Entry) => {
         const newEntries = [...entries];
         const index = newEntries.findIndex(e => e.id === entry.id);
@@ -254,7 +269,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "development-fund", "other"];
 
     const renderTabContent = () => {
         // Double check access before rendering restrictive tabs
@@ -558,7 +573,7 @@ const App: React.FC = () => {
                         )}
                     </div>
                 );
-            case 'development-fund': return <DevelopmentFund members={members} entries={developmentFund} setEntries={setDevelopmentFund} settings={settings} />;
+            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} />;
             case 'harvest': return <Harvest members={members} entries={harvestEntries} setEntries={setHarvestEntries} settings={settings} currentUser={currentUser} />;
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} />;
@@ -567,7 +582,7 @@ const App: React.FC = () => {
             case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, attendance, weeklyHistory, users, developmentFund, noName: noNameEntries, monthLocks, setEntries, setMembers, setAttendance, setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries, setMonthLocks}}/>;
-            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} settings={settings} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} />;
+            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
             default: return <div>Select a tab</div>;
         }
     };
@@ -644,6 +659,7 @@ const App: React.FC = () => {
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />
+                <KeyboardShortcuts onNavigate={handleNavigate} />
             </div>
         </div>
     );

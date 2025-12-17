@@ -164,6 +164,24 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
         <div className="pb-12 max-w-6xl mx-auto p-4">
             <h2 className="text-3xl font-bold mb-6 text-white bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-3 rounded-lg inline-block">📅 Weekly History</h2>
 
+            {/* Show empty state when no history and no active editing */}
+            {history.length === 0 && !selectedRecordId ? (
+                <div className="text-center py-20 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border-2 border-amber-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto mb-6 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-3xl font-bold text-slate-800 mb-3">No Weekly History Records Yet</p>
+                    <p className="text-lg text-slate-600 mb-6">Start recording your weekly service history to track attendance, visitors, and events.</p>
+                    <button 
+                        onClick={() => setSelectedRecordId(null)}
+                        className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 text-base"
+                    >
+                        ✏️ Create First Record
+                    </button>
+                </div>
+            ) : (
+                <>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 <button onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded text-sm">📚 Archives</button>
                 <button onClick={() => setSelectedRecordId(null)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded text-sm">✏️ New</button>
@@ -523,6 +541,9 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                         </div>
                     </div>
                 </div>
+            )}
+
+                </>
             )}
 
             <HistoryArchiveModal 
