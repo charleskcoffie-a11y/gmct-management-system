@@ -136,6 +136,12 @@ export function sanitizeSettings(raw: any): Settings {
         supabaseUrl: sanitizeString(raw.supabaseUrl),
         supabaseKey: sanitizeString(raw.supabaseKey),
         logoUrl: raw.logoUrl ? sanitizeString(raw.logoUrl) : undefined,
+        orgName: sanitizeString(raw.orgName),
+        orgAddress: sanitizeString(raw.orgAddress),
+        orgPhone: sanitizeString(raw.orgPhone),
+        orgEmail: sanitizeString(raw.orgEmail),
+        charityNumber: sanitizeString(raw.charityNumber),
+        signatureImage: raw.signatureImage ? sanitizeString(raw.signatureImage) : undefined,
     }
 }
 
@@ -188,10 +194,45 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
 // --- Enum Sanitizers ---
 
 export function sanitizeEntryType(type: any): EntryType {
-    const validTypes: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "development-fund", "other"];
-    // Backward compatibility for 'first-fruit'
-    if (type === 'first-fruit') return 'thanksgiving-offering';
-    return validTypes.includes(type) ? type : "other";
+    const raw = sanitizeString(type).toLowerCase().trim();
+
+    const normalized = raw
+        .replace(/\s+/g, '-')      // spaces to hyphen
+        .replace(/_+/g, '-')        // underscores to hyphen
+        .replace(/-{2,}/g, '-')     // collapse multiple hyphens
+        .replace(/[^a-z-]/g, '');   // remove unexpected chars
+
+    // Map common aliases to canonical values
+    const aliasMap: Record<string, EntryType> = {
+        'first-fruit': 'thanksgiving-offering',
+        'firstfruit': 'thanksgiving-offering',
+        'first-fruits': 'thanksgiving-offering',
+        'thanks': 'thanksgiving-offering',
+        'thanksgiving': 'thanksgiving-offering',
+        'tithes': 'tithe',
+        'development': 'development-fund',
+        'developmentfund': 'development-fund',
+        'harvest': 'harvest-levy',
+        'harvestlevy': 'harvest-levy',
+        'harvest-levy': 'harvest-levy',
+        'pledges': 'pledge',
+        'kofi-ama': 'kofi-and-ama',
+        'kofiandama': 'kofi-and-ama',
+    };
+
+    const validTypes: EntryType[] = [
+        'tithe',
+        'offering',
+        'thanksgiving-offering',
+        'pledge',
+        'harvest-levy',
+        'kofi-and-ama',
+        'development-fund',
+        'other'
+    ];
+
+    if (aliasMap[normalized]) return aliasMap[normalized];
+    return (validTypes as string[]).includes(normalized) ? normalized as EntryType : 'other';
 }
 
 export function sanitizeMethod(method: any): Method {

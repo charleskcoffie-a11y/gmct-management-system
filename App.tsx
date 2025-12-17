@@ -19,6 +19,7 @@ import NoName from './components/NoName';
 import FinancialControl from './components/FinancialControl';
 import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
+import TaxReceipts from './components/TaxReceipts';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
@@ -37,7 +38,14 @@ const INITIAL_SETTINGS: Settings = {
     maxClasses: DEFAULT_MAX_CLASSES,
     enforceDirectory: true,
     supabaseUrl: SUPABASE_URL,
-    supabaseKey: SUPABASE_KEY
+    supabaseKey: SUPABASE_KEY,
+    orgName: '',
+    orgAddress: '',
+    orgPhone: '',
+    orgEmail: '',
+    charityNumber: '',
+    signatureImage: undefined,
+    logoUrl: undefined,
 };
 
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
@@ -305,6 +313,9 @@ const App: React.FC = () => {
         if (activeTab === 'users' && currentUser.role !== 'admin') {
              return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
         }
+        if (activeTab === 'tax-receipts' && !(currentUser.role === 'admin' || currentUser.role === 'finance-chair')) {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin and Finance Chair can issue receipts.</div>;
+        }
 
         switch (activeTab) {
             case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
@@ -312,6 +323,7 @@ const App: React.FC = () => {
                 return (
                     <Reports 
                         entries={entries}
+                        harvestEntries={harvestEntries}
                         members={members}
                         settings={settings}
                         history={weeklyHistory}
@@ -615,7 +627,24 @@ const App: React.FC = () => {
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} />;
-            case 'insights': return <Insights entries={filteredAndSortedEntries.filter(e => !e.deleted)} settings={settings} />;
+            case 'insights':
+                return (
+                    <Insights
+                        // Use the full active dataset (not the Records tab filters)
+                        entries={entries.filter(e => !e.deleted)}
+                        harvestEntries={harvestEntries.filter(h => !h.deleted)}
+                        settings={settings}
+                    />
+                );
+            case 'tax-receipts':
+                return (
+                    <TaxReceipts
+                        entries={entries.filter(e => !e.deleted)}
+                        harvestEntries={harvestEntries.filter(h => !h.deleted)}
+                        members={members}
+                        settings={settings}
+                    />
+                );
             // 'history' moved under Reports tab
             case 'history': return <Reports entries={entries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} />;
@@ -633,6 +662,7 @@ const App: React.FC = () => {
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
         { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
+        { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
         { id: 'reports', label: 'Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'] },
         { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'users', label: 'Manage Users', roles: ['admin'] },

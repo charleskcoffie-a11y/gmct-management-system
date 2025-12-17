@@ -135,6 +135,35 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
         }
     };
 
+    const handleSignatureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Please upload an image file (PNG, JPG, etc.)');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            alert('Signature image should be less than 2MB');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64String = reader.result as string;
+            setSettings(prev => ({ ...prev, signatureImage: base64String }));
+            setTimeout(() => alert('Signature uploaded successfully.'), 50);
+        };
+        reader.onerror = () => alert('Error reading file. Please try again.');
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
+
+    const removeSignature = () => {
+        if (confirm('Remove the stored signature?')) {
+            setSettings(prev => ({ ...prev, signatureImage: undefined }));
+            alert('Signature removed.');
+        }
+    };
+
     // --- Data Maintenance: Merge Development Fund into Entries ---
     const handleMergeDevelopmentFund = () => {
         if (developmentFund.length === 0) {

@@ -1,5 +1,5 @@
 
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "kofi-and-ama" | "development-fund" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest" | "kofi-and-ama" | "development-fund" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {
@@ -71,6 +71,12 @@ export interface Settings {
     supabaseUrl: string;
     supabaseKey: string;
     logoUrl?: string; // Base64 or URL for organization logo
+    orgName?: string;
+    orgAddress?: string;
+    orgPhone?: string;
+    orgEmail?: string;
+    charityNumber?: string;
+    signatureImage?: string; // Base64 or URL for authorized signature
 }
 
 export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician';
@@ -140,7 +146,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities' | 'tax-receipts';
 
 export interface CloudState {
   ready: boolean;

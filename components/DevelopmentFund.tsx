@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings } from '../types';
-import { formatCurrency, sanitizeString } from '../utils';
+import { formatCurrency } from '../utils';
 import { saveEntryToSupabase, deleteEntryFromSupabase } from '../services/supabase';
 
 interface DevelopmentFundProps {
@@ -14,13 +14,10 @@ interface DevelopmentFundProps {
 
 const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, setEntries, settings }) => {
     // --- State ---
-    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [memberInput, setMemberInput] = useState('');
     const [startDate, setStartDate] = useState(''); // Empty = show all
     const [endDate, setEndDate] = useState(''); // Empty = show all
     const [showToast, setShowToast] = useState(false);
-    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-    const [historyScope, setHistoryScope] = useState<'filtered' | 'all'>('filtered');
     const [datePreset, setDatePreset] = useState<'custom' | 'this-week' | 'this-month' | 'qtd' | 'ytd' | 'last-12m'>('custom');
     const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -28,8 +25,28 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [editAmount, setEditAmount] = useState<string>('');
     const [editDesc, setEditDesc] = useState<string>('');
     const [lastDeleted, setLastDeleted] = useState<Entry | null>(null);
-    const quickAmountRef = useRef<HTMLInputElement | null>(null);
     const [duplicateWarning, setDuplicateWarning] = useState(false);
+    const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+    type BulkRow = {
+        id: string;
+        memberInput: string;
+        memberId: string;
+        memberName: string;
+        date: string;
+        amount: string;
+        note: string;
+    };
+    const [isBulkMode, setIsBulkMode] = useState(false);
+    const [bulkSaving, setBulkSaving] = useState(false);
+    const [bulkRows, setBulkRows] = useState<BulkRow[]>([{
+        id: uuidv4(),
+        memberInput: '',
+        memberId: '',
+        memberName: '',
+        date: new Date().toISOString().slice(0, 10),
+        amount: '',
+        note: ''
+    }]);
 
     // Form State
     const [newAmount, setNewAmount] = useState('');
@@ -37,20 +54,14 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [newDesc, setNewDesc] = useState('');
 
     // --- Derived Data ---
-    const filteredMembers = useMemo(() => {
-        const term = searchTerm.toLowerCase();
-        return members.filter(m => 
-            m.name.toLowerCase().includes(term) ||
-            (m.memberNumber && m.memberNumber.toLowerCase().includes(term)) ||
-            (m.classNumber && m.classNumber === term) || 
-            (m.classNumber && `class ${m.classNumber}` === term)
-        ).sort((a, b) => {
-            const classA = parseInt(a.classNumber || '9999');
-            const classB = parseInt(b.classNumber || '9999');
-            if (classA !== classB) return classA - classB;
-            return a.name.localeCompare(b.name);
-        });
-    }, [members, searchTerm]);
+    const selectedMember = useMemo(() => {
+        const term = memberInput.trim().toLowerCase();
+        if (!term) return null;
+        return members.find(m =>
+            m.name.toLowerCase() === term ||
+            (m.memberNumber && m.memberNumber.toLowerCase() === term)
+        ) || null;
+    }, [members, memberInput]);
 
     const displayEntries = useMemo(() => {
         let filtered = entries.filter(e => {
@@ -58,7 +69,6 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             if (e.deleted) return false; // Hide deleted entries
             if (startDate && e.date < startDate) return false;
             if (endDate && e.date > endDate) return false;
-            if (selectedMember && e.memberID !== selectedMember.id) return false;
             return true;
         });
 
@@ -90,18 +100,9 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         });
         return sortable;
 
-    }, [entries, members, selectedMember, startDate, endDate, sortConfig]);
+    }, [entries, members, startDate, endDate, sortConfig]);
 
     const totalContributions = displayEntries.reduce((sum, e) => sum + e.amount, 0);
-
-    const selectedMemberEntries = useMemo(() => {
-        if (!selectedMember) return [] as Array<Entry & { date: string }>;
-        const baseAll = entries.filter(e => e.type === 'development-fund' && e.memberID === selectedMember.id);
-        const base = historyScope === 'filtered'
-            ? baseAll.filter(e => (!startDate || e.date >= startDate) && (!endDate || e.date <= endDate))
-            : baseAll;
-        return base.sort((a, b) => b.date.localeCompare(a.date));
-    }, [entries, selectedMember, historyScope, startDate, endDate]);
 
     // --- Handlers ---
 
@@ -127,7 +128,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             return;
         }
         
-        if (!selectedMember) return alert("Please select a member first.");
+        if (!selectedMember) return alert("Please choose a member by typing their name or member #.");
         
         const amountVal = parseFloat(newAmount);
         if (isNaN(amountVal) || amountVal <= 0) return alert("Please enter a valid positive amount.");
@@ -163,11 +164,11 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             setNewDesc('');
             setNewDate(new Date().toISOString().slice(0, 10)); // Reset to today
             setDuplicateWarning(false); // Clear any previous warning
-            
+            setMemberInput('');
+
             setShowToast(true);
             setTimeout(() => setShowToast(false), 3000);
-            // Focus amount for quick batch entry
-            quickAmountRef.current?.focus();
+            setIsEntryModalOpen(false);
         } catch (error: any) {
             alert(`Failed to save: ${error.message}`);
         }
@@ -200,13 +201,136 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         }
     };
 
+    const submitBulkRows = async () => {
+        if (bulkSaving) return;
+        setBulkSaving(true);
+        try {
+            const prepared: Entry[] = [];
+            for (const row of bulkRows) {
+                const built = buildBulkEntry(row);
+                if (!built) {
+                    setBulkSaving(false);
+                    return;
+                }
+                if (prepared.some(p => p.memberID === built.memberID && p.date === built.date && p.type === built.type)) {
+                    alert(`Duplicate detected inside bulk list for ${built.memberName} on ${built.date}.`);
+                    setBulkSaving(false);
+                    return;
+                }
+                prepared.push(built);
+            }
+            for (const entry of prepared) {
+                if (settings.supabaseUrl && settings.supabaseKey) {
+                    await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+                }
+            }
+            setEntries(prev => [...prev, ...prepared]);
+            setBulkRows([{
+                id: uuidv4(),
+                memberInput: '',
+                memberId: '',
+                memberName: '',
+                date: new Date().toISOString().slice(0, 10),
+                amount: '',
+                note: ''
+            }]);
+            setIsBulkMode(false);
+            setMemberInput('');
+            setIsEntryModalOpen(false);
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+        } catch (error: any) {
+            alert(`Failed to save bulk entries: ${error.message}`);
+        } finally {
+            setBulkSaving(false);
+        }
+    };
+
+    const addBulkRow = () => {
+        setBulkRows(rows => [...rows, {
+            id: uuidv4(),
+            memberInput: '',
+            memberId: '',
+            memberName: '',
+            date: new Date().toISOString().slice(0, 10),
+            amount: '',
+            note: ''
+        }]);
+    };
+
+    const removeBulkRow = (id: string) => {
+        setBulkRows(rows => rows.length === 1 ? rows : rows.filter(r => r.id !== id));
+    };
+
+    const updateBulkRow = (id: string, patch: Partial<BulkRow>) => {
+        setBulkRows(rows => rows.map(r => r.id === id ? { ...r, ...patch } : r));
+    };
+
+    const handleBulkMemberChange = (id: string, value: string) => {
+        const match = members.find(m =>
+            m.name.toLowerCase() === value.toLowerCase() ||
+            (m.memberNumber && m.memberNumber.toLowerCase() === value.toLowerCase())
+        );
+
+        if (match) {
+            updateBulkRow(id, {
+                memberInput: match.name,
+                memberId: match.id,
+                memberName: match.name
+            });
+        } else {
+            updateBulkRow(id, {
+                memberInput: value,
+                memberId: '',
+                memberName: value
+            });
+        }
+    };
+
+    const buildBulkEntry = (row: BulkRow): Entry | null => {
+        const amountVal = parseFloat(row.amount);
+        if (!row.memberId && settings.enforceDirectory) {
+            alert('Please select a valid member from the directory for each row.');
+            return null;
+        }
+        if (isNaN(amountVal) || amountVal <= 0) {
+            alert('Amounts must be positive numbers.');
+            return null;
+        }
+        if (new Date(row.date) > new Date()) {
+            if (!window.confirm('One or more dates are in the future. Continue?')) return null;
+        }
+
+        if (entries.some(en => !en.deleted && en.type === 'development-fund' && en.memberID === row.memberId && en.date === row.date)) {
+            alert(`Duplicate detected for ${row.memberName || row.memberInput} on ${row.date}.`);
+            return null;
+        }
+
+        const member = members.find(m => m.id === row.memberId);
+
+        return {
+            id: uuidv4(),
+            date: row.date,
+            memberID: row.memberId || member?.id || '',
+            memberName: member?.name || row.memberName,
+            classNumber: member?.classNumber,
+            type: 'development-fund',
+            fund: 'development-fund',
+            method: 'other',
+            amount: amountVal,
+            note: row.note || undefined,
+            createdAt: new Date().toISOString(),
+            deleted: false
+        };
+    };
+
     const undoDelete = async () => {
         if (!lastDeleted) return;
         try {
             if (settings.supabaseUrl && settings.supabaseKey) {
                 await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, lastDeleted);
             }
-            setEntries(prev => [...prev, lastDeleted!]);
+            setEntries(prev => [...prev, lastDeleted]);
             setLastDeleted(null);
         } catch (error: any) {
             alert(`Failed to restore: ${error.message}`);
@@ -297,35 +421,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         try { localStorage.setItem('devfund-sort', JSON.stringify(sortConfig)); } catch {}
     }, [sortConfig]);
 
-    useEffect(() => {
-        try {
-            const savedScope = localStorage.getItem('devfund-historyScope') as any;
-            if (savedScope) setHistoryScope(savedScope);
-        } catch {}
-    }, []);
-
-    useEffect(() => {
-        try { localStorage.setItem('devfund-historyScope', historyScope); } catch {}
-    }, [historyScope]);
-
-    const exportMemberCsv = () => {
-        if (!selectedMember) return;
-        const rows = [['Date','Amount','Description','MemberName','MemberID']];
-        const member = selectedMember;
-        selectedMemberEntries.forEach(e => rows.push([e.date, String(e.amount), (e as any).note || '', member.name, member.memberNumber || '-']))
-        const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `devfund_${member.name.replace(/\s+/g,'_')}_${historyScope}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
     return (
-        <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row gap-6 relative">
-            
+        <div className="h-[calc(100vh-140px)] flex flex-col gap-6 relative">
             {duplicateWarning && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex justify-center items-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border-2 border-red-300 animate-fadeIn">
@@ -339,7 +436,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                         </div>
                         <div className="p-6 space-y-4">
                             <p className="text-slate-700 leading-relaxed">
-                                A <span className="font-bold text-red-600">Development Fund</span> contribution already exists for <span className="font-bold">{selectedMember?.name}</span> on <span className="font-bold">{newDate}</span>.
+                                A <span className="font-bold text-red-600">Development Fund</span> contribution already exists for <span className="font-bold">{selectedMember?.name || memberInput || 'this member'}</span> on <span className="font-bold">{newDate}</span>.
                             </p>
                             <p className="text-sm text-slate-600 bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
                                 💡 <strong>Tip:</strong> Please choose a different date or edit the existing entry.
@@ -363,61 +460,16 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 </div>
             )}
 
-            {/* Sidebar: Member Search */}
-            <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col bg-gradient-to-b from-blue-50 to-indigo-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
-                <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 border-b border-blue-300">
-                    <h3 className="font-bold text-white mb-2 text-lg">👥 Member Search</h3>
-                    <input 
-                        type="text" 
-                        placeholder="Name, ID, or Class..." 
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full border-2 border-blue-200 rounded-lg shadow-sm focus:ring-blue-400 focus:border-blue-400 py-2 px-3"
-                    />
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                    {filteredMembers.map(m => (
-                        <button
-                            key={m.id}
-                            onClick={() => setSelectedMember(m)}
-                            className={`w-full text-left p-4 border-b border-blue-100 transition-all flex justify-between items-center ${
-                              selectedMember?.id === m.id 
-                                ? 'bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-md border-l-4 border-l-blue-700 font-semibold' 
-                                : 'hover:bg-blue-100 text-slate-800'
-                            }`}
-                        >
-                            <div>
-                                <div className="font-bold">{sanitizeString(m.name)}</div>
-                                <div className={`text-xs ${selectedMember?.id === m.id ? 'text-blue-100' : 'text-slate-600'}`}>Class {m.classNumber || '-'} • ID: {m.memberNumber || '-'}</div>
-                            </div>
-                            <div className="text-lg">›</div>
-                        </button>
-                    ))}
-                    {filteredMembers.length === 0 && (
-                        <div className="p-8 text-center text-blue-400 italic">No members found.</div>
-                    )}
-                </div>
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col bg-gradient-to-br from-white via-purple-50 to-pink-50 rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden">
-                
-                {/* Header / Filters / Stats */}
-                <div className="p-6 border-b-2 border-purple-200 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 sticky top-0 z-20 shadow-md">
+            <div className="flex flex-col bg-gradient-to-br from-white via-purple-50 to-pink-50 rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden flex-1">
+                <div className="p-6 border-b-2 border-purple-200 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div className="flex-1">
                         <h2 className="text-3xl font-bold text-white">💰 Development Fund</h2>
-                        <p className="text-purple-100 text-sm mt-1">
-                            {selectedMember 
-                                ? `💎 Showing records for ${sanitizeString(selectedMember.name)}` 
-                                : "📊 Viewing all contributions (Select a member to add)"}
-                        </p>
+                        <p className="text-purple-100 text-sm mt-1">Track and manage development fund contributions. Use the Add Entry button below for single or bulk captures.</p>
                     </div>
-
                     <div className="bg-gradient-to-br from-yellow-300 to-orange-400 px-6 py-3 rounded-xl border-2 border-yellow-400 shadow-lg flex flex-col items-end min-w-[200px] transform hover:scale-105 transition">
                         <span className="text-xs font-bold uppercase text-white tracking-wider">💵 Total Collected</span>
                         <span className="text-2xl font-extrabold text-white">{formatCurrency(totalContributions, settings.currency)}</span>
                     </div>
-
                     <div className="flex gap-2 items-center bg-gradient-to-r from-white to-purple-100 p-3 rounded-lg border-2 border-purple-300 shadow-lg self-stretch xl:self-auto justify-center">
                         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border-2 border-purple-300 text-sm focus:ring-purple-400 focus:border-purple-400 text-slate-700 bg-white rounded px-2 py-1"/>
                         <span className="text-purple-600 font-bold">to</span>
@@ -427,42 +479,25 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                 <button key={p} type="button" onClick={() => applyPreset(p)} className={`px-2 py-1 rounded-md text-xs font-bold transition transform hover:scale-110 ${datePreset===p ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' : 'bg-white text-slate-700 border border-purple-300 hover:border-purple-600'}`}>{p.replace('-', ' ')}</button>
                             ))}
                         </div>
-                        {selectedMember && (
-                            <button type="button" onClick={() => { setHistoryScope('filtered'); setIsHistoryOpen(true); }} className="ml-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3 py-2 rounded-md">Member History</button>
-                        )}
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-                    
-                    {/* List of Contributions */}
-                    <div className="flex-1 overflow-y-auto p-0 lg:border-r border-slate-200 relative">
-                        {selectedMember && (
-                            <div className="bg-indigo-50 border-b border-indigo-200 p-3 flex flex-wrap gap-2 items-end">
-                                <div className="w-full">
-                                    {hasDuplicate && (
-                                        <div className="mb-2 bg-red-100 border-l-4 border-red-500 text-red-700 p-2 rounded text-sm">
-                                            <strong>⚠️ Duplicate Entry:</strong> An entry already exists for this member on {newDate}
-                                        </div>
-                                    )}
-                                    <label className="block text-xs font-bold uppercase text-indigo-800 mb-1 ml-1">Quick Add</label>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                        <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)} className="border-slate-300 rounded-md p-2" />
-                                        <input ref={quickAmountRef} type="number" step="0.01" value={newAmount} onChange={e=>setNewAmount(e.target.value)} placeholder="Amount" className="border-slate-300 rounded-md p-2" />
-                                        <input type="text" value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="Description" className="border-slate-300 rounded-md p-2" />
-                                        <button onClick={handleAddEntry} disabled={hasDuplicate} className={`font-bold px-4 rounded-md ${hasDuplicate ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>{hasDuplicate ? '⚠️ Duplicate' : 'Save'}</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        <div className="overflow-y-auto max-h-[55vh] border-t-2 border-purple-200">
-                         <table className="w-full text-left text-slate-700">
+                <div className="px-6 py-4 bg-gradient-to-r from-white/70 to-purple-50 border-b border-purple-100 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-sm text-purple-700 font-semibold">
+                        <span className="bg-purple-600 text-white px-2 py-1 rounded-md text-xs font-bold">Tip</span>
+                        Use the button at the bottom-right to add contributions (single or bulk). Filters above keep the table focused on the date range you need.
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-hidden">
+                    <div className="overflow-y-auto max-h-[60vh] border-t-2 border-purple-200">
+                        <table className="w-full text-left text-slate-700">
                             <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs uppercase font-bold sticky top-0 z-10 shadow-md">
                                 <tr>
                                     <th className="px-4 py-3 cursor-pointer" onClick={() => setSortConfig(s => ({ key: 'date', direction: s.key==='date' && s.direction==='asc' ? 'desc' : 'asc' }))}>
                                         Date {sortConfig.key==='date' ? (sortConfig.direction==='asc' ? '▲' : '▼') : ''}
                                     </th>
-                                    {!selectedMember && <th className="px-4 py-3">Member</th>}
+                                    <th className="px-4 py-3">Member</th>
                                     <th className="px-4 py-3">Class</th>
                                     <th className="px-4 py-3">Desc</th>
                                     <th className="px-4 py-3 text-right cursor-pointer" onClick={() => setSortConfig(s => ({ key: 'amount', direction: s.key==='amount' && s.direction==='asc' ? 'desc' : 'asc' }))}>
@@ -479,9 +514,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                 <input type="date" value={editDate} onChange={e=>setEditDate(e.target.value)} className="border-slate-300 rounded-md p-1" />
                                             ) : entry.date}
                                         </td>
-                                        {!selectedMember && (
-                                            <td className="px-4 py-3 font-medium text-slate-800">{entry.memberName}</td>
-                                        )}
+                                        <td className="px-4 py-3 font-medium text-slate-800">{entry.memberName}</td>
                                         <td className="px-4 py-3 text-center">{entry.classNumber}</td>
                                         <td className="px-4 py-3 truncate max-w-[150px]">
                                             {editingId===entry.id ? (
@@ -518,7 +551,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                             </tbody>
                             <tfoot>
                                 <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 border-purple-300 font-bold text-slate-700">
-                                    <td className="px-4 py-3" colSpan={selectedMember ? 3 : 4}>
+                                    <td className="px-4 py-3" colSpan={4}>
                                         <span className="text-xs font-bold uppercase text-purple-600">Visible:</span>
                                     </td>
                                     <td className="px-4 py-3 text-right font-extrabold text-purple-700">{formatCurrency(displayEntries.reduce((s,e)=>s+e.amount,0), settings.currency)}</td>
@@ -526,117 +559,202 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                 </tr>
                             </tfoot>
                         </table>
-                        </div>
-                        {lastDeleted && (
-                            <div className="fixed bottom-6 right-6 bg-gradient-to-r from-red-500 to-rose-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 border-2 border-red-300">
-                                <span className="font-bold">🗑️ Entry deleted.</span>
-                                <button onClick={undoDelete} className="bg-white text-red-600 font-bold px-3 py-1 rounded-md hover:bg-red-100 transition">↩️ Undo</button>
-                                <button onClick={()=>setLastDeleted(null)} className="text-red-200 hover:text-white transition font-bold">✕</button>
-                            </div>
-                        )}
                     </div>
-
-                    {/* Add Entry Form (Only visible if member selected) */}
-                    {selectedMember ? (
-                        <div className="w-full lg:w-1/3 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-6 shadow-inner overflow-y-auto h-full border-t lg:border-t-0 border-2 border-green-200">
-                            <h3 className="font-bold text-green-800 mb-4 border-b-2 border-green-300 pb-2 flex items-center gap-2 text-lg">
-                                <span className="bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">+</span>
-                                Add Contribution
-                            </h3>
-                            <div className="mb-6 bg-gradient-to-br from-white to-green-100 p-4 rounded-lg border-2 border-green-300 shadow-md">
-                                <span className="text-xs font-bold text-green-600 uppercase tracking-wide">💎 Beneficiary</span>
-                                <div className="font-bold text-xl bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mt-1">{sanitizeString(selectedMember.name)}</div>
-                                <div className="text-sm font-medium text-slate-600 mt-1 flex gap-2">
-                                    <span className="bg-gradient-to-r from-blue-400 to-cyan-400 text-white px-2 py-0.5 rounded font-bold">📚 Class {selectedMember.classNumber}</span>
-                                    <span className="bg-gradient-to-r from-purple-400 to-pink-400 text-white px-2 py-0.5 rounded font-bold">🎫 ID: {selectedMember.memberNumber || 'N/A'}</span>
-                                </div>
-                            </div>
-                            
-                            <form onSubmit={handleAddEntry} onKeyDown={handleKeyDown} className="space-y-5">
-                                <div>
-                                    <label className="block text-sm font-bold text-green-700 mb-1">📅 Date</label>
-                                    <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} required className="w-full border-2 border-green-300 rounded-lg shadow-sm py-2 px-3 focus:ring-green-400 focus:border-green-400 font-medium" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-green-700 mb-1">💰 Amount</label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <span className="text-green-600 font-bold text-lg">$</span>
-                                        </div>
-                                        <input type="number" step="0.01" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0.00" required className="w-full pl-8 border-2 border-green-300 rounded-lg shadow-sm font-bold text-xl py-2 focus:ring-green-400 focus:border-green-400 bg-white text-green-700" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-green-700 mb-1">📝 Description (Optional)</label>
-                                    <textarea rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="e.g. Monthly pledge" className="w-full border-2 border-green-300 rounded-lg shadow-sm py-2 px-3 focus:ring-green-400 focus:border-green-400" />
-                                </div>
-                                <button type="submit" disabled={hasDuplicate} className={`w-full font-bold py-3.5 rounded-lg shadow-lg transition-all active:scale-95 text-lg ${hasDuplicate ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white hover:scale-[1.02]'}`}>
-                                    {hasDuplicate ? '⚠️ Duplicate on this date' : '✓ Save Contribution'}
-                                </button>
-                                <p className="text-center text-xs text-green-600 font-medium">Press Ctrl+Enter to save</p>
-                                <button type="button" onClick={() => setSelectedMember(null)} className="w-full text-slate-500 text-sm hover:text-slate-700 font-medium py-2">
-                                    Cancel Selection
-                                </button>
-                            </form>
-                        </div>
-                    ) : (
-                        <div className="hidden lg:flex w-1/3 bg-slate-50 items-center justify-center p-8 text-center text-slate-400 border-l border-slate-200">
-                            <div>
-                                <div className="bg-slate-200 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-4xl text-white font-bold">←</span>
-                                </div>
-                                <h4 className="text-lg font-bold text-slate-600">Select a Member</h4>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
 
-            {isHistoryOpen && selectedMember && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-16" onClick={() => setIsHistoryOpen(false)}>
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-                        <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+            {lastDeleted && (
+                <div className="fixed bottom-6 right-6 bg-gradient-to-r from-red-500 to-rose-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 border-2 border-red-300">
+                    <span className="font-bold">🗑️ Entry deleted.</span>
+                    <button onClick={undoDelete} className="bg-white text-red-600 font-bold px-3 py-1 rounded-md hover:bg-red-100 transition">↩️ Undo</button>
+                    <button onClick={()=>setLastDeleted(null)} className="text-red-200 hover:text-white transition font-bold">✕</button>
+                </div>
+            )}
+
+            <button
+                type="button"
+                onClick={() => { setIsEntryModalOpen(true); setIsBulkMode(false); }}
+                className="fixed bottom-6 right-6 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 text-base"
+            >
+                <span className="text-2xl leading-none">+</span>
+                Add Entry
+            </button>
+
+            {isEntryModalOpen && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex justify-center items-center p-4" onClick={() => setIsEntryModalOpen(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col border-2 border-slate-200" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-blue-600 to-cyan-600 p-6 rounded-t-2xl text-white flex justify-between items-start">
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">Contribution History: {sanitizeString(selectedMember.name)}</h3>
-                                <p className="text-slate-500 text-sm">Scope: {historyScope === 'filtered' ? 'Filtered (date range)' : 'All time'}</p>
+                                <h3 className="text-2xl font-bold">Add Development Fund Entry</h3>
+                                <p className="text-blue-100 text-sm mt-1">Choose single or bulk entry mode below.</p>
                             </div>
+                            <button onClick={() => setIsEntryModalOpen(false)} className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg text-2xl font-bold transition">×</button>
+                        </div>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                            <div className="text-sm font-semibold text-slate-700">Entry mode</div>
                             <div className="flex gap-2">
-                                <button type="button" onClick={() => setHistoryScope('filtered')} className={`px-3 py-1 rounded-md text-sm font-bold ${historyScope==='filtered' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>Filtered</button>
-                                <button type="button" onClick={() => setHistoryScope('all')} className={`px-3 py-1 rounded-md text-sm font-bold ${historyScope==='all' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>All Time</button>
+                                <button type="button" onClick={() => setIsBulkMode(false)} className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition ${!isBulkMode ? 'bg-green-600 border-green-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-700 hover:border-green-400'}`}>
+                                    Single Entry
+                                </button>
+                                <button type="button" onClick={() => setIsBulkMode(true)} className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition ${isBulkMode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-700 hover:border-purple-400'}`}>
+                                    Bulk Entry
+                                </button>
                             </div>
                         </div>
-                        <div className="p-6 max-h-[60vh] overflow-y-auto">
-                            {selectedMemberEntries.length > 0 ? (
-                                <table className="w-full text-left text-slate-600">
-                                    <thead className="bg-slate-100 text-slate-700 text-xs uppercase font-bold sticky top-0">
-                                        <tr>
-                                            <th className="px-4 py-3">Date</th>
-                                            <th className="px-4 py-3">Description</th>
-                                            <th className="px-4 py-3 text-right">Amount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 text-sm">
-                                        {selectedMemberEntries.map(e => (
-                                            <tr key={e.id} className="hover:bg-slate-50">
-                                                <td className="px-4 py-3 whitespace-nowrap">{e.date}</td>
-                                                <td className="px-4 py-3 truncate">{(e as any).note || ''}</td>
-                                                <td className="px-4 py-3 text-right font-bold">{formatCurrency(e.amount, settings.currency)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <div className="text-center text-slate-400 p-12">No contributions found for chosen scope.</div>
+                        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                            {!isBulkMode && (
+                                <form onSubmit={handleAddEntry} onKeyDown={handleKeyDown} className="space-y-4">
+                                    <div className="bg-white rounded-xl shadow-md border-2 border-slate-200 p-4">
+                                        <label className="block text-xs font-bold uppercase text-slate-600 mb-2">Member</label>
+                                        <input
+                                            list="devfund-members"
+                                            value={memberInput}
+                                            onChange={e => setMemberInput(e.target.value)}
+                                            placeholder="Type name or member #"
+                                            className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 font-medium"
+                                        />
+                                        <datalist id="devfund-members">
+                                            {members.slice(0, 400).map(m => (
+                                                <React.Fragment key={m.id}>
+                                                    <option value={m.name} />
+                                                    {m.memberNumber && <option value={m.memberNumber} />}
+                                                </React.Fragment>
+                                            ))}
+                                        </datalist>
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            Directory required: {settings.enforceDirectory ? 'Yes' : 'No'}
+                                        </p>
+                                        {selectedMember && (
+                                            <div className="mt-3 flex gap-2 text-xs font-bold text-slate-700">
+                                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md">Class {selectedMember.classNumber || '-'}</span>
+                                                <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-md">ID: {selectedMember.memberNumber || 'N/A'}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-white rounded-xl p-4 shadow-md border-2 border-purple-100">
+                                            <label className="block text-xs font-bold text-purple-600 uppercase mb-2">Date</label>
+                                            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all" />
+                                        </div>
+                                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 shadow-md border-2 border-green-200">
+                                            <label className="block text-xs font-bold text-green-600 uppercase mb-2">Amount</label>
+                                            <input inputMode="decimal" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0.00" className="w-full border-2 border-green-300 rounded-lg p-3 font-bold text-2xl text-right text-green-700 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-all bg-white" />
+                                        </div>
+                                    </div>
+                                    <div className="bg-white rounded-xl p-4 shadow-md border-2 border-slate-200">
+                                        <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Note (Optional)</label>
+                                        <textarea rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Add any additional details..." className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all" />
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="submit"
+                                            disabled={hasDuplicate || !selectedMember}
+                                            className={`font-bold py-3 px-6 rounded-lg transition-all shadow-md ${hasDuplicate || !selectedMember ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60' : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white hover:scale-105'}`}
+                                        >
+                                            {hasDuplicate ? '⚠️ Duplicate Detected' : 'Save Contribution'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {isBulkMode && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <div>
+                                            <h4 className="text-lg font-bold text-purple-800">Bulk Development Fund Entry</h4>
+                                            <p className="text-sm text-slate-600">Add multiple members and save them together.</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button type="button" onClick={addBulkRow} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg shadow-md">+ Add Row</button>
+                                            <button type="button" onClick={submitBulkRows} disabled={bulkSaving} className={`font-bold px-4 py-2 rounded-lg shadow-md ${bulkSaving ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'}`}>
+                                                {bulkSaving ? 'Saving...' : 'Save All'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full text-sm text-slate-700">
+                                            <thead className="bg-purple-100 text-purple-800 text-xs uppercase font-bold">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left">Member / ID</th>
+                                                    <th className="px-3 py-2 text-left">Date</th>
+                                                    <th className="px-3 py-2 text-left">Amount</th>
+                                                    <th className="px-3 py-2 text-left">Note</th>
+                                                    <th className="px-3 py-2 text-right">Remove</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-purple-100">
+                                                {bulkRows.map(row => {
+                                                    const inlineDuplicate = row.memberId && row.date && (
+                                                        entries.some(en => !en.deleted && en.type === 'development-fund' && en.memberID === row.memberId && en.date === row.date) ||
+                                                        bulkRows.some(other => other.id !== row.id && other.memberId === row.memberId && other.date === row.date)
+                                                    );
+                                                    return (
+                                                        <tr key={row.id} className="bg-white hover:bg-purple-50 transition">
+                                                            <td className="px-3 py-2 align-top">
+                                                                <input
+                                                                    list="devfund-bulk-members"
+                                                                    value={row.memberInput}
+                                                                    onChange={e => handleBulkMemberChange(row.id, e.target.value)}
+                                                                    placeholder="Type name or member #"
+                                                                    className="w-full border-2 border-slate-200 rounded-md p-2 text-sm focus:border-purple-400 focus:ring-purple-200"
+                                                                />
+                                                                <p className="text-[11px] text-slate-500 mt-1">Pick from suggestions to link member.</p>
+                                                            </td>
+                                                            <td className="px-3 py-2 align-top">
+                                                                <input
+                                                                    type="date"
+                                                                    value={row.date}
+                                                                    onChange={e => updateBulkRow(row.id, { date: e.target.value })}
+                                                                    className="w-full border-2 border-slate-200 rounded-md p-2 text-sm focus:border-purple-400 focus:ring-purple-200"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 align-top">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={row.amount}
+                                                                    onChange={e => updateBulkRow(row.id, { amount: e.target.value })}
+                                                                    placeholder="0.00"
+                                                                    className="w-full border-2 border-slate-200 rounded-md p-2 text-sm font-bold text-right text-green-700 focus:border-green-400 focus:ring-green-200"
+                                                                />
+                                                                {inlineDuplicate && (
+                                                                    <div className="text-xs text-red-600 font-semibold mt-1">⚠️ Duplicate exists for this member/date</div>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-3 py-2 align-top">
+                                                                <input
+                                                                    type="text"
+                                                                    value={row.note}
+                                                                    onChange={e => updateBulkRow(row.id, { note: e.target.value })}
+                                                                    placeholder="Optional note"
+                                                                    className="w-full border-2 border-slate-200 rounded-md p-2 text-sm focus:border-purple-400 focus:ring-purple-200"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 align-top text-right">
+                                                                <button type="button" onClick={() => removeBulkRow(row.id)} className="text-red-500 hover:text-red-700 font-bold text-lg">×</button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                        <datalist id="devfund-bulk-members">
+                                            {members.slice(0, 400).map(m => (
+                                                <React.Fragment key={m.id}>
+                                                    <option value={m.name} />
+                                                    {m.memberNumber && <option value={m.memberNumber} />}
+                                                </React.Fragment>
+                                            ))}
+                                        </datalist>
+                                    </div>
+                                    <div className="text-xs text-slate-500 font-medium">
+                                        Save All will validate against duplicates and directory rules before pushing to the cloud.
+                                    </div>
+                                </div>
                             )}
                         </div>
-                        <div className="p-4 bg-slate-50 rounded-b-xl flex justify-between items-center">
-                            <div className="text-sm text-slate-600 font-bold">
-                                Total: {formatCurrency(selectedMemberEntries.reduce((s,e)=>s+e.amount,0), settings.currency)} • {selectedMemberEntries.length} entries
-                            </div>
-                            <div className="flex gap-2">
-                                <button type="button" onClick={exportMemberCsv} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Export CSV</button>
-                                <button type="button" onClick={() => setIsHistoryOpen(false)} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Close</button>
-                            </div>
+                        <div className="p-4 bg-slate-50 rounded-b-2xl border-t border-slate-200 flex justify-end">
+                            <button onClick={() => setIsEntryModalOpen(false)} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg transition-all">Close</button>
                         </div>
                     </div>
                 </div>

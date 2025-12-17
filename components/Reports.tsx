@@ -1,12 +1,13 @@
 // components/Reports.tsx
 import React, { useMemo, useState } from 'react';
-import type { Entry, Member, Settings, WeeklyHistoryRecord, EntryType } from '../types';
-import { toCsv, sanitizeString, fromCsv, sanitizeEntry } from '../utils';
+import type { Entry, Member, Settings, WeeklyHistoryRecord, EntryType, HarvestEntry } from '../types';
+import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeEntryType } from '../utils';
 import WeeklyHistory from './WeeklyHistory';
 import { DownloadIcon, UploadIcon } from './icons';
 
 interface ReportsProps {
   entries: Entry[];
+  harvestEntries: HarvestEntry[];
   members: Member[];
   settings: Settings;
   history: WeeklyHistoryRecord[];
@@ -14,15 +15,36 @@ interface ReportsProps {
   setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
 }
 
-const Reports: React.FC<ReportsProps> = ({ entries, members, settings, history, setHistory, setEntries }) => {
+const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, settings, history, setHistory, setEntries }) => {
   const today = new Date().toISOString().slice(0, 10);
+
+  const combinedEntries = useMemo(() => {
+    const harvestedAsEntries: Entry[] = harvestEntries.map(h => ({
+      id: h.id,
+      date: h.date,
+      memberID: h.memberID,
+      memberName: h.memberName,
+      classNumber: h.classNumber,
+      type: 'harvest-levy',
+      fund: 'harvest levy',
+      method: 'other',
+      amount: h.amount,
+      note: h.note,
+      createdAt: h.createdAt,
+      deleted: h.deleted,
+    }));
+
+    return [...entries, ...harvestedAsEntries]
+      .filter(e => !e.deleted)
+      .map(e => ({ ...e, type: sanitizeEntryType(e.type) }));
+  }, [entries, harvestEntries]);
 
   // Financial report generator state
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(today);
   const [emailTo, setEmailTo] = useState('');
 
-  const entryTypes = useMemo(() => Array.from(new Set(entries.map(e => e.type))), [entries]);
+  const entryTypes = useMemo(() => Array.from(new Set(combinedEntries.map(e => e.type))), [combinedEntries]);
   const classNumbers = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
   const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
 
@@ -76,7 +98,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, members, settings, history, 
   };
 
   const exportFilteredFinancials = () => {
-    const filteredEntries = entries.filter(entry => {
+    const filteredEntries = combinedEntries.filter(entry => {
       if (startDate && entry.date < startDate) return false;
       if (endDate && entry.date > endDate) return false;
       if (!selectedTypes.has('all') && !selectedTypes.has(entry.type)) return false;
@@ -93,7 +115,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, members, settings, history, 
         Class: member ? sanitizeString(member.classNumber) : 'N/A',
         Type: entry.type,
         Amount: entry.amount.toFixed(2),
-        Method: entry.method,
+        Method: entry.method || 'other',
         Note: sanitizeString(entry.note),
       };
     });

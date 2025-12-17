@@ -2,15 +2,16 @@
 // components/Insights.tsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import type { Entry, Settings, EntryType } from '../types';
-import { formatCurrency, capitalize, calculateInsights } from '../utils';
+import type { Entry, Settings, EntryType, HarvestEntry } from '../types';
+import { formatCurrency, capitalize, calculateInsights, sanitizeEntryType } from '../utils';
 
 interface InsightsProps {
     entries: Entry[];
+    harvestEntries: HarvestEntry[];
     settings: Settings;
 }
 
-const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
+const Insights: React.FC<InsightsProps> = ({ entries, harvestEntries, settings }) => {
     // Initialize year-to-date filters
     const currentYear = new Date().getFullYear();
     const startOfYear = `${currentYear}-01-01`;
@@ -20,18 +21,43 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
     const [endDate, setEndDate] = useState(today);
     const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
 
+    const combinedEntries = useMemo(() => {
+        const harvestedAsEntries: Entry[] = harvestEntries.map(h => ({
+            id: h.id,
+            date: h.date,
+            memberID: h.memberID,
+            memberName: h.memberName,
+            classNumber: h.classNumber,
+            type: 'harvest-levy',
+            fund: 'harvest levy',
+            method: 'other',
+            amount: h.amount,
+            note: h.note,
+            createdAt: h.createdAt,
+            deleted: h.deleted,
+        }));
+        return [...entries, ...harvestedAsEntries];
+    }, [entries, harvestEntries]);
+
+    // Normalize types and drop deleted rows before filtering
+    const normalizedEntries = useMemo(() => (
+        combinedEntries
+            .filter(e => !e.deleted)
+            .map(e => ({ ...e, type: sanitizeEntryType(e.type) }))
+    ), [combinedEntries]);
+
     // Filter Data for current year
     const filteredEntries = useMemo(() => {
-        return entries.filter(e => {
+        return normalizedEntries.filter(e => {
             if (startDate && e.date < startDate) return false;
             if (endDate && e.date > endDate) return false;
             if (typeFilter !== 'all' && e.type !== typeFilter) return false;
             return true;
         });
-    }, [entries, startDate, endDate, typeFilter]);
+    }, [normalizedEntries, startDate, endDate, typeFilter]);
 
     // Calculate AI Summary (based on ALL entries for context, not just filtered)
-    const aiSummary = useMemo(() => calculateInsights(entries), [entries]);
+    const aiSummary = useMemo(() => calculateInsights(normalizedEntries), [normalizedEntries]);
 
     const totalContribution = filteredEntries.reduce((acc, entry) => acc + entry.amount, 0);
     const totalEntries = filteredEntries.length;
@@ -65,7 +91,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
         
         // Process previous year data (all entries from previous year)
         const previousYear = currentYear - 1;
-        for (const entry of entries) {
+        for (const entry of normalizedEntries) {
             if (entry.date.startsWith(String(previousYear)) && !entry.deleted) {
                 const month = parseInt(entry.date.substring(5, 7));
                 const dayOfYear = new Date(entry.date).getDay();
@@ -80,7 +106,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
             'Current Year': currentYearData[month] || 0,
             'Previous Year': previousYearData[month] || 0,
         }));
-    }, [filteredEntries, entries, currentYear]);
+    }, [filteredEntries, combinedEntries, currentYear]);
 
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
@@ -106,7 +132,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
             </div>
 
             {/* Empty State when no entries */}
-            {entries.length === 0 ? (
+            {combinedEntries.length === 0 ? (
                 <div className="text-center py-20 bg-gradient-to-br from-slate-50 to-indigo-50 rounded-2xl border-2 border-slate-200">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto mb-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -171,7 +197,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
                     <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as any)} className="border-slate-300 rounded-lg shadow-sm">
                         <option value="all">All Types</option>
-                        {["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "development-fund", "other"].map(t => (
+                        {["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "harvest", "kofi-and-ama", "development-fund", "other"].map(t => (
                             <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>
                         ))}
                     </select>
