@@ -77,6 +77,8 @@ const mapMemberToDB = (m: Member) => ({
     name: m.name,
     class_number: m.classNumber,
     member_number: m.memberNumber,
+    address: m.address,
+    active: typeof m.active === 'boolean' ? m.active : true,
     created_at: m.createdAt || new Date().toISOString() // Ensure never empty
 });
 
@@ -85,6 +87,8 @@ const mapMemberFromDB = (m: any): Member => ({
     name: m.name,
     classNumber: m.class_number,
     memberNumber: m.member_number,
+    address: m.address,
+    active: typeof m.active === 'boolean' ? m.active : true,
     createdAt: m.created_at
 });
 
@@ -307,5 +311,39 @@ export const saveMonthLockToSupabase = async (url: string, key: string, lock: Mo
 
     const { error } = await supabase.from('month_locks').upsert([mapLockToDB(lock)]);
     if (error) throw new Error(`Save month lock failed: ${error.message}`);
+    return { success: true };
+};
+
+// --- Individual User Operations ---
+export const saveUserToSupabase = async (url: string, key: string, user: User, originalUsername?: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('app_users').upsert([mapUserToDB(user)]);
+    if (error) throw new Error(`Save user failed: ${error.message}`);
+
+    if (originalUsername && originalUsername.toLowerCase() !== user.username.toLowerCase()) {
+        const { error: delErr } = await supabase.from('app_users').delete().eq('username', originalUsername);
+        if (delErr) throw new Error(`Cleanup old username failed: ${delErr.message}`);
+    }
+    return { success: true };
+};
+
+export const deleteUserFromSupabase = async (url: string, key: string, username: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('app_users').delete().eq('username', username);
+    if (error) throw new Error(`Delete user failed: ${error.message}`);
+    return { success: true };
+};
+
+// --- Individual Member Delete ---
+export const deleteMemberFromSupabase = async (url: string, key: string, memberId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('members').delete().eq('id', memberId);
+    if (error) throw new Error(`Delete member failed: ${error.message}`);
     return { success: true };
 };

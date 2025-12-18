@@ -23,8 +23,8 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
     }, [member]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -88,6 +88,32 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                 />
                             </div>
+                        </div>
+                        <div>
+                            <label htmlFor="address" className="block font-medium text-gray-700">Address</label>
+                            <input
+                                id="address"
+                                name="address"
+                                type="text"
+                                placeholder="Street, City, Province, Postal Code"
+                                value={formData.address || ''}
+                                onChange={handleChange}
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <label htmlFor="active" className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    id="active"
+                                    name="active"
+                                    type="checkbox"
+                                    checked={formData.active ?? true}
+                                    onChange={handleChange}
+                                    className="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                />
+                                <span className="font-bold text-gray-800">Active Member</span>
+                            </label>
+                            <p className="text-xs text-gray-500 mt-1">Uncheck to mark this member as inactive.</p>
                         </div>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-b-lg flex justify-end gap-2">

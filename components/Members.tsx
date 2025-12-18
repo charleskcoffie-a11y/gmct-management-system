@@ -6,6 +6,7 @@ import MemberModal from './MemberModal';
 import ConfirmationModal from './ConfirmationModal';
 import MemberProfileModal from './MemberProfileModal';
 import { UploadIcon } from './icons';
+import { saveMemberToSupabase as saveMemberToSupabaseFn, deleteMemberFromSupabase } from '../services/supabase';
 
 interface MembersProps {
     members: Member[];
@@ -53,6 +54,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [showInactive, setShowInactive] = useState<boolean>(false);
     
     // New State for Profile Modal
     const [viewProfileMember, setViewProfileMember] = useState<Member | null>(null);
@@ -111,7 +113,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         event.target.value = ""; 
     };
 
-    const handleSave = (member: Member) => {
+    const handleSave = async (member: Member) => {
         const newMembers = [...members];
         const index = newMembers.findIndex(m => m.id === member.id);
 
@@ -121,6 +123,14 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
             newMembers.push(member);
         }
         setMembers(newMembers.sort((a,b) => a.name.localeCompare(b.name)));
+        // Persist to Supabase if configured
+        if (settings.supabaseUrl && settings.supabaseKey) {
+            try {
+                await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
+            } catch (e: any) {
+                alert(`Cloud save failed. Local updated only. Details: ${e.message || e}`);
+            }
+        }
         setIsModalOpen(false);
     };
     
@@ -129,9 +139,16 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         setIsConfirmDeleteOpen(true);
     };
 
-    const confirmDeleteMember = () => {
+    const confirmDeleteMember = async () => {
         if (memberToDeleteId) {
             setMembers(members.filter(m => m.id !== memberToDeleteId));
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                try {
+                    await deleteMemberFromSupabase(settings.supabaseUrl, settings.supabaseKey, memberToDeleteId);
+                } catch (e: any) {
+                    alert(`Cloud delete failed. Local removed only. Details: ${e.message || e}`);
+                }
+            }
         }
         setIsConfirmDeleteOpen(false);
         setMemberToDeleteId(null);
@@ -149,9 +166,11 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
             
             const classFilterMatch = classFilter === 'all' || m.classNumber === classFilter;
 
-            return searchTermMatch && classFilterMatch;
+            const activeMatch = showInactive ? true : (m.active !== false);
+
+            return searchTermMatch && classFilterMatch && activeMatch;
         });
-    }, [members, searchTerm, classFilter]);
+    }, [members, searchTerm, classFilter, showInactive]);
 
     const clearFilters = () => {
         setSearchTerm('');
@@ -285,8 +304,13 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                     <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur flex items-center justify-center text-lg font-bold shadow-sm">
                                         {sanitizeString(member.name).charAt(0).toUpperCase()}
                                     </div>
-                                    <div className={`${colors.badge} font-bold text-[10px] px-2 py-0.5 rounded-full shadow-sm`}>
-                                        C{member.classNumber || '-'}
+                                    <div className="flex items-center gap-1">
+                                        <div className={`${colors.badge} font-bold text-[10px] px-2 py-0.5 rounded-full shadow-sm`}>
+                                            C{member.classNumber || '-'}
+                                        </div>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full shadow-sm font-bold ${member.active === false ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                            {member.active === false ? 'Inactive' : 'Active'}
+                                        </span>
                                     </div>
                                 </div>
 
@@ -363,6 +387,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                             Member #
                                         </div>
                                     </th>
+                                    <th className="px-8 py-5">Status</th>
                                     <th className="px-8 py-5 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -389,6 +414,11 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-slate-800 font-semibold text-base">{sanitizeString(member.memberNumber) || '-'}</td>
+                                        <td className="px-8 py-5">
+                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${member.active === false ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                {member.active === false ? 'Inactive' : 'Active'}
+                                            </span>
+                                        </td>
                                         <td className="px-8 py-5 text-right">
                                             <div className="flex justify-end gap-2">
                                                 <button 
@@ -423,6 +453,20 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                    <div className="w-full md:w-72">
+                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 h-full flex items-center">
+                            <label htmlFor="showInactive" className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    id="showInactive"
+                                    type="checkbox"
+                                    checked={showInactive}
+                                    onChange={e => setShowInactive(e.target.checked)}
+                                    className="h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                                />
+                                <span className="font-bold text-slate-800">Show inactive members</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
             )}

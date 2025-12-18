@@ -194,7 +194,10 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {filteredTotals.map(member => (
+                    {filteredTotals.map(member => {
+                        const m = membersById.get(member.memberId);
+                        const memberAddress = m?.address || '';
+                        return (
                         <div key={member.memberId} className="bg-white rounded-xl shadow border border-slate-200 p-5 receipt-card">
                             <div className="flex flex-wrap items-start gap-4 justify-between border-b border-slate-200 pb-4">
                                 <div className="space-y-1">
@@ -215,6 +218,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                     <div className="text-xs uppercase text-slate-500 font-bold">Issued To</div>
                                     <div className="text-lg font-bold text-slate-900">{member.memberName}</div>
                                     <div className="text-sm text-slate-600">Class {member.classNumber || 'N/A'}</div>
+                                    {memberAddress && (
+                                        <div className="text-sm text-slate-600 mt-1 whitespace-pre-line">{memberAddress}</div>
+                                    )}
                                 </div>
                                 <div className="text-right">
                                     <div className="text-xs uppercase text-slate-500 font-bold">Serial / Barcode</div>
@@ -254,14 +260,17 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                 </div>
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
             <style>
                 {`@media print {
                     body { background: white; }
-                    .receipt-card { page-break-inside: avoid; }
+                    /* Force one member per page */
+                    .receipt-card { page-break-after: always; break-after: page; }
+                    .receipt-card:last-child { page-break-after: auto; break-after: auto; }
                     button, select, input { display: none !important; }
                 }`}
             </style>

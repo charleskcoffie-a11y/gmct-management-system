@@ -73,13 +73,14 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
             name: m.name,
             classNumber: m.classNumber || '',
             memberNumber: m.memberNumber || '',
+            address: m.address || '',
             id: m.id // Optional: Useful for system admin, ignored during import if not needed
         }));
         generateAndDownloadCsv(exportData, `Members_Directory_${today}.csv`);
     };
 
     const downloadMemberTemplate = () => {
-        const headers = "name,classNumber,memberNumber";
+        const headers = "name,classNumber,memberNumber,address";
         const blob = new Blob([headers], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -254,6 +255,48 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                         </div>
                         
                         <div className="pt-3 border-t-2 border-purple-100">
+                            <p className="text-xs text-slate-500 font-medium">
+                                📌 Supported formats: PNG, JPG, GIF • Max size: 2MB
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Signature Upload Section */}
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl shadow-lg border-2 border-amber-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-amber-600 to-orange-600 p-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            ✍️ Authorized Signature
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-slate-600 font-medium">Upload an authorized signature for tax receipts and official documents.</p>
+                        
+                        {settings.signatureImage && (
+                            <div className="bg-white p-4 rounded-lg border-2 border-amber-200 flex items-center justify-center">
+                                <img src={settings.signatureImage} alt="Current Signature" className="max-h-24 max-w-full object-contain" />
+                            </div>
+                        )}
+                        
+                        <div className="flex flex-wrap gap-4">
+                            <label className="flex-1 min-w-[140px] bg-gradient-to-br from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold py-3 px-4 rounded-lg cursor-pointer flex justify-center items-center gap-2 transition-all shadow-md border-2 border-amber-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <span>{settings.signatureImage ? 'Change Signature' : 'Upload Signature'}</span>
+                                <input type="file" accept="image/*" className="hidden" onChange={handleSignatureUpload} />
+                            </label>
+                            {settings.signatureImage && (
+                                <button onClick={removeSignature} className="flex-1 min-w-[140px] bg-white hover:bg-red-50 text-red-600 font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all border-2 border-red-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    <span>Remove</span>
+                                </button>
+                            )}
+                        </div>
+                        
+                        <div className="pt-3 border-t-2 border-amber-100">
                             <p className="text-xs text-slate-500 font-medium">
                                 📌 Supported formats: PNG, JPG, GIF • Max size: 2MB
                             </p>

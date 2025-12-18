@@ -1,20 +1,22 @@
 // components/Users.tsx
 import React, { useState } from 'react';
-import type { User, Member } from '../types';
+import type { User, Member, Settings } from '../types';
 import { sanitizeString, sanitizeUserRole } from '../utils';
 import UserModal from './UserModal';
+import { saveUserToSupabase, deleteUserFromSupabase } from '../services/supabase';
 
 interface UsersTabProps {
     users: User[];
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     members: Member[];
+    settings?: Settings;
 }
 
-const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
+const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-    const handleSave = (user: User, originalUsername?: string) => {
+    const handleSave = async (user: User, originalUsername?: string) => {
         const newUsers = [...users];
         const matchUsername = (originalUsername || user.username).toLowerCase();
         const index = newUsers.findIndex(u => u.username.toLowerCase() === matchUsername);
@@ -43,19 +45,39 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members }) => {
             newUsers.push(user);
         }
 
+        // Optimistic update local state
         setUsers(newUsers);
+
+        // Persist to Supabase if configured
+        if (settings?.supabaseUrl && settings?.supabaseKey) {
+            try {
+                await saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, user, originalUsername);
+            } catch (e: any) {
+                alert(`Cloud save failed. Local updated only. Details: ${e.message || e}`);
+            }
+        }
         setIsModalOpen(false);
         setSelectedUser(null);
     };
 
-    const handleDelete = (username: string) => {
+    const handleDelete = async (username: string) => {
         const uname = username.toLowerCase();
         if (uname === 'admin') {
             alert('The default Admin user cannot be deleted.');
             return;
         }
         if (!confirm(`Delete user "${username}"?`)) return;
+        // Optimistic local delete
         setUsers(prev => prev.filter(u => u.username.toLowerCase() !== uname));
+
+        // Persist delete to Supabase if configured
+        if (settings?.supabaseUrl && settings?.supabaseKey) {
+            try {
+                await deleteUserFromSupabase(settings.supabaseUrl, settings.supabaseKey, username);
+            } catch (e: any) {
+                alert(`Cloud delete failed. Local removed only. Details: ${e.message || e}`);
+            }
+        }
     };
 
     const totalUsers = users.length;

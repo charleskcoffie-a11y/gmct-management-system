@@ -114,6 +114,10 @@ export function sanitizeMember(raw: any): Member {
         name: sanitizeString(findVal(['name', 'fullName', 'member name'])) || "Unnamed Member",
         classNumber: sanitizeString(findVal(['classNumber', 'class', 'class #', 'classNo'])),
         memberNumber: sanitizeString(findVal(['memberNumber', 'member #', 'number', 'memberId', 'memberNo'])),
+        address: sanitizeString(findVal(['address', 'member address', 'home address', 'street', 'mailing address'])),
+        active: typeof findVal(['active', 'isActive', 'status']) === 'boolean'
+            ? (findVal(['active', 'isActive', 'status']) as boolean)
+            : true,
         // Ensure createdAt is never empty string
         createdAt: sanitizeString(findVal(['createdAt', 'created_at'])) || new Date().toISOString()
     };
