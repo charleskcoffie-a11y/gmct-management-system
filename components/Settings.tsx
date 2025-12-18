@@ -61,6 +61,29 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         event.target.value = ""; // Reset file input
     };
 
+    const handleSignatureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64 = e.target?.result as string;
+                setLocalSettings(prev => ({
+                    ...prev,
+                    signatureImage: base64
+                }));
+            };
+            reader.readAsDataURL(file);
+        }
+        event.target.value = ""; // Reset file input
+    };
+
+    const handleRemoveSignature = () => {
+        setLocalSettings(prev => ({
+            ...prev,
+            signatureImage: undefined
+        }));
+    };
+
     const handleTestSupabase = async () => {
         setTestResult(null);
         setIsTesting(true);
@@ -178,7 +201,78 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 </div>
             )}
             
-             {/* 2. Cloud Sync (Supabase) - Admin Only */}
+            {/* 2. Organization Details - Admin Only */}
+            {currentUser.role === 'admin' ? (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl shadow-lg border-2 border-green-200">
+                    <h3 className="text-xl font-bold text-green-800 border-b-2 border-green-100 pb-3 mb-4">🏛️ Organization Details</h3>
+                    <div className="space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="orgName" className="block font-bold text-green-800 text-sm uppercase mb-2">Organization Name</label>
+                                <input type="text" id="orgName" name="orgName" value={localSettings.orgName || ''} onChange={handleChange} className="w-full border-2 border-green-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-green-400 focus:border-green-400" placeholder="Ghana Methodist Church of Toronto" />
+                            </div>
+                            <div>
+                                <label htmlFor="charityNumber" className="block font-bold text-green-800 text-sm uppercase mb-2">Charity Number</label>
+                                <input type="text" id="charityNumber" name="charityNumber" value={localSettings.charityNumber || ''} onChange={handleChange} className="w-full border-2 border-green-300 rounded-lg py-2 px-3 font-mono focus:ring-2 focus:ring-green-400 focus:border-green-400" placeholder="873990964RP0001" />
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="orgAddress" className="block font-bold text-green-800 text-sm uppercase mb-2">Address</label>
+                            <input type="text" id="orgAddress" name="orgAddress" value={localSettings.orgAddress || ''} onChange={handleChange} className="w-full border-2 border-green-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-green-400 focus:border-green-400" placeholder="69 Milvan Drive, Toronto, ON M9L 1Y8, Canada" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="orgPhone" className="block font-bold text-green-800 text-sm uppercase mb-2">Phone Number</label>
+                                <input type="text" id="orgPhone" name="orgPhone" value={localSettings.orgPhone || ''} onChange={handleChange} className="w-full border-2 border-green-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-green-400 focus:border-green-400" placeholder="416-901-5900" />
+                            </div>
+                            <div>
+                                <label htmlFor="orgEmail" className="block font-bold text-green-800 text-sm uppercase mb-2">Email</label>
+                                <input type="text" id="orgEmail" name="orgEmail" value={localSettings.orgEmail || ''} onChange={handleChange} className="w-full border-2 border-green-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-green-400 focus:border-green-400" placeholder="info@gmct-ca.org" />
+                            </div>
+                        </div>
+                        
+                        {/* Treasurer Signature Upload */}
+                        <div className="bg-white rounded-lg p-4 border-2 border-green-200">
+                            <label className="block font-bold text-green-800 text-sm uppercase mb-3">✍️ Treasurer Signature</label>
+                            <p className="text-xs text-green-700 mb-3">Upload an image of the treasurer's signature for tax receipts. Recommended: PNG with transparent background.</p>
+                            
+                            {localSettings.signatureImage ? (
+                                <div className="space-y-3">
+                                    <div className="bg-slate-50 border-2 border-slate-200 rounded-lg p-4 flex justify-center">
+                                        <img src={localSettings.signatureImage} alt="Treasurer Signature" className="h-20 object-contain" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <label className="flex-1 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all cursor-pointer text-center text-sm">
+                                            📤 Replace Signature
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleSignatureUpload} />
+                                        </label>
+                                        <button onClick={handleRemoveSignature} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all text-sm">
+                                            🗑️ Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <label className="block bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all cursor-pointer text-center">
+                                    📤 Upload Signature Image
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleSignatureUpload} />
+                                </label>
+                            )}
+                        </div>
+                        
+                        <div className="flex justify-end pt-4">
+                            <button onClick={handleSave} className="bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-green-300">
+                                ✓ Save Organization Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
+                    🔒 Only Administrators can modify Organization Details.
+                </div>
+            )}
+            
+             {/* 3. Cloud Sync (Supabase) - Admin Only */}
              {currentUser.role === 'admin' && (
                 <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-purple-200">
                     <h3 className="text-xl font-bold text-purple-800 border-b-2 border-purple-100 pb-3 mb-4">☁️ Cloud Database (Supabase)</h3>
@@ -232,7 +326,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 </div>
              )}
 
-            {/* 3. Local Backup - Available to all with access to Settings tab */}
+            {/* 4. Local Backup - Available to all with access to Settings tab */}
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-xl shadow-lg border-2 border-amber-200">
                 <h3 className="text-xl font-bold text-amber-800 border-b-2 border-amber-100 pb-3 mb-4">💾 Local Backup & Restore</h3>
                 <p className="text-sm text-amber-900 bg-amber-100 border border-amber-200 rounded-lg p-3 mb-4 font-medium">

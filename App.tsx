@@ -681,7 +681,7 @@ const App: React.FC = () => {
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
                 <main className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     <aside className="lg:col-span-1 no-print">
-                        <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900">
+                        <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900 no-print">
                             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_40%),radial-gradient(ellipse_at_bottom_right,rgba(236,72,153,0.12),transparent_35%)]"></div>
                             <div className="relative space-y-3">
                                 <div className="mb-3 flex items-center justify-between">

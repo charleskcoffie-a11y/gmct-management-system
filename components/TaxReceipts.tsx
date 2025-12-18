@@ -13,10 +13,13 @@ interface TaxReceiptsProps {
 interface MemberTotals {
     memberId: string;
     memberName: string;
+    memberNumber?: string;
     classNumber?: string;
     total: number;
     entries: Entry[];
     serial: string;
+    quarterlyBreakdown: Record<string, number>;
+    categoriesBreakdown: Record<string, number>;
 }
 
 const hashString = (value: string) => {
@@ -123,14 +126,29 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
             const existing = totals.get(e.memberID) || {
                 memberId: e.memberID,
                 memberName: member?.name || e.memberName || 'Unknown Member',
+                memberNumber: member?.memberNumber,
                 classNumber,
                 total: 0,
                 entries: [],
                 serial: makeSerial(e.memberID, year),
+                quarterlyBreakdown: { 'Jan-Mar': 0, 'Apr-Jun': 0, 'Jul-Sep': 0, 'Oct-Dec': 0 },
+                categoriesBreakdown: {},
             };
 
             existing.total += e.amount;
             existing.entries.push(e);
+
+            // Quarterly breakdown
+            const month = parseInt(e.date.substring(5, 7), 10);
+            if (month >= 1 && month <= 3) existing.quarterlyBreakdown['Jan-Mar'] += e.amount;
+            else if (month >= 4 && month <= 6) existing.quarterlyBreakdown['Apr-Jun'] += e.amount;
+            else if (month >= 7 && month <= 9) existing.quarterlyBreakdown['Jul-Sep'] += e.amount;
+            else if (month >= 10 && month <= 12) existing.quarterlyBreakdown['Oct-Dec'] += e.amount;
+
+            // Category breakdown
+            const categoryKey = e.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            existing.categoriesBreakdown[categoryKey] = (existing.categoriesBreakdown[categoryKey] || 0) + e.amount;
+
             totals.set(e.memberID, existing);
         }
 
@@ -144,15 +162,16 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
 
     const handlePrint = () => window.print();
 
-    const orgName = settings.orgName || 'Church / Organization Name';
-    const orgAddress = settings.orgAddress || 'Address';
-    const orgPhone = settings.orgPhone || '';
+    const orgName = settings.orgName || 'Ghana Methodist Church of Toronto';
+    const orgAddress = settings.orgAddress || '69 Milvan Drive, Toronto, ON M9L 1Y8, Canada';
+    const orgPhone = settings.orgPhone || '416-901-5900';
     const orgEmail = settings.orgEmail || '';
-    const charityNumber = settings.charityNumber || '';
+    const orgWebsite = 'https://gmct-ca.org/';
+    const charityNumber = settings.charityNumber || '873990964RP0001';
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-wrap justify-between gap-4 items-end">
+            <div className="flex flex-wrap justify-between gap-4 items-end no-print">
                 <div>
                     <h2 className="text-3xl font-extrabold text-slate-900">Annual Tax Receipts</h2>
                     <p className="text-slate-600">Generate CRA/charity receipts per member (≥ ${minAmount.toFixed(0)}) for {year}.</p>
@@ -162,7 +181,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow border border-slate-200 no-print">
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Year</label>
                     <select value={year} onChange={e => setYear(e.target.value)} className="w-full border-slate-300 rounded-lg shadow-sm">
@@ -189,74 +208,140 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
             </div>
 
             {filteredTotals.length === 0 ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center text-slate-500">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center text-slate-500 no-print">
                     No members meet the criteria for {year}. Adjust filters or threshold.
                 </div>
             ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 print-receipts">
                     {filteredTotals.map(member => {
                         const m = membersById.get(member.memberId);
                         const memberAddress = m?.address || '';
-                        return (
-                        <div key={member.memberId} className="bg-white rounded-xl shadow border border-slate-200 p-5 receipt-card">
-                            <div className="flex flex-wrap items-start gap-4 justify-between border-b border-slate-200 pb-4">
-                                <div className="space-y-1">
-                                    <p className="text-sm font-semibold text-slate-700">{orgName}</p>
-                                    <p className="text-sm text-slate-600">{orgAddress}</p>
-                                    {(orgPhone || orgEmail) && (
-                                        <p className="text-xs text-slate-500">{orgPhone}{orgPhone && orgEmail ? ' • ' : ''}{orgEmail}</p>
-                                    )}
-                                    {charityNumber && <p className="text-xs text-slate-500">Charity # {charityNumber}</p>}
+                        const categoriesEntries = Object.entries(member.categoriesBreakdown).sort((a, b) => b[1] - a[1]);
+                        const issueDate = new Date().toISOString().split('T')[0];
+                        
+                        // Reusable summary section component
+                        const SummarySection = ({ copyLabel }: { copyLabel: string }) => (
+                            <div className="p-2">
+                                <div className="text-center mb-2 pb-1 border-b border-slate-300">
+                                    <h2 className="text-sm font-extrabold text-slate-900">OFFICIAL RECEIPT FOR INCOME TAX PURPOSES</h2>
+                                    <p className="text-[9px] text-slate-600">Receipt No: {member.serial} | Tax Year: {year}</p>
                                 </div>
-                                {settings.logoUrl && (
-                                    <img src={settings.logoUrl} alt="Organization Logo" className="h-12 object-contain" />
-                                )}
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-4">
-                                <div>
-                                    <div className="text-xs uppercase text-slate-500 font-bold">Issued To</div>
-                                    <div className="text-lg font-bold text-slate-900">{member.memberName}</div>
-                                    <div className="text-sm text-slate-600">Class {member.classNumber || 'N/A'}</div>
-                                    {memberAddress && (
-                                        <div className="text-sm text-slate-600 mt-1 whitespace-pre-line">{memberAddress}</div>
-                                    )}
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-xs uppercase text-slate-500 font-bold">Serial / Barcode</div>
-                                    <div className="font-mono text-sm text-slate-800">{member.serial}</div>
-                                    <Barcode serial={member.serial} />
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-wrap gap-4 justify-between items-center">
-                                <div>
-                                    <div className="text-xs uppercase text-slate-500 font-bold">Period</div>
-                                    <div className="text-sm text-slate-800">{yearRangeLabel}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs uppercase text-slate-500 font-bold">Total Eligible Amount</div>
-                                    <div className="text-2xl font-extrabold text-indigo-700">{formatCurrency(member.total, settings.currency)}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-xs uppercase text-slate-500 font-bold">Entries Count</div>
-                                    <div className="text-lg font-semibold text-slate-800">{member.entries.length}</div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-4 mt-4 border-t border-slate-200 pt-3">
-                                <div className="text-xs text-slate-500">Receipt auto-generated. Valid only if total ≥ {formatCurrency(minAmount, settings.currency)}.</div>
-                                <div className="flex items-center gap-3">
-                                    {settings.signatureImage && (
-                                        <div className="text-center">
-                                            <img src={settings.signatureImage} alt="Authorized Signature" className="h-12 object-contain" />
-                                            <div className="text-[10px] text-slate-500 mt-1">Authorized Signature</div>
+                                <div className="grid grid-cols-2 gap-2 mb-2 text-[10px]">
+                                    {/* Charity Info */}
+                                    <div>
+                                        <div className="font-bold text-[9px] uppercase text-slate-500 mb-0.5">Charity</div>
+                                        <div className="text-[10px]">
+                                            <p className="font-bold text-slate-900 text-sm">{orgName}</p>
+                                            <p className="text-slate-700">{orgAddress}</p>
+                                            <p className="text-slate-600">Phone: {orgPhone}</p>
+                                            <p className="font-mono font-bold text-slate-800">BN: {charityNumber}</p>
                                         </div>
-                                    )}
-                                    <div className="text-right text-xs text-slate-600">
-                                        <div>Issued on: {new Date().toLocaleDateString()}</div>
-                                        <div>Prepared by: System</div>
                                     </div>
+
+                                    {/* Donor Info with Barcode */}
+                                    <div>
+                                        <div className="font-bold text-[9px] uppercase text-slate-500 mb-0.5">Donor</div>
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="text-[10px] flex-1">
+                                                <p className="font-bold text-slate-900">{member.memberName.toUpperCase()}</p>
+                                                <p className="text-slate-600">ID: {member.memberNumber || member.memberId.substring(0, 8)}</p>
+                                                <p className="text-slate-700 text-[10px]">{memberAddress || 'No address on file'}</p>
+                                                <p className="text-slate-600">Issue Date: {issueDate}</p>
+                                            </div>
+                                            <div className="flex-shrink-0">
+                                                <Barcode serial={member.serial} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Signature and Total Amount */}
+                                <div className="mt-2 flex justify-between items-center">
+                                    <div className="text-[9px]">
+                                        {settings.signatureImage && (
+                                            <img src={settings.signatureImage} alt="Signature" className="h-8 object-contain mb-1" />
+                                        )}
+                                        <div className="font-bold text-slate-900">Peggy Asary, Treasurer</div>
+                                    </div>
+                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded p-2 text-center">
+                                        <div className="text-[9px] text-slate-600 uppercase font-bold">Total Eligible Amount</div>
+                                        <div className="text-2xl font-extrabold text-green-700">{formatCurrency(member.total, settings.currency || 'CAD')}</div>
+                                        <div className="text-[9px] text-slate-600">{settings.currency || 'CAD'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                        
+                        return (
+                        <div key={member.memberId} className="bg-white rounded-lg shadow-lg border-2 border-slate-300 p-2 receipt-card">
+                            {/* SECTION 1 - CRA Copy */}
+                            <SummarySection copyLabel="CRA Copy - Official Tax Receipt" />
+                            
+                            {/* Dotted Line Separator */}
+                            <div className="border-t-2 border-dashed border-slate-400 my-2 relative">
+                                <div className="absolute left-0 right-0 -top-2 text-center">
+                                    <span className="bg-white px-2 text-[8px] text-slate-500">✂ Cut Here</span>
+                                </div>
+                            </div>
+
+                            {/* SECTION 2 - Donor Copy */}
+                            <SummarySection copyLabel="Donor Copy - Official Tax Receipt" />
+                            
+                            {/* Dotted Line Separator */}
+                            <div className="border-t-2 border-dashed border-slate-400 my-2 relative">
+                                <div className="absolute left-0 right-0 -top-2 text-center">
+                                    <span className="bg-white px-2 text-[8px] text-slate-500">✂ Cut Here</span>
+                                </div>
+                            </div>
+
+                            {/* SECTION 3 - Detailed Breakdown */}
+                            <div className="p-2">
+                                <div className="text-center mb-2 pb-1 border-b border-slate-300">
+                                    <div className="bg-indigo-700 text-white font-bold text-[9px] uppercase tracking-widest py-0.5 px-2 inline-block rounded mb-0.5">
+                                        Detailed Breakdown
+                                    </div>
+                                    <p className="text-[10px] text-slate-700">For: {member.memberName} | Receipt No: {member.serial}</p>
+                                </div>
+
+                                {/* Donation Categories Table */}
+                                <div className="mb-2">
+                                    <div className="text-[9px] uppercase text-slate-500 font-bold mb-1">Donation Categories</div>
+                                    <div className="bg-white rounded border border-slate-300 overflow-hidden">
+                                        <table className="w-full text-[10px]">
+                                            <thead>
+                                                <tr className="bg-slate-700 text-white">
+                                                    <th className="text-left px-2 py-1 font-bold border-r border-slate-600">#</th>
+                                                    <th className="text-left px-2 py-1 font-bold border-r border-slate-600">Category</th>
+                                                    <th className="text-right px-2 py-1 font-bold">Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {categoriesEntries.map(([category, total], index) => (
+                                                    <tr key={category} className={index % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
+                                                        <td className="px-2 py-1 border-r border-slate-200 text-slate-600">{index + 1}</td>
+                                                        <td className="px-2 py-1 border-r border-slate-200 text-slate-800">{category}</td>
+                                                        <td className="px-2 py-1 text-right font-bold text-slate-900">{formatCurrency(total, settings.currency || 'CAD')}</td>
+                                                    </tr>
+                                                ))}
+                                                <tr className="bg-green-100 border-t-2 border-green-400">
+                                                    <td colSpan={2} className="px-2 py-1 font-bold text-slate-900 border-r border-green-300">TOTAL</td>
+                                                    <td className="px-2 py-1 text-right font-extrabold text-green-800">{formatCurrency(member.total, settings.currency || 'CAD')}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* CRA Information */}
+                                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-2 text-[9px] text-slate-700">
+                                    <p className="font-bold text-yellow-900">Canada Revenue Agency Information</p>
+                                    <p>For information on registered charities: www.canada.ca/charities-giving</p>
+                                </div>
+
+                                {/* Footer */}
+                                <div className="mt-2 text-center text-[8px] text-slate-400">
+                                    <span>Auto-generated: {new Date().toISOString()}</span>
                                 </div>
                             </div>
                         </div>
@@ -267,11 +352,87 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
 
             <style>
                 {`@media print {
-                    body { background: white; }
-                    /* Force one member per page */
-                    .receipt-card { page-break-after: always; break-after: page; }
-                    .receipt-card:last-child { page-break-after: auto; break-after: auto; }
-                    button, select, input { display: none !important; }
+                    @page {
+                        size: letter;
+                        margin: 0.3in 0.4in;
+                    }
+                    
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    
+                    html, body {
+                        background: white !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    /* Hide app header, navigation, and all controls */
+                    header, nav, .header, .navigation, .navbar, .sidebar,
+                    .no-print, button, select, input, label {
+                        display: none !important;
+                        visibility: hidden !important;
+                    }
+                    
+                    /* Hide everything except receipts */
+                    body > *:not(.print-receipts):not(style) {
+                        display: none !important;
+                    }
+                    
+                    /* Show only receipts container */
+                    .print-receipts, .print-receipts * {
+                        display: block !important;
+                        visibility: visible !important;
+                    }
+                    
+                    /* Force one receipt per page with tight fit */
+                    .receipt-card {
+                        page-break-after: always !important;
+                        break-after: page !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        page-break-before: auto !important;
+                        margin: 0 !important;
+                        padding: 0.25in !important;
+                        box-shadow: none !important;
+                        border: 1px solid #cbd5e1 !important;
+                        max-height: 10in !important;
+                        overflow: hidden !important;
+                        transform: scale(0.95);
+                        transform-origin: top left;
+                    }
+                    
+                    .receipt-card:first-child {
+                        page-break-before: avoid !important;
+                    }
+                    
+                    .receipt-card:last-child {
+                        page-break-after: auto !important;
+                        break-after: auto !important;
+                    }
+                    
+                    /* Remove all spacing between receipts */
+                    .space-y-4, .space-y-6 {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+                    
+                    .space-y-4 > *, .space-y-6 > * {
+                        margin: 0 !important;
+                    }
+                    
+                    /* Ensure compact layout for print */
+                    .receipt-card * {
+                        max-width: 100% !important;
+                    }
+                    
+                    /* Make table text smaller if needed */
+                    table {
+                        font-size: 10px !important;
+                    }
                 }`}
             </style>
         </div>
