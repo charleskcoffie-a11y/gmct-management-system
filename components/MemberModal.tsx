@@ -101,6 +101,18 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                             />
                         </div>
+                        <div>
+                            <label htmlFor="phone" className="block font-medium text-gray-700">Phone Number</label>
+                            <input
+                                id="phone"
+                                name="phone"
+                                type="text"
+                                placeholder="e.g. (555) 123-4567"
+                                value={formData.phone || ''}
+                                onChange={handleChange}
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
                         <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                             <label htmlFor="active" className="flex items-center gap-3 cursor-pointer">
                                 <input

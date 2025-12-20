@@ -45,9 +45,14 @@ create table if not exists public.members (
     id uuid primary key default uuid_generate_v4(),
     name text not null,
     class_number text,
-    member_number text, 
+    member_number text,
+    address text,
+    phone text,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
+-- If you are upgrading an existing database, run the following to add the new columns:
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS phone text;
 
 -- 3. Create Financial Entries Table
 create table if not exists public.entries (

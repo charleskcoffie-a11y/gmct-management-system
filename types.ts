@@ -62,6 +62,7 @@ export interface Member {
     classNumber?: string; // e.g. "1"
     memberNumber?: string; // e.g. "128"
     address?: string;
+    phone?: string;
     active?: boolean;
     createdAt?: string;
 }
