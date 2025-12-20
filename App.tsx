@@ -1,6 +1,7 @@
 
 // App.tsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { ToastProvider } from './components/ToastProvider';
 import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -743,4 +744,10 @@ const App: React.FC = () => {
     );
 };
 
-export default App;
+export default function AppWithToasts() {
+    return (
+        <ToastProvider>
+            <App />
+        </ToastProvider>
+    );
+}

@@ -1,6 +1,7 @@
 
 // components/BulkAttendanceModal.tsx
 import React, { useState, useMemo } from 'react';
+import { useToast } from './ToastProvider';
 import type { Member, Settings, AttendanceStatus } from '../types';
 import { sanitizeString } from '../utils';
 
@@ -50,9 +51,10 @@ const BulkAttendanceModal: React.FC<BulkAttendanceModalProps> = ({ members, sett
         setSelectedMemberIds(newSelected);
     };
 
+    const { showToast } = useToast();
     const handleApply = () => {
         if (selectedMemberIds.size === 0) {
-            alert("No members selected.");
+            showToast("No members selected.", 'warning');
             return;
         }
         onApply(Array.from(selectedMemberIds), targetStatus);

@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useToast } from './ToastProvider';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings } from '../types';
 import { formatCurrency } from '../utils';
@@ -118,6 +119,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         );
     })();
 
+    const { showToast, showConfirm } = useToast();
     const handleAddEntry = async (e: React.FormEvent | React.MouseEvent) => {
         if ('preventDefault' in e) e.preventDefault();
         
@@ -128,12 +130,21 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             return;
         }
         
-        if (!selectedMember) return alert("Please choose a member by typing their name or member #.");
-        
+        if (!selectedMember) {
+            showToast("Please choose a member by typing their name or member #.", 'warning');
+            return;
+        }
         const amountVal = parseFloat(newAmount);
-        if (isNaN(amountVal) || amountVal <= 0) return alert("Please enter a valid positive amount.");
+        if (isNaN(amountVal) || amountVal <= 0) {
+            showToast("Please enter a valid positive amount.", 'warning');
+            return;
+        }
         if (new Date(newDate) > new Date()) {
-             if(!window.confirm("Date is in the future. Continue?")) return;
+            let proceed = false;
+            await new Promise<void>((resolve) => {
+                showConfirm("Date is in the future. Continue?", () => { proceed = true; resolve(); }, () => { resolve(); });
+            });
+            if (!proceed) return;
         }
 
         const newEntry: Entry = {
@@ -170,7 +181,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             setTimeout(() => setShowToast(false), 3000);
             setIsEntryModalOpen(false);
         } catch (error: any) {
-            alert(`Failed to save: ${error.message}`);
+            showToast(`Failed to save: ${error.message}`, 'error');
         }
     };
 
@@ -188,7 +199,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
     const handleDelete = async (id: string) => {
         const entry = entries.find(e => e.id === id) || null;
-        if(window.confirm("Delete this contribution?")) {
+        showConfirm("Delete this contribution?", async () => {
             try {
                 if (settings.supabaseUrl && settings.supabaseKey) {
                     await deleteEntryFromSupabase(settings.supabaseUrl, settings.supabaseKey, id);
@@ -196,9 +207,9 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 setEntries(prev => prev.filter(e => e.id !== id));
                 setLastDeleted(entry);
             } catch (error: any) {
-                alert(`Failed to delete: ${error.message}`);
+                showToast(`Failed to delete: ${error.message}`, 'error');
             }
-        }
+        });
     };
 
     const submitBulkRows = async () => {
@@ -213,7 +224,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                     return;
                 }
                 if (prepared.some(p => p.memberID === built.memberID && p.date === built.date && p.type === built.type)) {
-                    alert(`Duplicate detected inside bulk list for ${built.memberName} on ${built.date}.`);
+                    showToast(`Duplicate detected inside bulk list for ${built.memberName} on ${built.date}.`, 'warning');
                     setBulkSaving(false);
                     return;
                 }
@@ -240,7 +251,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             setShowToast(true);
             setTimeout(() => setShowToast(false), 3000);
         } catch (error: any) {
-            alert(`Failed to save bulk entries: ${error.message}`);
+            showToast(`Failed to save bulk entries: ${error.message}`, 'error');
         } finally {
             setBulkSaving(false);
         }
@@ -290,19 +301,23 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const buildBulkEntry = (row: BulkRow): Entry | null => {
         const amountVal = parseFloat(row.amount);
         if (!row.memberId && settings.enforceDirectory) {
-            alert('Please select a valid member from the directory for each row.');
+            showToast('Please select a valid member from the directory for each row.', 'warning');
             return null;
         }
         if (isNaN(amountVal) || amountVal <= 0) {
-            alert('Amounts must be positive numbers.');
+            showToast('Amounts must be positive numbers.', 'warning');
             return null;
         }
         if (new Date(row.date) > new Date()) {
-            if (!window.confirm('One or more dates are in the future. Continue?')) return null;
+            let proceed = false;
+            // Synchronous confirm for each row is not ideal, but for now:
+            // eslint-disable-next-line no-alert
+            showConfirm('One or more dates are in the future. Continue?', () => { proceed = true; }, () => {});
+            if (!proceed) return null;
         }
 
         if (entries.some(en => !en.deleted && en.type === 'development-fund' && en.memberID === row.memberId && en.date === row.date)) {
-            alert(`Duplicate detected for ${row.memberName || row.memberInput} on ${row.date}.`);
+            showToast(`Duplicate detected for ${row.memberName || row.memberInput} on ${row.date}.`, 'warning');
             return null;
         }
 
@@ -333,7 +348,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             setEntries(prev => [...prev, lastDeleted]);
             setLastDeleted(null);
         } catch (error: any) {
-            alert(`Failed to restore: ${error.message}`);
+            showToast(`Failed to restore: ${error.message}`, 'error');
         }
     };
 
@@ -347,9 +362,13 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const saveEdit = async () => {
         if (!editingId) return;
         const amountVal = parseFloat(editAmount);
-        if (isNaN(amountVal) || amountVal <= 0) { alert('Enter a valid positive amount.'); return; }
+        if (isNaN(amountVal) || amountVal <= 0) { showToast('Enter a valid positive amount.', 'warning'); return; }
         if (new Date(editDate) > new Date()) {
-            if (!window.confirm('Date is in the future. Continue?')) return;
+            let proceed = false;
+            await new Promise<void>((resolve) => {
+                showConfirm('Date is in the future. Continue?', () => { proceed = true; resolve(); }, () => { resolve(); });
+            });
+            if (!proceed) return;
         }
         try {
             const updatedEntry = entries.find(e => e.id === editingId);

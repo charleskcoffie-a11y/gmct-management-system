@@ -7,6 +7,7 @@ import ConfirmationModal from './ConfirmationModal';
 import MemberProfileModal from './MemberProfileModal';
 import { UploadIcon } from './icons';
 import { saveMemberToSupabase as saveMemberToSupabaseFn, deleteMemberFromSupabase } from '../services/supabase';
+import { useToast } from './ToastProvider';
 
 interface MembersProps {
     members: Member[];
@@ -113,6 +114,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         event.target.value = ""; 
     };
 
+    const { showToast } = useToast();
     const handleSave = async (member: Member) => {
         const newMembers = [...members];
         const index = newMembers.findIndex(m => m.id === member.id);
@@ -127,9 +129,12 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         if (settings.supabaseUrl && settings.supabaseKey) {
             try {
                 await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
+                showToast('Member saved to cloud!', 'success');
             } catch (e: any) {
-                alert(`Cloud save failed. Local updated only. Details: ${e.message || e}`);
+                showToast(`Cloud save failed. Local updated only. Details: ${e.message || e}`, 'error');
             }
+        } else {
+            showToast('Member saved locally.', 'info');
         }
         setIsModalOpen(false);
     };

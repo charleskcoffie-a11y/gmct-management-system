@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useToast } from './ToastProvider';
 import type { HarvestEntry, Member, Settings } from '../types';
 import { formatCurrency } from '../utils';
 
@@ -104,10 +105,11 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         setIsModalOpen(true);
     };
 
+    const { showToast, showConfirm } = useToast();
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.memberID || formData.amount <= 0) {
-            alert('Please select a member and enter a valid amount');
+            showToast('Please select a member and enter a valid amount', 'warning');
             return;
         }
 
@@ -124,10 +126,10 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     };
 
     const handleDelete = (id: string) => {
-        if (confirm('Are you sure you want to delete this harvest entry?')) {
+        showConfirm('Are you sure you want to delete this harvest entry?', () => {
             setEntries(prev => prev.map(e => e.id === id ? { ...e, deleted: true, updatedBy: currentUser?.name, lastUpdated: new Date().toISOString() } : e));
             setIsModalOpen(false);
-        }
+        });
     };
 
     const handleMemberNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {

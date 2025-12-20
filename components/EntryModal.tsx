@@ -1,5 +1,6 @@
 // components/EntryModal.tsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { useToast } from './ToastProvider';
 import type { Entry, EntryType, Method, Member, Settings, User, MonthLock } from '../types';
 import { sanitizeEntry, isMonthLocked } from '../utils';
 
@@ -128,6 +129,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
         }
     };
 
+    const { showToast, showConfirm } = useToast();
     const validateAndSubmit = async (callback: (e: Entry) => void | Promise<void>) => {
         if (hasDuplicate) {
             const typeDisplay = formData.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -135,20 +137,24 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             return false;
         }
         if (!formData.memberID && settings.enforceDirectory) {
-            alert('Please select a valid member from the directory.');
+            showToast('Please select a valid member from the directory.', 'warning');
             return false;
         }
         if (formData.amount <= 0) {
-            alert('Amount must be greater than zero.');
+            showToast('Amount must be greater than zero.', 'warning');
             return false;
         }
         if (new Date(formData.date) > new Date()) {
-            if (!window.confirm('You are entering a date in the future. Is this correct?')) return false;
+            let proceed = false;
+            await new Promise<void>((resolve) => {
+                showConfirm('You are entering a date in the future. Is this correct?', () => { proceed = true; resolve(); }, () => { resolve(); });
+            });
+            if (!proceed) return false;
         }
 
         const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
         if (isMonthLocked(formData.date, monthLocks) && !canOverrideLock) {
-            alert(`The financial month for ${formData.date} is LOCKED. You cannot add or edit entries for this period.`);
+            showToast(`The financial month for ${formData.date} is LOCKED. You cannot add or edit entries for this period.`, 'error');
             return false;
         }
 
@@ -157,7 +163,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             const now = new Date().getTime();
             const minutesDiff = (now - createdTime) / (1000 * 60);
             if (minutesDiff > 15) {
-                alert('Time limit exceeded. Data Entry staff can only edit records within 15 minutes of creation. Please contact a Finance Team member.');
+                showToast('Time limit exceeded. Data Entry staff can only edit records within 15 minutes of creation. Please contact a Finance Team member.', 'error');
                 return false;
             }
         }
@@ -176,7 +182,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             setTimeout(() => setShowSuccessToast(false), 3000);
             return true;
         } catch (error: any) {
-            alert(error.message || 'Failed to save entry');
+            showToast(error.message || 'Failed to save entry', 'error');
             return false;
         }
     };
