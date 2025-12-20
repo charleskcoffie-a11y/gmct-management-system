@@ -31,8 +31,16 @@ interface SettingsProps {
     };
 }
 
+import { SUPABASE_URL, SUPABASE_KEY } from '../constants';
+
 const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser }) => {
-    const [localSettings, setLocalSettings] = useState<Settings>(settings);
+    // Ensure credentials are populated if empty
+    const initialSettings: Settings = {
+        ...settings,
+        supabaseUrl: settings.supabaseUrl || SUPABASE_URL,
+        supabaseKey: settings.supabaseKey || SUPABASE_KEY,
+    };
+    const [localSettings, setLocalSettings] = useState<Settings>(initialSettings);
     const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{type: 'success'|'error'|'info', message: string} | null>(null);
@@ -299,6 +307,11 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                                     className="w-full border-2 border-purple-300 rounded-lg py-2 px-3 font-mono text-sm bg-white focus:ring-2 focus:ring-purple-400 focus:border-purple-400" 
                                 />
                             </div>
+                        </div>
+                        <div className="text-sm text-blue-700 font-semibold flex items-center gap-2">
+                            {cloud.ready === false && cloud.message === '' && (
+                                <span>Attempting to connect...</span>
+                            )}
                         </div>
 
                         <div className="flex flex-wrap gap-4 items-center border-b-2 border-purple-100 pb-4">
