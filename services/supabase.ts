@@ -78,6 +78,8 @@ const mapMemberToDB = (m: Member) => ({
     class_number: m.classNumber,
     member_number: m.memberNumber,
     address: m.address,
+    city: m.city,
+    province: m.province,
     phone: m.phone,
     active: typeof m.active === 'boolean' ? m.active : true,
     created_at: m.createdAt || new Date().toISOString() // Ensure never empty
@@ -89,6 +91,8 @@ const mapMemberFromDB = (m: any): Member => ({
     classNumber: m.class_number,
     memberNumber: m.member_number,
     address: m.address,
+    city: m.city,
+    province: m.province,
     phone: m.phone,
     active: typeof m.active === 'boolean' ? m.active : true,
     createdAt: m.created_at

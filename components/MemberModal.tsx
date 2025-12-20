@@ -113,6 +113,30 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                             />
                         </div>
+                        <div>
+                            <label htmlFor="city" className="block font-medium text-gray-700">City</label>
+                            <input
+                                id="city"
+                                name="city"
+                                type="text"
+                                placeholder="e.g. Stoney Creek"
+                                value={formData.city || ''}
+                                onChange={handleChange}
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="province" className="block font-medium text-gray-700">Province</label>
+                            <input
+                                id="province"
+                                name="province"
+                                type="text"
+                                placeholder="e.g. Ontario"
+                                value={formData.province || ''}
+                                onChange={handleChange}
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
                         <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                             <label htmlFor="active" className="flex items-center gap-3 cursor-pointer">
                                 <input
