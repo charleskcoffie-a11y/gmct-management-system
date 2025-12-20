@@ -41,17 +41,19 @@ To set up the database structure, run the following SQL script in Supabase:
 create extension if not exists "uuid-ossp";
 
 -- 2. Create Members Table
+-- 2. Create Members Table (or add columns if upgrading)
 create table if not exists public.members (
     id uuid primary key default uuid_generate_v4(),
-    name text not null,
-    class_number text,
-    member_number text,
-    address text,
-    city text,
-    province text,
-    phone text,
-    created_at timestamp with time zone default timezone('utc'::text, now())
+    name text not null
 );
+-- Add columns if not exist (for upgrades/migrations)
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS class_number text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS member_number text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS city text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS province text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS created_at timestamp with time zone default timezone('utc'::text, now());
 
 -- 3. Create Financial Entries Table
 create table if not exists public.entries (
