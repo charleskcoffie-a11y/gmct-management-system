@@ -27,7 +27,7 @@ import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitize
 import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase } from './services/supabase';
+import { saveEntryToSupabase, getSupabaseClient } from './services/supabase';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -51,6 +51,15 @@ const INITIAL_SETTINGS: Settings = {
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
 const App: React.FC = () => {
+        // --- Supabase Initialization on App Start ---
+        useEffect(() => {
+            const client = getSupabaseClient(SUPABASE_URL, SUPABASE_KEY);
+            if (client) {
+                setCloud({ ready: true, message: 'Supabase connected.' });
+            } else {
+                setCloud({ ready: false, message: 'Supabase connection failed.' });
+            }
+        }, []);
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
     const [members, setMembers] = useLocalStorage<Member[]>('gmct-members', [], (data) => Array.isArray(data) ? data.map(sanitizeMember) : []);
