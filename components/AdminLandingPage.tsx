@@ -37,8 +37,13 @@ const AdminLandingPage: React.FC<AdminLandingPageProps> = ({ onNavigate, current
                 />
                 <InfoCard 
                     title="Reports"
-                    description="Generate financial reports and manage weekly service history in one place."
+                    description="Generate financial reports and manage giving history."
                     onClick={() => onNavigate('reports')}
+                />
+                <InfoCard
+                    title="Weekly History"
+                    description="View and manage weekly service history records."
+                    onClick={() => onNavigate('weekly-history')}
                 />
                 <InfoCard 
                     title="User Management"

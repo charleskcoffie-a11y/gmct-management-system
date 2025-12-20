@@ -655,7 +655,8 @@ const App: React.FC = () => {
                     />
                 );
             // 'history' moved under Reports tab
-            case 'history': return <Reports entries={entries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} />;
+            case 'history': return <Reports entries={entries} members={members} settings={settings} setEntries={setEntries} />;
+            case 'weekly-history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, weeklyHistory, users, developmentFund, noName: noNameEntries, monthLocks, setEntries, setMembers, setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries, setMonthLocks}}/>;
             case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
