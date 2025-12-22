@@ -305,3 +305,5 @@ git commit -m "Updated financial entry form validation"
 # 3. Push to GitHub
 git push
 ```
+/ /   t r i g g e r   r e d e p l o y  
+ 
