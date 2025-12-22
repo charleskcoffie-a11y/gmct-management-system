@@ -26,6 +26,8 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import type { HarvestPledge } from './types/harvestPledge';
+import HarvestPledges from './components/HarvestPledges';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, getSupabaseClient } from './services/supabase';
@@ -74,6 +76,44 @@ const App: React.FC = () => {
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
+    // Harvest Pledges State
+    const [harvestPledges, setHarvestPledges] = useLocalStorage<HarvestPledge[]>('gmct-harvest-pledges', [], (data) => Array.isArray(data) ? data : []);
+    // Handle payment for a pledge: add entry, update pledge, remove if fully paid
+    const handlePayPledge = (pledge: HarvestPledge, amount: number) => {
+        if (amount <= 0 || amount > pledge.remaining) return;
+        // Add entry to main entries
+        const newEntry: Entry = {
+            id: crypto.randomUUID(),
+            date: new Date().toISOString().split('T')[0],
+            memberID: pledge.memberID,
+            memberName: pledge.memberName,
+            classNumber: pledge.classNumber,
+            type: 'pledge',
+            fund: pledge.category === 'harvest-appeal' ? 'Harvest Appeal' : 'Harvest Sales',
+            method: 'cash', // Default, can be changed if needed
+            amount,
+            note: `Pledge payment for ${pledge.category.replace('-', ' ')}`,
+            createdBy: currentUser?.username || 'Unknown',
+            createdAt: new Date().toISOString(),
+        };
+        setEntries(prev => [...prev, newEntry]);
+        // Update pledge remaining or remove if fully paid
+        setHarvestPledges(prev => prev.map(p =>
+            p.id === pledge.id
+                ? { ...p, remaining: p.remaining - amount }
+                : p
+        ).filter(p => p.id !== pledge.id || p.remaining > 0));
+    };
+        // Add navigation for Harvest Pledges
+        if (activeTab === 'harvest-pledges') {
+            return <HarvestPledges
+                members={members}
+                pledges={harvestPledges}
+                setPledges={setHarvestPledges}
+                settings={settings}
+                onPayPledge={handlePayPledge}
+            />;
+        }
 
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
@@ -671,6 +711,7 @@ const App: React.FC = () => {
         { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
+        { id: 'harvest-pledges', label: 'Harvest Pledges', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
         { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
         { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
