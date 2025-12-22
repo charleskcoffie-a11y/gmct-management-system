@@ -16,6 +16,22 @@ const pledgeCategories: { value: HarvestPledgeCategory; label: string }[] = [
 ];
 
 const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPledges, settings, onPayPledge }) => {
+  // Defensive runtime prop validation
+  if (!Array.isArray(members) || !Array.isArray(pledges) || typeof setPledges !== 'function' || !settings || typeof onPayPledge !== 'function') {
+    return (
+      <div className="p-4 bg-red-100 text-red-800 rounded">
+        <h2 className="text-xl font-bold mb-2">Harvest Pledges - Error</h2>
+        <p>Required data is missing or invalid. Please contact the administrator.</p>
+        <ul className="mt-2 text-sm">
+          <li>members: {String(Array.isArray(members))}</li>
+          <li>pledges: {String(Array.isArray(pledges))}</li>
+          <li>setPledges: {typeof setPledges}</li>
+          <li>settings: {settings ? 'ok' : 'missing'}</li>
+          <li>onPayPledge: {typeof onPayPledge}</li>
+        </ul>
+      </div>
+    );
+  }
   const [filterName, setFilterName] = useState('');
   const [filterClass, setFilterClass] = useState('all');
   const [form, setForm] = useState<Partial<HarvestPledge>>({ category: 'harvest-appeal' });
