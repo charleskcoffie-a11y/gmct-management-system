@@ -18,7 +18,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [memberInput, setMemberInput] = useState('');
     const [startDate, setStartDate] = useState(''); // Empty = show all
     const [endDate, setEndDate] = useState(''); // Empty = show all
-    const [showToast, setShowToast] = useState(false);
+    const [showToastVisible, setShowToastVisible] = useState(false);
     const [datePreset, setDatePreset] = useState<'custom' | 'this-week' | 'this-month' | 'qtd' | 'ytd' | 'last-12m'>('custom');
     const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -177,8 +177,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             setDuplicateWarning(false); // Clear any previous warning
             setMemberInput('');
 
-            setShowToast(true);
-            setTimeout(() => setShowToast(false), 3000);
+            setShowToastVisible(true);
+            setTimeout(() => setShowToastVisible(false), 3000);
             setIsEntryModalOpen(false);
         } catch (error: any) {
             showToast(`Failed to save: ${error.message}`, 'error');
@@ -248,8 +248,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             setIsBulkMode(false);
             setMemberInput('');
             setIsEntryModalOpen(false);
-            setShowToast(true);
-            setTimeout(() => setShowToast(false), 3000);
+            setShowToastVisible(true);
+            setTimeout(() => setShowToastVisible(false), 3000);
         } catch (error: any) {
             showToast(`Failed to save bulk entries: ${error.message}`, 'error');
         } finally {
@@ -473,7 +473,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 </div>
             )}
 
-            {showToast && (
+            {showToastVisible && (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-2 rounded-full shadow-lg font-bold animate-fadeIn z-50">
                     ✓ Contribution Added
                 </div>
