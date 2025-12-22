@@ -32,9 +32,16 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         memberName: '',
         classNumber: '',
         amount: 0,
+        category: 'harvest-levy',
         note: '',
         createdAt: new Date().toISOString()
     });
+    const harvestCategories = [
+        { value: 'harvest-levy', label: 'Harvest Levy' },
+        { value: 'harvest-pledge', label: 'Harvest Pledge' },
+        { value: 'harvest-sales', label: 'Harvest Sales' },
+        { value: 'chairperson-supporter', label: 'Chairperson Supporter' }
+    ];
     const [amountInput, setAmountInput] = useState('');
     const [memberNumberInput, setMemberNumberInput] = useState('');
 
@@ -94,6 +101,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 memberName: '',
                 classNumber: '',
                 amount: 0,
+                category: 'harvest-levy',
                 note: '',
                 createdBy: currentUser?.name,
                 createdAt: new Date().toISOString()
@@ -433,12 +441,20 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                             <label className="block text-sm font-semibold text-slate-700 mb-2">Member #</label>
                                             <input value={memberNumberInput} onChange={handleMemberNumberChange} placeholder="128" className="w-full border-2 border-slate-300 rounded-lg p-3 font-bold text-amber-700 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all" />
                                         </div>
-                                        <div className="md:col-span-3">
+                                        <div className="md:col-span-2">
                                             <label className="block text-sm font-semibold text-slate-700 mb-2">Full Name</label>
                                             <input list="members-list" value={formData.memberName} onChange={handleMemberNameChange} placeholder="Search by first or last name..." className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all" />
                                             <datalist id="members-list">
                                                 {members.map(m => <option key={m.id} value={m.name} />)}
                                             </datalist>
+                                        </div>
+                                        <div className="md:col-span-1">
+                                            <label className="block text-sm font-semibold text-slate-700 mb-2">Category</label>
+                                            <select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value as any })} className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all">
+                                                {harvestCategories.map(cat => (
+                                                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
                                 </div>

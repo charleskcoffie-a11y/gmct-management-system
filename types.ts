@@ -31,6 +31,8 @@ export interface DevelopmentFundEntry {
     createdBy?: string;
 }
 
+export type HarvestCategory = 'harvest-levy' | 'harvest-pledge' | 'harvest-sales' | 'chairperson-supporter';
+
 export interface HarvestEntry {
     id: string;
     date: string; // ISO format YYYY-MM-DD
@@ -38,6 +40,7 @@ export interface HarvestEntry {
     memberName: string;
     classNumber?: string;
     amount: number;
+    category: HarvestCategory;
     note?: string;
     createdBy?: string;
     updatedBy?: string;
