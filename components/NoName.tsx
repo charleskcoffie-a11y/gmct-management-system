@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { NoNameEntry, Settings, User } from '../types';
+import type { NoNameEntry, Settings, User, SyncStatus } from '../types';
 import { formatCurrency } from '../utils';
 
 interface NoNameProps {
@@ -8,9 +8,10 @@ interface NoNameProps {
     setEntries: React.Dispatch<React.SetStateAction<NoNameEntry[]>>;
     settings: Settings;
     currentUser: User;
+    syncStatus?: SyncStatus;
 }
 
-const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentUser }) => {
+const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentUser, syncStatus }) => {
     const [newAmount, setNewAmount] = useState('');
     const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
     const [newNotes, setNewNotes] = useState('');
@@ -22,6 +23,7 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
     const [editNotes, setEditNotes] = useState('');
     const [lastDeleted, setLastDeleted] = useState<NoNameEntry | null>(null);
     const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+    const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
     // Sorted entries
     const sortedEntries = useMemo(() => {
@@ -54,6 +56,10 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
 
     const handleAddEntry = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isConnected) {
+            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         const amountVal = parseFloat(newAmount);
         if (isNaN(amountVal) || amountVal <= 0) {
             setToastMsg('Enter a valid positive amount.');
@@ -85,6 +91,10 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
     };
 
     const handleDelete = (id: string) => {
+        if (!isConnected) {
+            alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         const entry = entries.find(e => e.id === id);
         if (window.confirm('Delete this entry?')) {
             setEntries(prev => prev.filter(e => e.id !== id));
@@ -93,6 +103,10 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
     };
 
     const undoDelete = () => {
+        if (!isConnected) {
+            alert('Undo is disabled until connected to the cloud.');
+            return;
+        }
         if (!lastDeleted) return;
         setEntries(prev => [...prev, lastDeleted]);
         setLastDeleted(null);
@@ -106,6 +120,10 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
     };
 
     const saveEdit = () => {
+        if (!isConnected) {
+            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         if (!editingId) return;
         const amountVal = parseFloat(editAmount);
         if (isNaN(amountVal) || amountVal <= 0) {
@@ -232,7 +250,9 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
                     </div>
                     <button
                         type="submit"
-                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center gap-3"
+                        disabled={!isConnected}
+                        title={!isConnected ? 'Requires cloud connection to add records' : undefined}
+                        className={`w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-200 flex items-center justify-center gap-3 ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'}`}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -324,7 +344,7 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
                                         <div className="flex gap-2 justify-end">
                                             {editingId === entry.id ? (
                                                 <>
-                                                    <button onClick={saveEdit} className="bg-green-500 hover:bg-green-600 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all hover:scale-105">
+                                                    <button onClick={saveEdit} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`bg-green-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-green-600 hover:scale-105'}` }>
                                                         Save
                                                     </button>
                                                     <button onClick={cancelEdit} className="bg-slate-400 hover:bg-slate-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all hover:scale-105">
@@ -335,13 +355,17 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
                                                 <>
                                                     <button
                                                         onClick={() => startEdit(entry)}
-                                                        className="bg-purple-500 hover:bg-purple-600 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all hover:scale-105"
+                                                        disabled={!isConnected}
+                                                        title={!isConnected ? 'Requires cloud connection' : undefined}
+                                                        className={`bg-purple-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-purple-600 hover:scale-105'}`}
                                                     >
                                                         Edit
                                                     </button>
                                                     <button
                                                         onClick={() => handleDelete(entry.id)}
-                                                        className="bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-2 rounded-lg text-sm transition-all hover:scale-105"
+                                                        disabled={!isConnected}
+                                                        title={!isConnected ? 'Requires cloud connection' : undefined}
+                                                        className={`bg-red-500 text-white font-bold px-3 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-red-600 hover:scale-105'}`}
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                                             <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -382,7 +406,7 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
                         <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                     <span className="font-bold text-base">Donation deleted.</span>
-                    <button onClick={undoDelete} className="bg-white text-red-700 font-bold px-4 py-2 rounded-lg shadow-md hover:scale-105 transition-all text-sm">
+                    <button onClick={undoDelete} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`bg-white text-red-700 font-bold px-4 py-2 rounded-lg shadow-md text-sm ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105 transition-all'}`}>
                         Undo
                     </button>
                     <button onClick={() => setLastDeleted(null)} className="text-red-200 hover:text-white transition-colors">

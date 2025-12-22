@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastProvider';
-import type { HarvestEntry, Member, Settings } from '../types';
+import type { HarvestEntry, Member, Settings, SyncStatus, User } from '../types';
 import { formatCurrency } from '../utils';
 
 interface HarvestProps {
@@ -8,10 +8,11 @@ interface HarvestProps {
     entries: HarvestEntry[];
     setEntries: React.Dispatch<React.SetStateAction<HarvestEntry[]>>;
     settings: Settings;
-    currentUser?: { name: string; role: string } | null;
+    currentUser?: User | null;
+    syncStatus?: SyncStatus;
 }
 
-const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, settings, currentUser }) => {
+const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, settings, currentUser, syncStatus }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<HarvestEntry | null>(null);
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
@@ -46,6 +47,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [memberNumberInput, setMemberNumberInput] = useState('');
 
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
+    const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
     // Filtered entries
     const filteredEntries = useMemo(() => {
@@ -88,6 +90,10 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     }, [filteredEntries]);
 
     const handleOpenModal = (entry: HarvestEntry | null = null) => {
+        if (!isConnected) {
+            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         if (entry) {
             setFormData(entry);
             setAmountInput(String(entry.amount));
@@ -103,7 +109,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 amount: 0,
                 category: 'harvest-levy',
                 note: '',
-                createdBy: currentUser?.name,
+                createdBy: currentUser?.username,
                 createdAt: new Date().toISOString()
             });
             setAmountInput('');
@@ -116,6 +122,10 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const { showToast, showConfirm } = useToast();
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isConnected) {
+            showToast('Requires cloud connection to save', 'warning');
+            return;
+        }
         if (!formData.memberID || formData.amount <= 0) {
             showToast('Please select a member and enter a valid amount', 'warning');
             return;
@@ -124,7 +134,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         if (selectedEntry) {
             setEntries(prev => prev.map(entry => 
                 entry.id === selectedEntry.id 
-                    ? { ...formData, updatedBy: currentUser?.name, lastUpdated: new Date().toISOString() }
+                    ? { ...formData, updatedBy: currentUser?.username, lastUpdated: new Date().toISOString() }
                     : entry
             ));
         } else {
@@ -134,8 +144,12 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     };
 
     const handleDelete = (id: string) => {
+        if (!isConnected) {
+            showToast('Requires cloud connection to delete', 'warning');
+            return;
+        }
         showConfirm('Are you sure you want to delete this harvest entry?', () => {
-            setEntries(prev => prev.map(e => e.id === id ? { ...e, deleted: true, updatedBy: currentUser?.name, lastUpdated: new Date().toISOString() } : e));
+            setEntries(prev => prev.map(e => e.id === id ? { ...e, deleted: true, updatedBy: currentUser?.username, lastUpdated: new Date().toISOString() } : e));
             setIsModalOpen(false);
         });
     };
@@ -201,7 +215,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                         </div>
                     </div>
                     {currentUser?.role !== 'pastor' && (
-                        <button onClick={() => handleOpenModal()} className="bg-gradient-to-br from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-105 text-base flex items-center gap-3 group">
+                        <button onClick={() => handleOpenModal()} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection to add records' : undefined} className={`bg-gradient-to-br from-amber-400 to-orange-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:from-amber-500 hover:to-orange-500 hover:scale-105'}`}>
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                             </svg>
@@ -379,10 +393,13 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                                     {canEdit && (
                                                         <button 
                                                             onClick={() => { 
+                                                                if (!isConnected) { showToast('Requires cloud connection to edit', 'warning'); return; }
                                                                 handleOpenModal(entry);
                                                                 setSelectedDateForModal(null);
                                                             }} 
-                                                            className="mt-2 text-amber-600 hover:text-amber-800 font-bold text-sm hover:underline"
+                                                            disabled={!isConnected}
+                                                            title={!isConnected ? 'Requires cloud connection' : undefined}
+                                                            className={`mt-2 font-bold text-sm ${!isConnected ? 'text-amber-400 cursor-not-allowed' : 'text-amber-600 hover:text-amber-800 hover:underline'}`}
                                                         >
                                                             Edit
                                                         </button>
@@ -504,7 +521,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                 
                                 <div className="flex gap-3">
                                     <button type="button" onClick={() => setIsModalOpen(false)} className="bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-lg transition-all">Cancel</button>
-                                    <button type="submit" className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-6 rounded-lg transition-all shadow-md hover:scale-105">Save</button>
+                                    <button type="submit" disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold py-3 px-6 rounded-lg transition-all shadow-md ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:from-amber-600 hover:to-orange-600 hover:scale-105'}`}>Save</button>
                                 </div>
                             </div>
                         </form>

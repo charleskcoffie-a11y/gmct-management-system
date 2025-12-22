@@ -1,6 +1,6 @@
 // components/Users.tsx
 import React, { useState } from 'react';
-import type { User, Member, Settings } from '../types';
+import type { User, Member, Settings, SyncStatus } from '../types';
 import { sanitizeString, sanitizeUserRole } from '../utils';
 import UserModal from './UserModal';
 import { saveUserToSupabase, deleteUserFromSupabase } from '../services/supabase';
@@ -10,13 +10,18 @@ interface UsersTabProps {
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     members: Member[];
     settings?: Settings;
+    syncStatus?: SyncStatus;
 }
 
-const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings }) => {
+const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings, syncStatus }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
     const handleSave = async (user: User, originalUsername?: string) => {
+        if (!settings?.supabaseUrl || !settings?.supabaseKey || syncStatus?.state !== 'synced') {
+            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         const newUsers = [...users];
         const matchUsername = (originalUsername || user.username).toLowerCase();
         const index = newUsers.findIndex(u => u.username.toLowerCase() === matchUsername);
@@ -61,6 +66,10 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings 
     };
 
     const handleDelete = async (username: string) => {
+        if (!settings?.supabaseUrl || !settings?.supabaseKey || syncStatus?.state !== 'synced') {
+            alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         const uname = username.toLowerCase();
         if (uname === 'admin') {
             alert('The default Admin user cannot be deleted.');
@@ -100,7 +109,12 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings 
                     <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 px-6 py-3 rounded-xl shadow-lg">👤 Manage Users</h2>
                     <p className="text-base text-slate-600 mt-3 font-medium">{totalUsers} user{totalUsers === 1 ? '' : 's'} • Roles: {roleSet.map(r => r.replace('-', ' ')).join(', ') || '—'}</p>
                 </div>
-                <button onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-green-300">
+                <button 
+                    onClick={() => { if (syncStatus?.state === 'synced' && settings?.supabaseUrl && settings?.supabaseKey) { setSelectedUser(null); setIsModalOpen(true); } }} 
+                    disabled={!(syncStatus?.state === 'synced' && settings?.supabaseUrl && settings?.supabaseKey)}
+                    title={!(syncStatus?.state === 'synced' && settings?.supabaseUrl && settings?.supabaseKey) ? 'Connect to Supabase to add users' : ''}
+                    className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg border-2 border-green-300 ${!(syncStatus?.state === 'synced' && settings?.supabaseUrl && settings?.supabaseKey) ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}
+                >
                     + Add New User
                 </button>
             </div>

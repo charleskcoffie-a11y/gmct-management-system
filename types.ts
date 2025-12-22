@@ -31,8 +31,6 @@ export interface DevelopmentFundEntry {
     createdBy?: string;
 }
 
-export type HarvestCategory = 'harvest-levy' | 'harvest-pledge' | 'harvest-sales' | 'chairperson-supporter';
-
 export interface HarvestEntry {
     id: string;
     date: string; // ISO format YYYY-MM-DD
@@ -40,7 +38,6 @@ export interface HarvestEntry {
     memberName: string;
     classNumber?: string;
     amount: number;
-    category: HarvestCategory;
     note?: string;
     createdBy?: string;
     updatedBy?: string;
@@ -65,9 +62,6 @@ export interface Member {
     classNumber?: string; // e.g. "1"
     memberNumber?: string; // e.g. "128"
     address?: string;
-    city?: string;
-    province?: string;
-    phone?: string;
     active?: boolean;
     createdAt?: string;
 }
@@ -154,7 +148,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'users' | 'settings' | 'utilities' | 'tax-receipts';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities' | 'tax-receipts';
 
 export interface CloudState {
   ready: boolean;

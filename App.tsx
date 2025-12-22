@@ -1,7 +1,6 @@
 
 // App.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { ToastProvider } from './components/ToastProvider';
 import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -26,11 +25,9 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
-import type { HarvestPledge } from './types/harvestPledge';
-import HarvestPledges from './components/HarvestPledges';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, getSupabaseClient } from './services/supabase';
+import { saveEntryToSupabase } from './services/supabase';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -64,11 +61,9 @@ const App: React.FC = () => {
     const [developmentFund, setDevelopmentFund] = useLocalStorage<DevelopmentFundEntry[]>('gmct-dev-fund', [], (data) => Array.isArray(data) ? data.map(sanitizeDevelopmentFundEntry) : []);
     const [noNameEntries, setNoNameEntries] = useLocalStorage<NoNameEntry[]>('gmct-no-name', [], (data) => Array.isArray(data) ? data.map(sanitizeNoNameEntry) : []);
     const [harvestEntries, setHarvestEntries] = useLocalStorage<HarvestEntry[]>('gmct-harvest', [], (data) => Array.isArray(data) ? data.map(sanitizeHarvestEntry) : []);
-
+    
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
-    // Harvest Pledges State
-    const [harvestPledges, setHarvestPledges] = useLocalStorage<HarvestPledge[]>('gmct-harvest-pledges', [], (data) => Array.isArray(data) ? data : []);
 
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
@@ -77,7 +72,7 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
-
+    
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [searchFilter, setSearchFilter] = useState('');
@@ -90,17 +85,8 @@ const App: React.FC = () => {
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
 
-    const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
-    // --- Supabase Initialization on App Start ---
-    useEffect(() => {
-        const client = getSupabaseClient(SUPABASE_URL, SUPABASE_KEY);
-        if (client) {
-            setCloud({ ready: true, message: 'Supabase connected.' });
-        } else {
-            setCloud({ ready: false, message: 'Supabase connection failed.' });
-        }
-    }, []);
+    const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
@@ -108,44 +94,13 @@ const App: React.FC = () => {
     }, {
         setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks
     });
-
-    // Handle payment for a pledge: add entry, update pledge, remove if fully paid
-    const handlePayPledge = (pledge: HarvestPledge, amount: number) => {
-        if (amount <= 0 || amount > pledge.remaining) return;
-        // Add entry to main entries
-        const newEntry: Entry = {
-            id: crypto.randomUUID(),
-            date: new Date().toISOString().split('T')[0],
-            memberID: pledge.memberID,
-            memberName: pledge.memberName,
-            classNumber: pledge.classNumber,
-            type: 'pledge',
-            fund: pledge.category === 'harvest-appeal' ? 'Harvest Appeal' : 'Harvest Sales',
-            method: 'cash', // Default, can be changed if needed
-            amount,
-            note: `Pledge payment for ${pledge.category.replace('-', ' ')}`,
-            createdBy: currentUser?.username || 'Unknown',
-            createdAt: new Date().toISOString(),
-        };
-        setEntries(prev => [...prev, newEntry]);
-        // Update pledge remaining or remove if fully paid
-        setHarvestPledges(prev => prev.map(p =>
-            p.id === pledge.id
-                ? { ...p, remaining: p.remaining - amount }
-                : p
-        ).filter(p => p.id !== pledge.id || p.remaining > 0));
-    };
-
-    // Add navigation for Harvest Pledges
-    if (activeTab === 'harvest-pledges') {
-        return <HarvestPledges
-            members={members}
-            pledges={harvestPledges}
-            setPledges={setHarvestPledges}
-            settings={settings}
-            onPayPledge={handlePayPledge}
-        />;
-    }
+    // Track whether we've ever reached a connected state; after that, don't block UI entirely
+    const [hasConnected, setHasConnected] = useState(false);
+    useEffect(() => {
+        if (syncStatus.state === 'synced') setHasConnected(true);
+    }, [syncStatus.state]);
+    
+    // --- Safe Close Protection ---
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             if (syncStatus.state === 'syncing' || syncStatus.state === 'error') {
@@ -272,6 +227,10 @@ const App: React.FC = () => {
     };
 
     const handleSaveEntry = async (entry: Entry) => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
+            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         const newEntries = [...entries];
         const index = newEntries.findIndex(e => e.id === entry.id);
         if (index > -1) {
@@ -292,6 +251,10 @@ const App: React.FC = () => {
     };
 
     const handleSaveAndNew = async (entry: Entry) => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
+            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         const newEntries = [...entries];
         newEntries.push(entry);
 
@@ -312,6 +275,12 @@ const App: React.FC = () => {
 
     // Soft Delete Logic
     const confirmDeleteEntry = async () => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
+            alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            setIsConfirmModalOpen(false);
+            setEntryToDeleteId(null);
+            return;
+        }
         if (entryToDeleteId) {
             const entryIndex = entries.findIndex(e => e.id === entryToDeleteId);
             if (entryIndex > -1) {
@@ -349,6 +318,45 @@ const App: React.FC = () => {
         setSortConfig({ key, direction });
     };
     
+    // --- Connection Gate: require cloud connection before using the app ---
+    const isConfigured = !!settings.supabaseUrl && settings.supabaseUrl.trim() !== '' && !!settings.supabaseKey && settings.supabaseKey.trim() !== '';
+
+    if (!isConfigured) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50 p-6">
+                <div className="bg-white border-2 border-slate-200 rounded-2xl p-8 shadow-xl max-w-xl w-full text-center">
+                    <h1 className="text-2xl font-extrabold text-slate-800 mb-2">Supabase Not Configured</h1>
+                    <p className="text-slate-600 mb-6">Please set your Supabase URL and Key in Settings or via defaults in constants. The app requires a cloud connection to operate.</p>
+                    <div className="text-sm text-slate-500">Tip: Edit constants in <span className="font-mono">constants.ts</span> to pre-fill credentials.</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!hasConnected && syncStatus.state !== 'synced') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50 p-6">
+                <div className="bg-white border-2 border-indigo-200 rounded-2xl p-8 shadow-xl max-w-xl w-full text-center">
+                    <div className="flex items-center justify-center mb-4">
+                        {syncStatus.state === 'error' ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-rose-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                        ) : (
+                            <svg className="animate-spin h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        )}
+                    </div>
+                    <h1 className="text-2xl font-extrabold text-slate-800 mb-2">{syncStatus.state === 'error' ? 'Connection Failed' : 'Connecting to Cloud...'}</h1>
+                    <p className="text-slate-600 mb-6">{syncStatus.state === 'error' ? (syncStatus.errorMessage || 'Unable to connect to Supabase.') : 'Please wait while we connect and sync your data.'}</p>
+                    {syncStatus.state === 'error' && (
+                        <button onClick={() => window.location.reload()} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow-md">Retry</button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     if (!currentUser) {
         return <Login users={users} onLogin={handleLogin} error={loginError} />;
     }
@@ -367,6 +375,7 @@ const App: React.FC = () => {
             return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin and Finance Chair can issue receipts.</div>;
         }
 
+        const canWrite = syncStatus.state === 'synced';
         switch (activeTab) {
             case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
             case 'reports':
@@ -402,7 +411,7 @@ const App: React.FC = () => {
                                 </div>
                                 {/* Hide Create Button for Pastor */}
                                 {currentUser.role !== 'pastor' && (
-                                    <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-105 text-base flex items-center gap-3 group">
+                                    <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} disabled={!canWrite} title={!canWrite ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!canWrite ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                                         </svg>
@@ -601,7 +610,7 @@ const App: React.FC = () => {
                                                 const member = membersMap.get(entry.memberID);
                                                 const displayClass = entry.classNumber || member?.classNumber || '-';
                                                 const isLocked = isMonthLocked(entry.date, monthLocks);
-                                                const canEdit = !entry.deleted && currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair');
+                                                const canEdit = !entry.deleted && currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair') && canWrite;
                                                 
                                                 return (
                                                     <div key={entry.id} className={`rounded-xl border-2 p-5 transition-all ${entry.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md'}`}>
@@ -645,7 +654,9 @@ const App: React.FC = () => {
                                                                             setIsModalOpen(true); 
                                                                             setSelectedDateForModal(null);
                                                                         }} 
-                                                                        className="mt-2 text-blue-600 hover:text-blue-800 font-bold text-sm hover:underline"
+                                                                        disabled={!canWrite}
+                                                                        title={!canWrite ? 'Requires cloud connection' : undefined}
+                                                                        className={`mt-2 font-bold text-sm ${!canWrite ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
                                                                     >
                                                                         Edit
                                                                     </button>
@@ -672,11 +683,11 @@ const App: React.FC = () => {
                         )}
                     </div>
                 );
-            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} />;
-            case 'harvest': return <Harvest members={members} entries={harvestEntries} setEntries={setHarvestEntries} settings={settings} currentUser={currentUser} />;
-            case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} />;
+            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} />;
+            case 'harvest': return <Harvest members={members} entries={harvestEntries} setEntries={setHarvestEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
+            case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
-            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} />;
+            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} />;
             case 'insights':
                 return (
                     <Insights
@@ -696,10 +707,22 @@ const App: React.FC = () => {
                     />
                 );
             // 'history' moved under Reports tab
-            case 'history': return <Reports entries={entries} members={members} settings={settings} setEntries={setEntries} />;
-            case 'weekly-history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
-            case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{entries, members, weeklyHistory, users, developmentFund, noName: noNameEntries, monthLocks, setEntries, setMembers, setWeeklyHistory, setUsers, setDevelopmentFund, setNoName: setNoNameEntries, setMonthLocks}}/>;
+            case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} />;
+            case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} syncStatus={syncStatus} />;
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{
+                entries,
+                members,
+                weeklyHistory,
+                users,
+                developmentFund,
+                monthLocks,
+                setEntries: (d) => setEntries(d),
+                setMembers: (d) => setMembers(d),
+                setWeeklyHistory: (d) => setWeeklyHistory(d),
+                setUsers: (d) => setUsers(d),
+                setDevelopmentFund: (d) => setDevelopmentFund(d),
+                setMonthLocks: (d) => setMonthLocks(d)
+            }} />;
             case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
             default: return <div>Select a tab</div>;
         }
@@ -711,7 +734,6 @@ const App: React.FC = () => {
         { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
-        { id: 'harvest-pledges', label: 'Harvest Pledges', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
         { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
         { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
@@ -731,6 +753,20 @@ const App: React.FC = () => {
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
             <div className="w-full px-4 sm:px-6 lg:px-8">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
+                {syncStatus.state !== 'synced' && (
+                    <div className="no-print mt-2 mb-4 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-sm flex items-center gap-2"
+                        style={{
+                            borderColor: syncStatus.state === 'error' ? '#fecaca' : '#bfdbfe',
+                            background: syncStatus.state === 'error' ? 'linear-gradient(to right, #fee2e2, #fecaca)' : 'linear-gradient(to right, #dbeafe, #e0e7ff)',
+                            color: syncStatus.state === 'error' ? '#7f1d1d' : '#1e3a8a'
+                        }}
+                        title={syncStatus.errorMessage || undefined}
+                    >
+                        {syncStatus.state === 'syncing' && 'Sync in progress — writes are temporarily disabled.'}
+                        {syncStatus.state === 'error' && 'Read-only — cloud connection required to make changes.'}
+                        {syncStatus.state !== 'syncing' && syncStatus.state !== 'error' && 'Read-only — waiting for cloud connection.'}
+                    </div>
+                )}
                 <main className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     <aside className="lg:col-span-1 no-print">
                         <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900 no-print">
@@ -785,10 +821,4 @@ const App: React.FC = () => {
     );
 };
 
-export default function AppWithToasts() {
-    return (
-        <ToastProvider>
-            <App />
-        </ToastProvider>
-    );
-}
+export default App;

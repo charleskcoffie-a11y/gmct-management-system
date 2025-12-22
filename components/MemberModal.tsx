@@ -34,36 +34,34 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
                 <form onSubmit={handleSubmit}>
                     <div className="p-6 border-b">
                         <h2 className="text-xl font-bold text-gray-800">{member ? 'Edit Member' : 'Add New Member'}</h2>
                     </div>
                     <div className="p-6 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="id" className="block font-medium text-gray-700">System ID</label>
-                                <input
-                                    id="id"
-                                    name="id"
-                                    type="text"
-                                    value={formData.id}
-                                    disabled
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-gray-100 cursor-not-allowed text-xs text-gray-500"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="name" className="block font-medium text-gray-700">Full Name</label>
-                                <input
-                                    id="name"
-                                    name="name"
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                    required
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
+                        <div>
+                            <label htmlFor="id" className="block font-medium text-gray-700">System ID</label>
+                            <input
+                                id="id"
+                                name="id"
+                                type="text"
+                                value={formData.id}
+                                disabled
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-gray-100 cursor-not-allowed text-xs text-gray-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="name" className="block font-medium text-gray-700">Full Name</label>
+                            <input
+                                id="name"
+                                name="name"
+                                type="text"
+                                value={formData.name}
+                                onChange={handleChange}
+                                required
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -91,57 +89,17 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 />
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="address" className="block font-medium text-gray-700">Address</label>
-                                <input
-                                    id="address"
-                                    name="address"
-                                    type="text"
-                                    placeholder="Street, Apt, Postal Code"
-                                    value={formData.address || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="phone" className="block font-medium text-gray-700">Phone Number</label>
-                                <input
-                                    id="phone"
-                                    name="phone"
-                                    type="text"
-                                    placeholder="e.g. (555) 123-4567"
-                                    value={formData.phone || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="city" className="block font-medium text-gray-700">City</label>
-                                <input
-                                    id="city"
-                                    name="city"
-                                    type="text"
-                                    placeholder="e.g. Stoney Creek"
-                                    value={formData.city || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="province" className="block font-medium text-gray-700">Province</label>
-                                <input
-                                    id="province"
-                                    name="province"
-                                    type="text"
-                                    placeholder="e.g. Ontario"
-                                    value={formData.province || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
+                        <div>
+                            <label htmlFor="address" className="block font-medium text-gray-700">Address</label>
+                            <input
+                                id="address"
+                                name="address"
+                                type="text"
+                                placeholder="Street, City, Province, Postal Code"
+                                value={formData.address || ''}
+                                onChange={handleChange}
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            />
                         </div>
                         <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                             <label htmlFor="active" className="flex items-center gap-3 cursor-pointer">

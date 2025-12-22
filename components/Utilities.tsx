@@ -165,7 +165,50 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
         }
     };
 
+    // --- Data Maintenance: Merge Development Fund into Entries ---
+    const handleMergeDevelopmentFund = () => {
+        if (developmentFund.length === 0) {
+            alert('No Development Fund records to merge.');
+            return;
+        }
+        if (!confirm('This will copy all Development Fund records into the main Entries as type "development-fund". Continue?')) return;
 
+        const membersMap = new Map(members.map(m => [m.id, m]));
+        const newEntries: Entry[] = developmentFund.map(df => {
+            const m = membersMap.get(df.memberId);
+            return {
+                id: `df-${df.id}`,
+                date: df.date,
+                memberID: df.memberId,
+                memberName: m ? m.name : 'Unknown Member',
+                classNumber: m?.classNumber,
+                type: 'development-fund',
+                fund: 'development-fund',
+                method: 'other',
+                amount: df.amount,
+                note: df.description,
+                createdBy: df.createdBy,
+                createdAt: new Date().toISOString(),
+            } as Entry;
+        });
+
+        // Avoid duplicates by id
+        const existingIds = new Set(entries.map(e => e.id));
+        const filteredToAdd = newEntries.filter(ne => !existingIds.has(ne.id));
+
+        if (filteredToAdd.length === 0) {
+            alert('All Development Fund records already merged.');
+            return;
+        }
+
+        setEntries(prev => [...prev, ...filteredToAdd]);
+
+        if (confirm('Do you also want to archive (clear) the standalone Development Fund table after merging?')) {
+            setDevelopmentFund([]);
+        }
+
+        alert(`Merged ${filteredToAdd.length} Development Fund record(s) into Entries.`);
+    };
 
 
     return (
@@ -325,7 +368,24 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                 {/* Weekly History tools moved to Reports tab */}
             </div>
 
-
+            {/* 2.5 Data Maintenance */}
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl shadow-lg border-2 border-amber-200 overflow-hidden">
+                <div className="bg-gradient-to-r from-amber-600 to-yellow-600 p-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        🔄 Data Maintenance
+                    </h3>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-slate-700 font-medium">Consolidate data into a single source for reporting and backups.</p>
+                    <button
+                        onClick={handleMergeDevelopmentFund}
+                        className="w-full bg-gradient-to-br from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-amber-400"
+                    >
+                        Merge Development Fund into Entries
+                    </button>
+                    <p className="text-xs text-amber-800">This creates Entries with type <strong>development-fund</strong> and optionally archives the standalone table.</p>
+                </div>
+            </div>
 
             {/* Financial report generator moved to Reports tab */}
 

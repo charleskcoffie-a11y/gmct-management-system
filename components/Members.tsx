@@ -1,13 +1,12 @@
 // components/Members.tsx
 import React, { useState, useMemo } from 'react';
-import type { Member, Settings, Entry, DevelopmentFundEntry } from '../types';
+import type { Member, Settings, Entry, DevelopmentFundEntry, SyncStatus } from '../types';
 import { sanitizeString, sanitizeMember, fromCsv } from '../utils';
 import MemberModal from './MemberModal';
 import ConfirmationModal from './ConfirmationModal';
 import MemberProfileModal from './MemberProfileModal';
 import { UploadIcon } from './icons';
 import { saveMemberToSupabase as saveMemberToSupabaseFn, deleteMemberFromSupabase } from '../services/supabase';
-import { useToast } from './ToastProvider';
 
 interface MembersProps {
     members: Member[];
@@ -16,6 +15,7 @@ interface MembersProps {
     // Props needed for profile calculation
     entries?: Entry[];
     developmentEntries?: DevelopmentFundEntry[];
+    syncStatus?: SyncStatus;
 }
 
 const colorGradients = [
@@ -47,7 +47,7 @@ const getColorForClass = (classNumber: string | undefined) => {
     return { gradient: colorGradients[index], badge: badgeColors[index] };
 };
 
-const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entries = [], developmentEntries = [] }) => {
+const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entries = [], developmentEntries = [], syncStatus }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -65,6 +65,11 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
     }, [settings.maxClasses]);
 
     const handleImportMembers = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || (syncStatus && syncStatus.state !== 'synced')) {
+            alert('Imports are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            event.target.value = "";
+            return;
+        }
         const file = event.target.files?.[0];
         if (!file) return;
 
@@ -114,8 +119,11 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         event.target.value = ""; 
     };
 
-    const { showToast } = useToast();
     const handleSave = async (member: Member) => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || (syncStatus && syncStatus.state !== 'synced')) {
+            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
         const newMembers = [...members];
         const index = newMembers.findIndex(m => m.id === member.id);
 
@@ -129,12 +137,9 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         if (settings.supabaseUrl && settings.supabaseKey) {
             try {
                 await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
-                showToast('Member saved to cloud!', 'success');
             } catch (e: any) {
-                showToast(`Cloud save failed. Local updated only. Details: ${e.message || e}`, 'error');
+                alert(`Cloud save failed. Local updated only. Details: ${e.message || e}`);
             }
-        } else {
-            showToast('Member saved locally.', 'info');
         }
         setIsModalOpen(false);
     };
@@ -145,6 +150,12 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
     };
 
     const confirmDeleteMember = async () => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || (syncStatus && syncStatus.state !== 'synced')) {
+            alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            setIsConfirmDeleteOpen(false);
+            setMemberToDeleteId(null);
+            return;
+        }
         if (memberToDeleteId) {
             setMembers(members.filter(m => m.id !== memberToDeleteId));
             if (settings.supabaseUrl && settings.supabaseKey) {
@@ -219,7 +230,12 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                             <span>Import CSV</span>
                             <input type="file" accept=".csv" className="hidden" onChange={handleImportMembers} />
                         </label>
-                        <button onClick={() => { setSelectedMember(null); setIsModalOpen(true); }} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center gap-2 text-base">
+                        <button 
+                            onClick={() => { if (syncStatus?.state === 'synced' && settings.supabaseUrl && settings.supabaseKey) { setSelectedMember(null); setIsModalOpen(true); } }} 
+                            disabled={!(syncStatus?.state === 'synced' && settings.supabaseUrl && settings.supabaseKey)}
+                            title={!(syncStatus?.state === 'synced' && settings.supabaseUrl && settings.supabaseKey) ? 'Connect to Supabase to add members' : ''}
+                            className={`bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all flex items-center gap-2 text-base ${!(syncStatus?.state === 'synced' && settings.supabaseUrl && settings.supabaseKey) ? 'opacity-60 cursor-not-allowed' : 'hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:scale-105'}`}
+                        >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                             </svg>

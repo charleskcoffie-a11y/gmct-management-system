@@ -161,10 +161,6 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     }, [combinedEntries, membersById, minAmount, selectedClass, year]);
 
     const handlePrint = () => window.print();
-    const [reloadKey, setReloadKey] = useState(0);
-    const handleReload = () => {
-        setReloadKey(k => k + 1);
-    };
 
     const orgName = settings.orgName || 'Ghana Methodist Church of Toronto';
     const orgAddress = settings.orgAddress || '69 Milvan Drive, Toronto, ON M9L 1Y8, Canada';
@@ -173,17 +169,8 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const orgWebsite = 'https://gmct-ca.org/';
     const charityNumber = settings.charityNumber || '873990964RP0001';
 
-    // Handler for updating tax receipt details
-    const handleUpdateTaxReceipts = () => {
-        // TODO: Implement logic to update member details for tax receipts
-        // This could involve fetching latest member data or recalculating details
-        // For now, just force a reload
-        setReloadKey(k => k + 1);
-        alert('Tax receipt details have been updated.');
-    };
-
     return (
-        <div className="space-y-6" key={reloadKey}>
+        <div className="space-y-6">
             <div className="flex flex-wrap justify-between gap-4 items-end no-print">
                 <div>
                     <h2 className="text-3xl font-extrabold text-slate-900">Annual Tax Receipts</h2>
@@ -191,8 +178,6 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                 </div>
                 <div className="flex gap-2">
                     <button onClick={handlePrint} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow">Print / Save PDF</button>
-                    <button onClick={handleReload} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg shadow">Reload / Regenerate Report</button>
-                    <button onClick={handleUpdateTaxReceipts} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow">Update Tax Receipts</button>
                 </div>
             </div>
 
