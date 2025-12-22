@@ -16,18 +16,26 @@ const pledgeCategories: { value: HarvestPledgeCategory; label: string }[] = [
 ];
 
 const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPledges, settings, onPayPledge }) => {
-  // Defensive runtime prop validation
+  // Defensive runtime prop and array item validation
+  let errorMsg = '';
   if (!Array.isArray(members) || !Array.isArray(pledges) || typeof setPledges !== 'function' || !settings || typeof onPayPledge !== 'function') {
+    errorMsg = 'Required data is missing or invalid.';
+  } else if (members.some(m => !m || typeof m !== 'object' || !m.id || !m.name) || pledges.some(p => !p || typeof p !== 'object' || !p.id || !p.memberID)) {
+    errorMsg = 'One or more members or pledges are invalid or corrupted.';
+  }
+  if (errorMsg) {
     return (
       <div className="p-4 bg-red-100 text-red-800 rounded">
         <h2 className="text-xl font-bold mb-2">Harvest Pledges - Error</h2>
-        <p>Required data is missing or invalid. Please contact the administrator.</p>
+        <p>{errorMsg} Please contact the administrator.</p>
         <ul className="mt-2 text-sm">
           <li>members: {String(Array.isArray(members))}</li>
           <li>pledges: {String(Array.isArray(pledges))}</li>
           <li>setPledges: {typeof setPledges}</li>
           <li>settings: {settings ? 'ok' : 'missing'}</li>
           <li>onPayPledge: {typeof onPayPledge}</li>
+          <li>invalidMember: {members.findIndex(m => !m || typeof m !== 'object' || !m.id || !m.name)}</li>
+          <li>invalidPledge: {pledges.findIndex(p => !p || typeof p !== 'object' || !p.id || !p.memberID)}</li>
         </ul>
       </div>
     );
