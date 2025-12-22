@@ -20,6 +20,7 @@ import FinancialControl from './components/FinancialControl';
 import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import TaxReceipts from './components/TaxReceipts';
+import { ToastProvider } from './components/ToastProvider';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
@@ -822,3 +823,10 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+// Wrap with ToastProvider for components that use toast notifications
+export const AppWithToasts: React.FC = () => (
+    <ToastProvider>
+        <App />
+    </ToastProvider>
+);
