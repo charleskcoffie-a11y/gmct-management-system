@@ -146,6 +146,9 @@ const App: React.FC = () => {
             onPayPledge={handlePayPledge}
         />;
     }
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (syncStatus.state === 'syncing' || syncStatus.state === 'error') {
                 const msg = "Data is currently syncing or has failed to sync. Changes may be lost if you close now.";
                 e.preventDefault();
                 e.returnValue = msg;
