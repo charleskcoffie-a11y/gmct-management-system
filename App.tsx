@@ -54,15 +54,6 @@ const INITIAL_SETTINGS: Settings = {
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
 const App: React.FC = () => {
-        // --- Supabase Initialization on App Start ---
-        useEffect(() => {
-            const client = getSupabaseClient(SUPABASE_URL, SUPABASE_KEY);
-            if (client) {
-                setCloud({ ready: true, message: 'Supabase connected.' });
-            } else {
-                setCloud({ ready: false, message: 'Supabase connection failed.' });
-            }
-        }, []);
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
     const [members, setMembers] = useLocalStorage<Member[]>('gmct-members', [], (data) => Array.isArray(data) ? data.map(sanitizeMember) : []);
@@ -73,11 +64,51 @@ const App: React.FC = () => {
     const [developmentFund, setDevelopmentFund] = useLocalStorage<DevelopmentFundEntry[]>('gmct-dev-fund', [], (data) => Array.isArray(data) ? data.map(sanitizeDevelopmentFundEntry) : []);
     const [noNameEntries, setNoNameEntries] = useLocalStorage<NoNameEntry[]>('gmct-no-name', [], (data) => Array.isArray(data) ? data.map(sanitizeNoNameEntry) : []);
     const [harvestEntries, setHarvestEntries] = useLocalStorage<HarvestEntry[]>('gmct-harvest', [], (data) => Array.isArray(data) ? data.map(sanitizeHarvestEntry) : []);
-    
+
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
     // Harvest Pledges State
     const [harvestPledges, setHarvestPledges] = useLocalStorage<HarvestPledge[]>('gmct-harvest-pledges', [], (data) => Array.isArray(data) ? data : []);
+
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [loginError, setLoginError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<Tab>('home');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+
+    // -- Sorting & Filtering State for Financial Records --
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+    const [searchFilter, setSearchFilter] = useState('');
+    const [classFilter, setClassFilter] = useState('all');
+    const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
+    const [startDateFilter, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
+    const [endDateFilter, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
+    const [showDeleted, setShowDeleted] = useState(false);
+    const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
+    const [modalClassFilter, setModalClassFilter] = useState<string>('all');
+    const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
+
+    const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
+
+    // --- Supabase Initialization on App Start ---
+    useEffect(() => {
+        const client = getSupabaseClient(SUPABASE_URL, SUPABASE_KEY);
+        if (client) {
+            setCloud({ ready: true, message: 'Supabase connected.' });
+        } else {
+            setCloud({ ready: false, message: 'Supabase connection failed.' });
+        }
+    }, []);
+
+    // --- Live Sync Hook ---
+    const syncStatus = useSupabaseAutoSync(settings, {
+        entries, members, history: weeklyHistory, users, monthLocks
+    }, {
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks
+    });
+
     // Handle payment for a pledge: add entry, update pledge, remove if fully paid
     const handlePayPledge = (pledge: HarvestPledge, amount: number) => {
         if (amount <= 0 || amount > pledge.remaining) return;
@@ -104,51 +135,17 @@ const App: React.FC = () => {
                 : p
         ).filter(p => p.id !== pledge.id || p.remaining > 0));
     };
-        // Add navigation for Harvest Pledges
-        if (activeTab === 'harvest-pledges') {
-            return <HarvestPledges
-                members={members}
-                pledges={harvestPledges}
-                setPledges={setHarvestPledges}
-                settings={settings}
-                onPayPledge={handlePayPledge}
-            />;
-        }
 
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [loginError, setLoginError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<Tab>('home');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
-    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
-    
-    // -- Sorting & Filtering State for Financial Records --
-    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
-    const [searchFilter, setSearchFilter] = useState('');
-    const [classFilter, setClassFilter] = useState('all');
-    const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
-    const [startDateFilter, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
-    const [endDateFilter, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
-    const [showDeleted, setShowDeleted] = useState(false);
-    const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
-    const [modalClassFilter, setModalClassFilter] = useState<string>('all');
-    const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
-
-
-    const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
-
-    // --- Live Sync Hook ---
-    const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, history: weeklyHistory, users, monthLocks
-    }, {
-        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks
-    });
-    
-    // --- Safe Close Protection ---
-    useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (syncStatus.state === 'syncing' || syncStatus.state === 'error') {
+    // Add navigation for Harvest Pledges
+    if (activeTab === 'harvest-pledges') {
+        return <HarvestPledges
+            members={members}
+            pledges={harvestPledges}
+            setPledges={setHarvestPledges}
+            settings={settings}
+            onPayPledge={handlePayPledge}
+        />;
+    }
                 const msg = "Data is currently syncing or has failed to sync. Changes may be lost if you close now.";
                 e.preventDefault();
                 e.returnValue = msg;
