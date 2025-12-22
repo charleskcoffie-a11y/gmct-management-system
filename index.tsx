@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import AppWithToasts from './App';
+import { AppWithToasts } from './App';
 
 // --- Global Failsafe Error Handler ---
 const handleError = (errorEvent: ErrorEvent | PromiseRejectionEvent | { error: any }) => {
