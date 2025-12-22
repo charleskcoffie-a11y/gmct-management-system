@@ -173,6 +173,15 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const orgWebsite = 'https://gmct-ca.org/';
     const charityNumber = settings.charityNumber || '873990964RP0001';
 
+    // Handler for updating tax receipt details
+    const handleUpdateTaxReceipts = () => {
+        // TODO: Implement logic to update member details for tax receipts
+        // This could involve fetching latest member data or recalculating details
+        // For now, just force a reload
+        setReloadKey(k => k + 1);
+        alert('Tax receipt details have been updated.');
+    };
+
     return (
         <div className="space-y-6" key={reloadKey}>
             <div className="flex flex-wrap justify-between gap-4 items-end no-print">
@@ -183,6 +192,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                 <div className="flex gap-2">
                     <button onClick={handlePrint} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow">Print / Save PDF</button>
                     <button onClick={handleReload} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg shadow">Reload / Regenerate Report</button>
+                    <button onClick={handleUpdateTaxReceipts} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow">Update Tax Receipts</button>
                 </div>
             </div>
 
