@@ -42,7 +42,7 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
   }
   const [filterName, setFilterName] = useState('');
   const [filterClass, setFilterClass] = useState('all');
-  const [form, setForm] = useState<Partial<HarvestPledge>>({ category: 'harvest-appeal' });
+  const [form, setForm] = useState<Partial<HarvestPledge>>({ category: 'harvest-appeal', note: '' });
   const [showPayment, setShowPayment] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
 
@@ -82,9 +82,17 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Harvest Pledges</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Harvest Pledges</h2>
+        <button
+          onClick={() => (window as any).GMCTNavigateTab?.('harvest')}
+          className="bg-white border-2 border-amber-300 text-amber-700 font-bold px-4 py-2 rounded-xl shadow-sm hover:bg-amber-50 hover:border-amber-400 hover:text-amber-800 transition-all"
+        >
+          ← Back to Harvest
+        </button>
+      </div>
       <form onSubmit={handleAddPledge} className="space-y-4 bg-white p-4 rounded shadow">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
           <div>
             <label>Member</label>
             <select required value={form.memberID || ''} onChange={e => {
@@ -115,6 +123,23 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
             <select required value={form.category || 'harvest-appeal'} onChange={e => setForm(f => ({ ...f, category: e.target.value as HarvestPledgeCategory }))}>
               {pledgeCategories.map(cat => <option key={cat.value} value={cat.value}>{cat.label}</option>)}
             </select>
+          </div>
+          <div>
+            <label>Group (Optional)</label>
+            {(() => {
+              const baseOptions = ['Men','Women','Youth','Dayborn Special'];
+              const current = form.note || '';
+              const includesCurrent = current && baseOptions.includes(current);
+              const options = includesCurrent ? baseOptions : (current ? [current, ...baseOptions] : baseOptions);
+              return (
+                <select value={current} onChange={e => setForm(f => ({ ...f, note: e.target.value }))}>
+                  <option value="">None</option>
+                  {options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              );
+            })()}
           </div>
         </div>
         <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded">Add Pledge</button>

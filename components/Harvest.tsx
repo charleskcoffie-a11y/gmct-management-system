@@ -47,7 +47,9 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [memberNumberInput, setMemberNumberInput] = useState('');
 
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
-    const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
+    // Require browser online state AND valid Supabase credentials AND synced status
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : false;
+    const isConnected = isOnline && !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
     // Filtered entries
     const filteredEntries = useMemo(() => {
@@ -503,9 +505,26 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M18 13V5a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h3l3 3 3-3h3a2 2 0 002-2zM5 7a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H6z" clipRule="evenodd" />
                                         </svg>
-                                        Note (Optional)
+                                        Group (Optional)
                                     </label>
-                                    <input value={formData.note || ''} onChange={e => setFormData(prev => ({ ...prev, note: e.target.value }))} placeholder="Add any additional details..." className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all" />
+                                    {(() => {
+                                        const baseOptions = ['Men','Women','Youth','Dayborn Special'];
+                                        const current = formData.note || '';
+                                        const includesCurrent = current && baseOptions.includes(current);
+                                        const options = includesCurrent ? baseOptions : (current ? [current, ...baseOptions] : baseOptions);
+                                        return (
+                                            <select
+                                                value={current}
+                                                onChange={e => setFormData(prev => ({ ...prev, note: e.target.value }))}
+                                                className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all bg-white"
+                                            >
+                                                <option value="">None</option>
+                                                {options.map(opt => (
+                                                    <option key={opt} value={opt}>{opt}</option>
+                                                ))}
+                                            </select>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 

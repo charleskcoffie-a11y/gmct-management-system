@@ -351,9 +351,31 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M18 13V5a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h3l3 3 3-3h3a2 2 0 002-2zM5 7a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H6z" clipRule="evenodd" />
                                     </svg>
-                                    Note (Optional)
+                                    {formData.type === 'harvest-levy' ? 'Group (Optional)' : 'Note (Optional)'}
                                 </label>
-                                <input name="note" value={formData.note || ''} onChange={handleChange} placeholder="Add any additional details..." className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all" />
+                                {formData.type === 'harvest-levy' ? (
+                                    (() => {
+                                        const baseOptions = ['Men','Women','Youth','Dayborn Special'];
+                                        const current = formData.note || '';
+                                        const includesCurrent = current && baseOptions.includes(current);
+                                        const options = includesCurrent ? baseOptions : (current ? [current, ...baseOptions] : baseOptions);
+                                        return (
+                                            <select
+                                                name="note"
+                                                value={current}
+                                                onChange={handleChange}
+                                                className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all bg-white"
+                                            >
+                                                <option value="">None</option>
+                                                {options.map(opt => (
+                                                    <option key={opt} value={opt}>{opt}</option>
+                                                ))}
+                                            </select>
+                                        );
+                                    })()
+                                ) : (
+                                    <input name="note" value={formData.note || ''} onChange={handleChange} placeholder="Add any additional details..." className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all" />
+                                )}
                             </div>
                         </div>
 

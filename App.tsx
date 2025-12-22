@@ -17,7 +17,7 @@ import ConfirmationModal from './components/ConfirmationModal';
 import DevelopmentFund from './components/DevelopmentFund';
 import NoName from './components/NoName';
 import FinancialControl from './components/FinancialControl';
-import Harvest from './components/Harvest';
+import HarvestPledges from './components/HarvestPledges';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import TaxReceipts from './components/TaxReceipts';
 import { ToastProvider } from './components/ToastProvider';
@@ -26,6 +26,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import type { HarvestPledge } from './types/harvestPledge';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase } from './services/supabase';
@@ -62,6 +63,7 @@ const App: React.FC = () => {
     const [developmentFund, setDevelopmentFund] = useLocalStorage<DevelopmentFundEntry[]>('gmct-dev-fund', [], (data) => Array.isArray(data) ? data.map(sanitizeDevelopmentFundEntry) : []);
     const [noNameEntries, setNoNameEntries] = useLocalStorage<NoNameEntry[]>('gmct-no-name', [], (data) => Array.isArray(data) ? data.map(sanitizeNoNameEntry) : []);
     const [harvestEntries, setHarvestEntries] = useLocalStorage<HarvestEntry[]>('gmct-harvest', [], (data) => Array.isArray(data) ? data.map(sanitizeHarvestEntry) : []);
+    const [harvestPledges, setHarvestPledges] = useLocalStorage<HarvestPledge[]>('gmct-harvest-pledges', [], (data) => Array.isArray(data) ? data : []);
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
@@ -69,6 +71,11 @@ const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('home');
+        // Global navigation helper so child components can switch tabs without prop drilling
+        React.useEffect(() => {
+            (window as any).GMCTNavigateTab = (tab: Tab) => setActiveTab(tab);
+            return () => { try { delete (window as any).GMCTNavigateTab; } catch {} };
+        }, []);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -377,6 +384,20 @@ const App: React.FC = () => {
         }
 
         const canWrite = syncStatus.state === 'synced';
+
+        const handlePayPledge = (pledge: HarvestPledge, amount: number) => {
+            if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
+                alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+                return;
+            }
+            if (amount <= 0) return;
+            setHarvestPledges(prev => prev.map(p => p.id === pledge.id ? {
+                ...p,
+                remaining: Math.max(0, (p.remaining || 0) - amount),
+                updatedBy: currentUser?.username || p.updatedBy,
+                lastUpdated: new Date().toISOString()
+            } : p));
+        };
         switch (activeTab) {
             case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
             case 'reports':
@@ -685,7 +706,16 @@ const App: React.FC = () => {
                     </div>
                 );
             case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} />;
-            case 'harvest': return <Harvest members={members} entries={harvestEntries} setEntries={setHarvestEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
+            case 'harvest-pledges':
+                return (
+                    <HarvestPledges 
+                        members={members}
+                        pledges={harvestPledges}
+                        setPledges={setHarvestPledges}
+                        settings={settings}
+                        onPayPledge={handlePayPledge}
+                    />
+                );
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} />;
@@ -733,7 +763,7 @@ const App: React.FC = () => {
         { id: 'home', label: 'Home', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
         { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
-        { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+        { id: 'harvest-pledges', label: 'Harvest Pledges', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
         { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },

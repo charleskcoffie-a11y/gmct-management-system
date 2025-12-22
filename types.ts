@@ -148,7 +148,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities' | 'tax-receipts';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities' | 'tax-receipts';
 
 export interface CloudState {
   ready: boolean;
