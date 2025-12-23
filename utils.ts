@@ -195,6 +195,9 @@ export function sanitizeSettings(raw: any): Settings {
         charityNumber: sanitizeString(raw.charityNumber),
         signatureImage: raw.signatureImage ? sanitizeString(raw.signatureImage) : undefined,
         annualLevyAmount: typeof raw.annualLevyAmount === 'number' && !isNaN(raw.annualLevyAmount) ? raw.annualLevyAmount : 0,
+        etransferNotificationEmail: sanitizeString(raw.etransferNotificationEmail),
+        etransferInboundSecret: sanitizeString(raw.etransferInboundSecret),
+        etransferProvider: sanitizeString(raw.etransferProvider) as any,
     }
 }
 

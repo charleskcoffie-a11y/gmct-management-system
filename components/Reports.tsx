@@ -1,5 +1,5 @@
 // components/Reports.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { Entry, Member, Settings, WeeklyHistoryRecord, EntryType, HarvestEntry } from '../types';
 import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeEntryType } from '../utils';
 import WeeklyHistory from './WeeklyHistory';
@@ -13,10 +13,13 @@ interface ReportsProps {
   history: WeeklyHistoryRecord[];
   setHistory: React.Dispatch<React.SetStateAction<WeeklyHistoryRecord[]>>;
   setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
+  targetSection?: 'financial' | 'weekly' | 'birthdays' | null;
+  onConsumeTarget?: () => void;
 }
 
-const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, settings, history, setHistory, setEntries }) => {
+const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, settings, history, setHistory, setEntries, targetSection, onConsumeTarget }) => {
   const today = new Date().toISOString().slice(0, 10);
+  const [activeSection, setActiveSection] = useState<'financial' | 'weekly' | 'birthdays'>('financial');
 
   const combinedEntries = useMemo(() => {
     const harvestedAsEntries: Entry[] = harvestEntries.map(h => ({
@@ -50,6 +53,17 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
 
   const [selectedTypes, setSelectedTypes] = useState<Set<EntryType | 'all'>>(new Set(['all']));
   const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set(['all']));
+
+  useEffect(() => {
+    if (!targetSection) return;
+    setActiveSection(targetSection);
+    const id = targetSection === 'financial' ? 'financial-report-section' : targetSection === 'weekly' ? 'weekly-history-section' : 'upcoming-birthdays-section';
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    if (onConsumeTarget) onConsumeTarget();
+  }, [targetSection, onConsumeTarget]);
 
   const handleTypeChange = (type: EntryType | 'all') => {
     const newSelection = new Set(selectedTypes);
@@ -97,8 +111,8 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
     URL.revokeObjectURL(link.href);
   };
 
-  const exportFilteredFinancials = () => {
-    const filteredEntries = combinedEntries.filter(entry => {
+  const getFilteredEntries = () => {
+    return combinedEntries.filter(entry => {
       if (startDate && entry.date < startDate) return false;
       if (endDate && entry.date > endDate) return false;
       if (!selectedTypes.has('all') && !selectedTypes.has(entry.type)) return false;
@@ -106,6 +120,10 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
       if (!selectedClasses.has('all') && (!member || !member.classNumber || !selectedClasses.has(member.classNumber))) return false;
       return true;
     });
+  };
+
+  const exportFilteredFinancials = () => {
+    const filteredEntries = getFilteredEntries();
 
     const reportData = filteredEntries.map(entry => {
       const member = membersById.get(entry.memberID);
@@ -121,6 +139,67 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
     });
 
     generateAndDownloadCsv(reportData, `Financial_Report_${startDate || 'All'}_to_${endDate || 'All'}.csv`);
+  };
+
+  const exportSummaryByType = () => {
+    const filtered = getFilteredEntries();
+    const summary = new Map<string, number>();
+    filtered.forEach(entry => {
+      summary.set(entry.type, (summary.get(entry.type) || 0) + entry.amount);
+    });
+    const data = Array.from(summary.entries()).map(([type, total]) => ({
+      Type: type,
+      TotalAmount: total.toFixed(2),
+    }));
+    generateAndDownloadCsv(data, `Financial_Summary_By_Type_${startDate || 'All'}_to_${endDate || 'All'}.csv`);
+  };
+
+  const exportByClass = () => {
+    const filtered = getFilteredEntries();
+    const summary = new Map<string, number>();
+    filtered.forEach(entry => {
+      const member = membersById.get(entry.memberID);
+      const cls = member?.classNumber || 'Unassigned';
+      summary.set(cls, (summary.get(cls) || 0) + entry.amount);
+    });
+    const data = Array.from(summary.entries()).map(([cls, total]) => ({
+      Class: cls,
+      TotalAmount: total.toFixed(2),
+    }));
+    generateAndDownloadCsv(data, `Financial_By_Class_${startDate || 'All'}_to_${endDate || 'All'}.csv`);
+  };
+
+  const filterPledgeEntries = () => getFilteredEntries().filter(e => e.type.toLowerCase().includes('pledge'));
+
+  const exportPledges = () => {
+    const pledges = filterPledgeEntries();
+    const data = pledges.map(entry => {
+      const member = membersById.get(entry.memberID);
+      return {
+        Date: entry.date,
+        MemberName: sanitizeString(entry.memberName),
+        Class: member ? sanitizeString(member.classNumber) : 'N/A',
+        Type: entry.type,
+        Amount: entry.amount.toFixed(2),
+        Note: sanitizeString(entry.note),
+      };
+    });
+    generateAndDownloadCsv(data, `Pledges_${startDate || 'All'}_to_${endDate || 'All'}.csv`);
+  };
+
+  const exportPledgesByGroup = () => {
+    const pledges = filterPledgeEntries();
+    const summary = new Map<string, number>();
+    pledges.forEach(entry => {
+      const member = membersById.get(entry.memberID);
+      const cls = member?.classNumber || 'Unassigned';
+      summary.set(cls, (summary.get(cls) || 0) + entry.amount);
+    });
+    const data = Array.from(summary.entries()).map(([cls, total]) => ({
+      Class: cls,
+      TotalPledges: total.toFixed(2),
+    }));
+    generateAndDownloadCsv(data, `Pledges_By_Class_${startDate || 'All'}_to_${endDate || 'All'}.csv`);
   };
 
   const handleImportEntries = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +238,14 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
     event.target.value = '';
   };
 
+  const formatCurrency = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 2 }).format(amount);
+    } catch {
+      return amount.toFixed(2);
+    }
+  };
+
   // Upcoming Birthdays (Next 4 Weeks starting next Sunday)
   const nextSunday = (base: Date) => {
     const d = new Date(base);
@@ -185,7 +272,6 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
       const endUTC = Date.UTC(endDateObj.getFullYear(), endDateObj.getMonth(), endDateObj.getDate());
       let bdayUTC = Date.UTC(bday.getUTCFullYear(), bday.getUTCMonth(), bday.getUTCDate());
       if (bdayUTC < startUTC) {
-        // move to next year
         bday = new Date(Date.UTC(currentYear + 1, m.dobMonth - 1, m.dobDay));
         bdayUTC = Date.UTC(bday.getUTCFullYear(), bday.getUTCMonth(), bday.getUTCDate());
       }
@@ -208,155 +294,196 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
   }, [members, startSunday, endDateObj]);
 
   return (
-    <div className="flex flex-col space-y-10 pb-12 max-w-6xl">
-      <div>
-        <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 px-6 py-3 rounded-xl shadow-lg">📑 Reports</h2>
-        <p className="text-base text-slate-600 mt-3 font-medium">Generate financial CSVs and manage weekly service history.</p>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-800">Reports</h2>
+          <p className="text-sm text-slate-600">Pick a report to view or export.</p>
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 cursor-pointer">
+          <UploadIcon className="h-4 w-4" />
+          Import CSV
+          <input type="file" accept=".csv" onChange={handleImportEntries} className="hidden" />
+        </label>
       </div>
 
-      {/* Financial Records & Reports */}
-      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl shadow-lg border-2 border-indigo-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4">
-          <h3 className="text-lg font-bold text-white">📊 Financial Records & Reports</h3>
-        </div>
+      <div className="bg-white border-2 border-slate-200 rounded-xl p-4 shadow-md flex flex-wrap gap-2">
+        <button
+          onClick={() => setActiveSection('financial')}
+          className={`px-4 py-2 rounded-lg font-bold text-sm border-2 transition-all ${activeSection === 'financial' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
+        >
+          Financial Report
+        </button>
+        <button
+          onClick={() => setActiveSection('weekly')}
+          className={`px-4 py-2 rounded-lg font-bold text-sm border-2 transition-all ${activeSection === 'weekly' ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
+        >
+          Weekly History
+        </button>
+        <button
+          onClick={() => setActiveSection('birthdays')}
+          className={`px-4 py-2 rounded-lg font-bold text-sm border-2 transition-all ${activeSection === 'birthdays' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
+        >
+          Upcoming Birthdays
+        </button>
+      </div>
 
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Filters Column */}
-          <div className="lg:col-span-2 space-y-6">
-            <h4 className="font-bold text-indigo-800 uppercase text-sm">🔍 Filter Report Data</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-indigo-800 mb-2">📅 Start Date</label>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"/>
+      {activeSection === 'financial' && (
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl shadow-lg border-2 border-indigo-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4">
+            <h3 className="text-lg font-bold text-white">📊 Financial Records & Reports</h3>
+          </div>
+
+          <div id="financial-report-section" className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Start Date</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border-2 border-indigo-200 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">End Date</label>
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border-2 border-indigo-200 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Email To</label>
+                  <input
+                    type="email"
+                    placeholder="treasurer@gmct.org"
+                    value={emailTo}
+                    onChange={e => setEmailTo(e.target.value)}
+                    className="w-full border-2 border-indigo-200 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-indigo-800 mb-2">📅 End Date</label>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"/>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="text-sm font-bold text-slate-700">Entry Types</div>
+                  <div className="flex flex-wrap gap-2">
+                    {['all', ...entryTypes].map(type => (
+                      <button
+                        key={type}
+                        onClick={() => handleTypeChange(type as EntryType | 'all')}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedTypes.has(type as EntryType | 'all') ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100'}`}
+                      >
+                        {type === 'all' ? 'All' : type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-sm font-bold text-slate-700">Classes</div>
+                  <div className="flex flex-wrap gap-2">
+                    {classNumbers.map(cls => (
+                      <button
+                        key={cls}
+                        onClick={() => handleClassChange(cls)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedClasses.has(cls) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100'}`}
+                      >
+                        {cls === 'all' ? 'All' : `Class ${cls}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border-2 border-slate-100 rounded-xl p-4 shadow-inner">
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={exportFilteredFinancials} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-indigo-400">
+                    <DownloadIcon className="h-4 w-4" />
+                    Export CSV
+                  </button>
+                  <button onClick={exportSummaryByType} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-purple-400">
+                    <DownloadIcon className="h-4 w-4" />
+                    Export by Type
+                  </button>
+                  <button onClick={exportByClass} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-emerald-400">
+                    <DownloadIcon className="h-4 w-4" />
+                    Export by Class
+                  </button>
+                  <button onClick={exportPledges} className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-amber-400">
+                    <DownloadIcon className="h-4 w-4" />
+                    Export Pledges
+                  </button>
+                  <button onClick={exportPledgesByGroup} className="flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-pink-400">
+                    <DownloadIcon className="h-4 w-4" />
+                    Export Pledges by Group
+                  </button>
+                </div>
               </div>
             </div>
 
-            <fieldset>
-              <legend className="text-sm font-bold text-indigo-800 mb-2">💷 Contribution Type</legend>
-              <div className="flex flex-wrap gap-2">
-                <button 
-                  onClick={() => handleTypeChange('all')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedTypes.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                >
-                  All Types
-                </button>
-                {entryTypes.map(type => (
-                  <button 
-                    key={type}
-                    onClick={() => handleTypeChange(type)}
-                    className={`px-3 py-1 rounded-full text-xs font-bold border-2 capitalize transition-all ${selectedTypes.has(type) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                  >
-                    {type.replace('-', ' ')}
-                  </button>
-                ))}
+            <div className="bg-white rounded-xl border-2 border-indigo-100 shadow-inner p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-600">Total Entries</span>
+                <span className="text-lg font-extrabold text-indigo-700">{combinedEntries.length}</span>
               </div>
-            </fieldset>
-
-            <fieldset>
-              <legend className="text-sm font-bold text-indigo-800 mb-2">📚 Class</legend>
-              <div className="flex flex-wrap gap-2">
-                <button 
-                  onClick={() => handleClassChange('all')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedClasses.has('all') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                >
-                  All Classes
-                </button>
-                {classNumbers.slice(1).map(cls => (
-                  <button 
-                    key={cls}
-                    onClick={() => handleClassChange(cls)}
-                    className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedClasses.has(cls) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}
-                  >
-                    Class {cls}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-600">Total Amount</span>
+                <span className="text-lg font-extrabold text-indigo-700">{formatCurrency(combinedEntries.reduce((sum, e) => sum + e.amount, 0), settings.currency)}</span>
               </div>
-            </fieldset>
-          </div>
-
-          {/* Actions Column */}
-          <div className="flex flex-col gap-4 border-l-2 border-indigo-200 pl-8">
-            <h4 className="font-bold text-indigo-800 uppercase text-sm">⚡ Actions</h4>
-
-            <button onClick={exportFilteredFinancials} className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 border-2 border-indigo-400">
-              <DownloadIcon />
-              Generate Report CSV
-            </button>
-
-            <label className="bg-white hover:bg-indigo-50 text-indigo-700 font-bold py-3 px-4 rounded-lg border-2 border-indigo-300 shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all">
-              <UploadIcon />
-              Import Financial CSV
-              <input type="file" accept=".csv" className="hidden" onChange={handleImportEntries} />
-            </label>
-
-            <div className="mt-4 pt-4 border-t-2 border-indigo-200">
-              <label className="block text-sm font-bold text-indigo-800 mb-2">✉️ Email Report To</label>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  placeholder="treasurer@gmct.org"
-                  value={emailTo}
-                  onChange={e => setEmailTo(e.target.value)}
-                  className="flex-1 min-w-0 border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
-                />
-                <button 
-                  onClick={() => window.location.href = `mailto:${emailTo}?subject=Financial Report&body=Please attach the generated CSV.`}
-                  className="bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all border-2 border-blue-400"
-                >
-                  📧 Email
-                </button>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-600">Total Classes</span>
+                <span className="text-lg font-extrabold text-indigo-700">{classNumbers.length - 1}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-600">Types Selected</span>
+                <span className="text-lg font-extrabold text-indigo-700">{selectedTypes.has('all') ? 'All' : `${selectedTypes.size}`}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-600">Classes Selected</span>
+                <span className="text-lg font-extrabold text-indigo-700">{selectedClasses.has('all') ? 'All' : `${selectedClasses.size}`}</span>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Weekly History Manager */}
-      <div>
-        <WeeklyHistory history={history} setHistory={setHistory} />
-      </div>
-
-      {/* Upcoming Birthdays */}
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white">
-          <h3 className="text-lg font-bold">🎉 Upcoming Birthdays (Next 4 Weeks)</h3>
-          <p className="text-sm opacity-90">Starting Sunday {startSunday.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</p>
+      {activeSection === 'weekly' && (
+        <div id="weekly-history-section">
+          <WeeklyHistory history={history} setHistory={setHistory} />
         </div>
-        <div className="p-6">
-          {upcomingBirthdays.length === 0 ? (
-            <div className="text-center text-slate-500 p-8">No upcoming birthdays in the next four weeks.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-slate-700">
-                <thead className="bg-gradient-to-r from-blue-100 to-indigo-100 text-slate-700 text-sm uppercase font-bold">
-                  <tr>
-                    <th className="px-6 py-3">Member</th>
-                    <th className="px-6 py-3">Class</th>
-                    <th className="px-6 py-3">Birthday</th>
-                    <th className="px-6 py-3">Week</th>
-                    <th className="px-6 py-3">Contact</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {upcomingBirthdays.map(b => (
-                    <tr key={b.id} className="hover:bg-blue-50 transition-colors">
-                      <td className="px-6 py-3 font-semibold">{b.name}</td>
-                      <td className="px-6 py-3">{b.classNumber || '-'}</td>
-                      <td className="px-6 py-3">{new Date(b.dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</td>
-                      <td className="px-6 py-3"><span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">Week {b.week + 1}</span></td>
-                      <td className="px-6 py-3 text-sm text-slate-600">{b.email || b.phone || '-'}</td>
+      )}
+
+      {activeSection === 'birthdays' && (
+        <div id="upcoming-birthdays-section" className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white">
+            <h3 className="text-lg font-bold">🎉 Upcoming Birthdays (Next 4 Weeks)</h3>
+            <p className="text-sm opacity-90">Starting Sunday {startSunday.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</p>
+          </div>
+          <div className="p-6">
+            {upcomingBirthdays.length === 0 ? (
+              <div className="text-center text-slate-500 p-8">No upcoming birthdays in the next four weeks.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-slate-700">
+                  <thead className="bg-gradient-to-r from-blue-100 to-indigo-100 text-slate-700 text-sm uppercase font-bold">
+                    <tr>
+                      <th className="px-6 py-3">Member</th>
+                      <th className="px-6 py-3">Class</th>
+                      <th className="px-6 py-3">Birthday</th>
+                      <th className="px-6 py-3">Week</th>
+                      <th className="px-6 py-3">Contact</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {upcomingBirthdays.map(b => (
+                      <tr key={b.id} className="hover:bg-blue-50 transition-colors">
+                        <td className="px-6 py-3 font-semibold">{b.name}</td>
+                        <td className="px-6 py-3">{b.classNumber || '-'}</td>
+                        <td className="px-6 py-3">{new Date(b.dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</td>
+                        <td className="px-6 py-3"><span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">Week {b.week + 1}</span></td>
+                        <td className="px-6 py-3 text-sm text-slate-600">{b.email || b.phone || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

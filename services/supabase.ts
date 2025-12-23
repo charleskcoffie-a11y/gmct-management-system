@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -288,6 +288,39 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
         history,
         monthLocks
     };
+};
+
+// --- E-Transfers ---
+const mapETransferFromDB = (r: any): ETransfer => ({
+    id: r.id,
+    receivedAt: r.received_at,
+    amount: parseFloat(r.amount),
+    currency: r.currency || undefined,
+    senderName: r.sender_name || undefined,
+    senderEmail: r.sender_email || undefined,
+    memo: r.memo || undefined,
+    rawSubject: r.raw_subject || undefined,
+    rawText: r.raw_text || undefined,
+    reconciled: !!r.reconciled,
+    createdAt: r.created_at || undefined,
+});
+
+export const loadETransfersFromSupabase = async (url: string, key: string): Promise<ETransfer[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('etransfers').select('*').order('received_at', { ascending: false });
+    if (error) {
+        console.warn('Failed to load etransfers:', error.message);
+        return [];
+    }
+    return (data || []).map(mapETransferFromDB);
+};
+
+export const markETransferReconciled = async (url: string, key: string, id: string, reconciled: boolean) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase.from('etransfers').update({ reconciled }).eq('id', id);
+    if (error) throw new Error(error.message);
 };
 
 // --- Individual Entry Operations (for multi-user real-time collaboration) ---
@@ -701,5 +734,202 @@ export const deleteWesleyHallReceipt = async (url: string, key: string, id: stri
         .delete()
         .eq('id', id);
     if (error) throw new Error(`Delete Wesley Hall receipt failed: ${error.message}`);
+    return { success: true };
+};
+
+// --- Attendance Functions ---
+export const loadAttendanceForDate = async (url: string, key: string, date: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('date', date);
+    if (error) {
+        console.warn('Load attendance failed:', error.message);
+        return [];
+    }
+    return data || [];
+};
+
+export const saveAttendanceToSupabase = async (
+    url: string,
+    key: string,
+    records: Array<{ date: string; member_id: string; status: string }>
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('attendance')
+        .upsert(records, { onConflict: 'date,member_id' });
+    if (error) throw new Error(`Save attendance failed: ${error.message}`);
+    return { success: true };
+};
+
+export const loadAttendanceReport = async (url: string, key: string, startDate: string, endDate: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false });
+    if (error) {
+        console.warn('Load attendance report failed:', error.message);
+        return [];
+    }
+    return data || [];
+};
+
+// --- Asset Management Functions ---
+const mapAssetToDB = (asset: any) => ({
+    id: asset.id,
+    name: asset.name,
+    category: asset.category,
+    description: asset.description,
+    location: asset.location,
+    purchase_date: asset.purchaseDate,
+    purchase_price: asset.purchasePrice,
+    current_value: asset.currentValue,
+    serial_number: asset.serialNumber,
+    model: asset.model,
+    condition: asset.condition,
+    status: asset.status,
+    assigned_to: asset.assignedTo,
+    warranty_expires: asset.warrantyExpires,
+    insurance_policy: asset.insurancePolicy,
+    insurance_coverage: asset.insuranceCoverage,
+    insurance_expires: asset.insuranceExpires,
+    photo_url: asset.photoUrl,
+    notes: asset.notes,
+    useful_life_years: asset.usefulLifeYears,
+    disposal_date: asset.disposalDate,
+    disposal_method: asset.disposalMethod,
+    disposal_value: asset.disposalValue,
+    disposal_notes: asset.disposalNotes,
+    created_by: asset.createdBy,
+    updated_by: asset.updatedBy,
+    created_at: asset.createdAt,
+    updated_at: asset.updatedAt,
+    deleted: asset.deleted || false,
+});
+
+const mapAssetFromDB = (row: any) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    description: row.description,
+    location: row.location,
+    purchaseDate: row.purchase_date,
+    purchasePrice: row.purchase_price,
+    currentValue: row.current_value,
+    serialNumber: row.serial_number,
+    model: row.model,
+    condition: row.condition,
+    status: row.status,
+    assignedTo: row.assigned_to,
+    warrantyExpires: row.warranty_expires,
+    insurancePolicy: row.insurance_policy,
+    insuranceCoverage: row.insurance_coverage,
+    insuranceExpires: row.insurance_expires,
+    photoUrl: row.photo_url,
+    notes: row.notes,
+    usefulLifeYears: row.useful_life_years,
+    disposalDate: row.disposal_date,
+    disposalMethod: row.disposal_method,
+    disposalValue: row.disposal_value,
+    disposalNotes: row.disposal_notes,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deleted: row.deleted || false,
+});
+
+export const loadAssetsFromSupabase = async (url: string, key: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('assets')
+        .select('*')
+        .order('name', { ascending: true });
+    if (error) {
+        console.warn('Load assets failed:', error.message);
+        return [];
+    }
+    return (data || []).map(mapAssetFromDB);
+};
+
+export const saveAssetToSupabase = async (url: string, key: string, asset: any) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('assets')
+        .upsert([mapAssetToDB(asset)]);
+    if (error) throw new Error(`Save asset failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteAssetFromSupabase = async (url: string, key: string, id: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    // Soft delete
+    const { error } = await supabase
+        .from('assets')
+        .update({ deleted: true, updated_at: new Date().toISOString() })
+        .eq('id', id);
+    if (error) throw new Error(`Delete asset failed: ${error.message}`);
+    return { success: true };
+};
+
+// --- Asset Maintenance Functions ---
+const mapMaintenanceToDB = (maintenance: any) => ({
+    id: maintenance.id,
+    asset_id: maintenance.assetId,
+    maintenance_date: maintenance.maintenanceDate,
+    description: maintenance.description,
+    cost: maintenance.cost,
+    service_provider: maintenance.serviceProvider,
+    next_service_date: maintenance.nextServiceDate,
+    notes: maintenance.notes,
+    created_by: maintenance.createdBy,
+    created_at: maintenance.createdAt,
+});
+
+const mapMaintenanceFromDB = (row: any) => ({
+    id: row.id,
+    assetId: row.asset_id,
+    maintenanceDate: row.maintenance_date,
+    description: row.description,
+    cost: row.cost,
+    serviceProvider: row.service_provider,
+    nextServiceDate: row.next_service_date,
+    notes: row.notes,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+});
+
+export const loadAssetMaintenanceFromSupabase = async (url: string, key: string, assetId?: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    let query = supabase.from('asset_maintenance').select('*');
+    if (assetId) query = query.eq('asset_id', assetId);
+    query = query.order('maintenance_date', { ascending: false });
+    const { data, error } = await query;
+    if (error) {
+        console.warn('Load asset maintenance failed:', error.message);
+        return [];
+    }
+    return (data || []).map(mapMaintenanceFromDB);
+};
+
+export const saveAssetMaintenanceToSupabase = async (url: string, key: string, maintenance: any) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('asset_maintenance')
+        .upsert([mapMaintenanceToDB(maintenance)]);
+    if (error) throw new Error(`Save asset maintenance failed: ${error.message}`);
     return { success: true };
 };

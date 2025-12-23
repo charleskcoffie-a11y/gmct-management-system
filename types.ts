@@ -89,15 +89,20 @@ export interface Settings {
     charityNumber?: string;
     signatureImage?: string; // Base64 or URL for authorized signature
     annualLevyAmount?: number; // Annual Harvest Levy applied per member each year
+    // E-Transfer settings
+    etransferNotificationEmail?: string; // mailbox that receives Interac notifications
+    etransferInboundSecret?: string; // webhook secret to validate inbound provider
+    etransferProvider?: 'sendgrid' | 'mailgun' | 'resend' | 'generic';
 }
 
-export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician';
+export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader';
 
 export interface User {
     username: string;
     password?: string; // Should be hashed in a real app, but plain for this exercise
     role: UserRole;
-    classLed?: string; // Legacy: kept for older records
+    classLed?: string; // For class-leader role: which class they manage
+    assignedClass?: string; // Alias for classLed (more semantic)
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
@@ -158,7 +163,22 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
+
+export interface ETransfer {
+    id: string;
+    receivedAt: string; // ISO timestamp
+    amount: number;
+    currency?: string;
+    senderName?: string;
+    senderEmail?: string;
+    memo?: string;
+    rawSubject?: string;
+    rawText?: string;
+    reconciled?: boolean;
+    createdAt?: string;
+}
 
 export interface CloudState {
   ready: boolean;
@@ -192,5 +212,54 @@ export interface WesleyHallReceipt {
     updatedBy?: string;
     lastUpdated?: string; // ISO Timestamp
     deleted?: boolean;
+    createdAt?: string; // ISO Timestamp
+}
+
+export type AssetCategory = 'building' | 'technology' | 'musical-instrument' | 'furniture' | 'vehicle' | 'kitchen' | 'library' | 'art' | 'tools' | 'hvac' | 'other';
+export type AssetCondition = 'excellent' | 'good' | 'fair' | 'poor' | 'needs-repair';
+export type AssetStatus = 'active' | 'storage' | 'repair' | 'disposed';
+
+export interface Asset {
+    id: string;
+    name: string;
+    category: AssetCategory;
+    description?: string;
+    location?: string;
+    purchaseDate?: string; // ISO format YYYY-MM-DD
+    purchasePrice?: number;
+    currentValue?: number;
+    serialNumber?: string;
+    model?: string;
+    condition: AssetCondition;
+    status: AssetStatus;
+    assignedTo?: string; // Person or department
+    warrantyExpires?: string; // ISO format YYYY-MM-DD
+    insurancePolicy?: string;
+    insuranceCoverage?: number;
+    insuranceExpires?: string; // ISO format YYYY-MM-DD
+    photoUrl?: string;
+    notes?: string;
+    usefulLifeYears?: number; // For depreciation
+    disposalDate?: string; // ISO format YYYY-MM-DD
+    disposalMethod?: string; // Sold, Donated, Discarded
+    disposalValue?: number;
+    disposalNotes?: string;
+    createdBy?: string;
+    updatedBy?: string;
+    createdAt?: string; // ISO Timestamp
+    updatedAt?: string; // ISO Timestamp
+    deleted?: boolean;
+}
+
+export interface AssetMaintenance {
+    id: string;
+    assetId: string;
+    maintenanceDate: string; // ISO format YYYY-MM-DD
+    description: string;
+    cost?: number;
+    serviceProvider?: string;
+    nextServiceDate?: string; // ISO format YYYY-MM-DD
+    notes?: string;
+    createdBy?: string;
     createdAt?: string; // ISO Timestamp
 }

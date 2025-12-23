@@ -390,6 +390,116 @@ Notes:
 - Use the Wesley Hall tab to add receipts, view totals to date, and see monthly trend.
 - Deleting a receipt removes it from the table; consider soft delete for audit by setting `deleted = true` if needed.
 
+### Class Attendance Management
+Class leaders can mark attendance for their assigned class, and administrators can generate attendance reports for follow-up.
+
+**Step 1: Ensure attendance table exists** (already created in main schema)
+```sql
+-- Attendance table should already exist from main setup
+-- If not, run this:
+create table if not exists public.attendance (
+    id uuid primary key default uuid_generate_v4(),
+    date date not null,
+    member_id uuid references public.members(id),
+    status text, -- 'present', 'absent', 'sick', 'travel'
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    unique(date, member_id)
+);
+```
+
+**Step 2: Enable Row Level Security**
+```sql
+alter table public.attendance enable row level security;
+
+-- Allow all for anon/public (app-level filtering handles class restrictions)
+create policy "Enable attendance access" on public.attendance
+  for all using (true) with check (true);
+
+-- Optional: Add indexes for performance
+create index if not exists idx_attendance_date on public.attendance(date);
+create index if not exists idx_attendance_member on public.attendance(member_id);
+```
+
+**Step 3: Application-level security**
+- Class leaders see only their assigned class members (filtered by `assignedClass` field)
+- Admins and pastors can view all class attendance
+- Financial tabs are hidden from class-leader role
+
+Notes:
+- Class leaders access only their assigned class via Attendance tab
+- Attendance data is completely separate from financial records
+- Status options: present, absent, sick, travel
+
+### Assets Management
+Track church assets, equipment, and property with comprehensive management features.
+
+**Step 1: Create assets tables**
+```sql
+create table if not exists public.assets (
+    id uuid primary key default uuid_generate_v4(),
+    name text not null,
+    category text, -- building, technology, musical-instrument, furniture, vehicle, etc.
+    description text,
+    location text,
+    purchase_date date,
+    purchase_price numeric,
+    current_value numeric,
+    serial_number text,
+    model text,
+    condition text, -- excellent, good, fair, poor, needs-repair
+    status text, -- active, storage, repair, disposed
+    assigned_to text,
+    warranty_expires date,
+    insurance_policy text,
+    insurance_coverage numeric,
+    insurance_expires date,
+    photo_url text,
+    notes text,
+    useful_life_years integer,
+    disposal_date date,
+    disposal_method text,
+    disposal_value numeric,
+    disposal_notes text,
+    created_by text,
+    updated_by text,
+    created_at timestamptz default timezone('utc'::text, now()),
+    updated_at timestamptz,
+    deleted boolean default false
+);
+
+create table if not exists public.asset_maintenance (
+    id uuid primary key default uuid_generate_v4(),
+    asset_id uuid references public.assets(id),
+    maintenance_date date not null,
+    description text not null,
+    cost numeric,
+    service_provider text,
+    next_service_date date,
+    notes text,
+    created_by text,
+    created_at timestamptz default timezone('utc'::text, now())
+);
+```
+
+**Step 2: Enable RLS**
+```sql
+alter table public.assets enable row level security;
+alter table public.asset_maintenance enable row level security;
+
+create policy "Enable asset access" on public.assets
+  for all using (true) with check (true);
+
+create policy "Enable maintenance access" on public.asset_maintenance
+  for all using (true) with check (true);
+```
+
+**Step 3: Indexes**
+```sql
+create index if not exists idx_assets_category on public.assets(category);
+create index if not exists idx_assets_status on public.assets(status);
+create index if not exists idx_asset_maintenance_asset on public.asset_maintenance(asset_id);
+```
+
 ## Part 2: User Roles Definition
 
 **Admin (Full Authority)**
@@ -409,6 +519,9 @@ Can view giving summaries, trends, class totals, and Development Fund progress. 
 
 **Statistician (Analytics & Reports)**
 Can view comprehensive analytics, reports, and trends. Cannot edit financial records or access system settings.
+
+**Class Leader (Attendance Management)**
+Can view Member Directory (read-only) and mark attendance for their assigned class only. Cannot access any financial data, financial reports, or settings. Attendance is completely isolated from financial records.
 
 ---
 

@@ -322,6 +322,40 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 </div>
              )}
 
+            {/* 3b. E-Transfer Inbound Settings - Admin Only */}
+            {currentUser.role === 'admin' && (
+                <div className="bg-gradient-to-br from-cyan-50 to-sky-50 p-6 rounded-xl shadow-lg border-2 border-cyan-200">
+                    <h3 className="text-xl font-bold text-cyan-800 border-b-2 border-cyan-100 pb-3 mb-4">💸 E-Transfer Notifications</h3>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-bold uppercase text-cyan-800 mb-2">Provider</label>
+                                <select name="etransferProvider" value={localSettings.etransferProvider || 'generic'} onChange={handleChange} className="w-full border-2 border-cyan-300 rounded-lg py-2 px-3 bg-white">
+                                    <option value="sendgrid">SendGrid</option>
+                                    <option value="mailgun">Mailgun</option>
+                                    <option value="resend">Resend (inbound)</option>
+                                    <option value="generic">Generic</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold uppercase text-cyan-800 mb-2">Notification Email</label>
+                                <input type="email" name="etransferNotificationEmail" value={localSettings.etransferNotificationEmail || ''} onChange={handleChange} placeholder="treasurer@gmct.org" className="w-full border-2 border-cyan-300 rounded-lg py-2 px-3" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold uppercase text-cyan-800 mb-2">Inbound Secret</label>
+                                <input type="password" name="etransferInboundSecret" value={localSettings.etransferInboundSecret || ''} onChange={handleChange} placeholder="Set a shared secret" className="w-full border-2 border-cyan-300 rounded-lg py-2 px-3" />
+                            </div>
+                        </div>
+                        <div className="text-sm text-cyan-900 bg-cyan-100 border border-cyan-200 rounded-lg p-3">
+                            Point your provider webhook to your Supabase function URL: <span className="font-mono">/functions/v1/etransfer-inbound</span> and send the shared secret in header <span className="font-mono">x-inbound-secret</span>.
+                        </div>
+                        <div className="flex justify-end">
+                            <button onClick={handleSave} className="bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">✓ Save E-Transfer Settings</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 4. Local Backup - Available to all with access to Settings tab */}
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-xl shadow-lg border-2 border-amber-200">
                 <h3 className="text-xl font-bold text-amber-800 border-b-2 border-amber-100 pb-3 mb-4">💾 Local Backup & Restore</h3>

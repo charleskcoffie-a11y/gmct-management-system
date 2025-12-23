@@ -12,6 +12,8 @@ import UsersTab from './components/Users';
 import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
+import UpcomingBirthdays from './components/UpcomingBirthdays';
+import ETransfers from './components/ETransfers';
 import Reports from './components/Reports';
 import ConfirmationModal from './components/ConfirmationModal';
 import DevelopmentFund from './components/DevelopmentFund';
@@ -22,6 +24,8 @@ import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import TaxReceipts from './components/TaxReceipts';
 import WesleyHall from './components/WesleyHall';
+import ClassAttendance from './components/ClassAttendance';
+import Assets from './components/Assets';
 import { ToastProvider } from './components/ToastProvider';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -74,6 +78,7 @@ const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('home');
+    const [reportsTarget, setReportsTarget] = useState<'financial' | 'weekly' | 'birthdays' | null>(null);
         // Global navigation helper so child components can switch tabs without prop drilling
         React.useEffect(() => {
             (window as any).GMCTNavigateTab = (tab: Tab) => setActiveTab(tab);
@@ -96,6 +101,8 @@ const App: React.FC = () => {
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
 
+    // Navigation collapse state
+    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
@@ -254,7 +261,7 @@ const App: React.FC = () => {
             else if (user.role === 'finance-team') setActiveTab('records');
             else if (user.role === 'data-entry') setActiveTab('records');
             else if (user.role === 'pastor') setActiveTab('insights');
-            else if (user.role === 'statistician') setActiveTab('reports');
+            else if (user.role === 'statistician') setActiveTab('history');
             else setActiveTab('home');
         } else {
             setLoginError('Invalid username or password.');
@@ -831,8 +838,42 @@ const App: React.FC = () => {
                         syncStatus={syncStatus}
                     />
                 );
+            case 'attendance':
+                return (
+                    <ClassAttendance
+                        members={members}
+                        settings={settings}
+                        currentUser={currentUser}
+                        syncStatus={syncStatus}
+                    />
+                );
+            case 'assets':
+                return (
+                    <Assets
+                        settings={settings}
+                        currentUser={currentUser}
+                        syncStatus={syncStatus}
+                    />
+                );
+            case 'weekly-history':
+                return (
+                    <div className="space-y-6">
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
+                            <h3 className="text-lg font-bold">📅 Weekly History</h3>
+                        </div>
+                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />
+                    </div>
+                );
+            case 'upcoming-birthdays':
+                return (
+                    <UpcomingBirthdays members={members} />
+                );
+            case 'e-transfers':
+                return (
+                    <ETransfers settings={settings} />
+                );
             // 'history' moved under Reports tab
-            case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} />;
+            case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} targetSection={reportsTarget} onConsumeTarget={() => setReportsTarget(null)} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} syncStatus={syncStatus} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{
                 entries,
@@ -853,28 +894,109 @@ const App: React.FC = () => {
         }
     };
 
-    const navItems = [
-        { id: 'home', label: 'Home', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-        { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
-        { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
-        { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
-        
-        { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
-        { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
-        { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
-        { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
-        { id: 'reports', label: 'Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'] },
-        { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
-        { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-        { id: 'users', label: 'Manage Users', roles: ['admin'] },
-        { id: 'utilities', label: 'Utilities', roles: ['admin'] },
-        { id: 'settings', label: 'Settings', roles: ['admin', 'finance-chair'] },
-    ].filter(item => {
-        // Always show Utilities so we can gray it out for non-admins if desired, or just strictly hide based on role
-        if (item.id === 'utilities') return true; 
-        
-        return item.roles.includes(currentUser.role);
-    });
+    const toggleSection = (sectionId: string) => {
+        setCollapsedSections(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(sectionId)) {
+                newSet.delete(sectionId);
+            } else {
+                newSet.add(sectionId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleNavClick = (item: any) => {
+        const targetTab = (item.tab || item.id) as Tab;
+        setActiveTab(targetTab);
+
+        if (item.targetSection) {
+            if (targetTab === 'history') {
+                if (item.targetSection === 'financial-report-section') setReportsTarget('financial');
+                else if (item.targetSection === 'weekly-history-section') setReportsTarget('weekly');
+                else if (item.targetSection === 'upcoming-birthdays-section') setReportsTarget('birthdays');
+                // Defer scrolling to Reports component after section switches
+            } else {
+                setTimeout(() => {
+                    const el = document.getElementById(item.targetSection);
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 150);
+            }
+        }
+    };
+
+    const navSections = [
+        {
+            id: 'financial',
+            label: 'Financial Management',
+            icon: '💰',
+            roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'],
+            items: [
+                { id: 'home', label: 'Home', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
+                { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
+                { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
+                { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
+                { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
+                { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
+            ]
+        },
+        {
+            id: 'members',
+            label: 'Members & Attendance',
+            icon: '👥',
+            roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor', 'class-leader'],
+            items: [
+                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor', 'class-leader'] },
+                { id: 'attendance', label: 'Class Attendance', roles: ['admin', 'pastor', 'class-leader'] },
+            ]
+        },
+        {
+            id: 'reports',
+            label: 'Reports',
+            icon: '📊',
+            roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'],
+            items: [
+                { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'history', targetSection: 'financial-report-section' },
+                { id: 'reports-weekly', label: 'Weekly History', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'weekly-history' },
+                { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'upcoming-birthdays' },
+                { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'e-transfers' },
+            ]
+        },
+        {
+            id: 'assets',
+            label: 'Assets Management',
+            icon: '🏛️',
+            roles: ['admin', 'finance-chair', 'pastor'],
+            items: [
+                { id: 'assets', label: 'Asset Registry', roles: ['admin', 'finance-chair', 'pastor'] },
+            ]
+        },
+        {
+            id: 'admin',
+            label: 'Administration',
+            icon: '⚙️',
+            roles: ['admin', 'finance-chair'],
+            items: [
+                { id: 'users', label: 'Manage Users', roles: ['admin'] },
+                { id: 'settings', label: 'Settings', roles: ['admin', 'finance-chair'] },
+                { id: 'utilities', label: 'Utilities', roles: ['admin'] },
+            ]
+        },
+    ];
+
+    const visibleSections = navSections
+        .map(section => ({
+            ...section,
+            items: section.items.filter(item => item.roles.includes(currentUser.role))
+        }))
+        .filter(section => 
+            section.items.length > 0 && section.roles.some(role => currentUser.role === role)
+        );
 
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
@@ -898,43 +1020,77 @@ const App: React.FC = () => {
                     <aside className="lg:col-span-1 no-print">
                         <nav className="relative overflow-y-auto max-h-[80vh] rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900 no-print">
                             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_40%),radial-gradient(ellipse_at_bottom_right,rgba(236,72,153,0.12),transparent_35%)]"></div>
-                            <div className="relative space-y-3">
-                                <div className="mb-3 flex items-center justify-between">
+                            <div className="relative space-y-4">
+                                <div className="mb-4 flex items-center justify-between pb-3 border-b border-white/10">
                                     <span className="text-slate-300/80 font-bold tracking-wider uppercase text-sm">Navigation</span>
                                     <span className="px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-100 bg-indigo-500/20 border border-indigo-400/30">
                                         {currentUser.role.replace(/-/g, ' ')}
                                     </span>
                                 </div>
-                                {navItems.map(item => {
-                                const hasAccess = item.roles.includes(currentUser.role);
-                                const isRestricted = !hasAccess;
-
-                                return (
-                                    <button 
-                                        key={item.id} 
-                                        onClick={() => hasAccess && setActiveTab(item.id as Tab)} 
-                                        disabled={isRestricted}
-                                        className={`group w-full text-left font-bold px-6 py-5 rounded-xl transition-all duration-200 text-lg tracking-wide flex items-center justify-between border ${
-                                            activeTab === item.id 
-                                                ? 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow-lg ring-2 ring-indigo-400/40 border-white/10' 
-                                                : isRestricted 
-                                                    ? 'text-slate-600/60 cursor-not-allowed opacity-50 bg-slate-900/50 border-white/5' 
-                                                    : 'text-slate-300/90 bg-white/0 hover:bg-white/[0.04] hover:text-indigo-200/90 border-white/5'
-                                        }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className={`${activeTab === item.id ? 'h-2 w-2 bg-white/90' : 'h-2 w-2 bg-slate-400/40 group-hover:bg-indigo-300/70'} rounded-full`}></span>
-                                            <span>{item.label}</span>
-                                            {isRestricted && (
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                {visibleSections.map(section => {
+                                    const isCollapsed = collapsedSections.has(section.id);
+                                    
+                                    return (
+                                        <div key={section.id} className="space-y-2">
+                                            {/* Section Header */}
+                                            <button
+                                                onClick={() => toggleSection(section.id)}
+                                                className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all group"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xl">{section.icon}</span>
+                                                    <span className="font-bold text-slate-200 text-sm uppercase tracking-wide">
+                                                        {section.label}
+                                                    </span>
+                                                </div>
+                                                <svg 
+                                                    xmlns="http://www.w3.org/2000/svg" 
+                                                    className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`}
+                                                    viewBox="0 0 20 20" 
+                                                    fill="currentColor"
+                                                >
+                                                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                                                 </svg>
+                                            </button>
+
+                                            {/* Section Items */}
+                                            {!isCollapsed && (
+                                                <div className="space-y-1 pl-2">
+                                                    {section.items.map(item => {
+                                                        const targetTab = (item.tab || item.id) as Tab;
+                                                        const isReportsSubItem = targetTab === 'history' && !!(item as any).targetSection;
+                                                        const currentReportsSectionId = reportsTarget === 'weekly'
+                                                            ? 'weekly-history-section'
+                                                            : reportsTarget === 'birthdays'
+                                                                ? 'upcoming-birthdays-section'
+                                                                : 'financial-report-section';
+                                                        const isActive = isReportsSubItem
+                                                            ? ((item as any).targetSection === currentReportsSectionId)
+                                                            : (activeTab === targetTab);
+                                                        
+                                                        return (
+                                                            <button
+                                                                key={item.id}
+                                                                onClick={() => handleNavClick(item)}
+                                                                className={`group w-full text-left font-semibold px-5 py-3 rounded-lg transition-all duration-200 text-sm flex items-center justify-between border ${
+                                                                    isActive
+                                                                        ? 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow-lg ring-1 ring-indigo-400/40 border-white/10'
+                                                                        : 'text-slate-300/90 bg-white/0 hover:bg-white/[0.06] hover:text-indigo-200/90 border-transparent hover:border-white/10'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`${isActive ? 'h-1.5 w-1.5 bg-white/90' : 'h-1.5 w-1.5 bg-slate-400/40 group-hover:bg-indigo-300/70'} rounded-full`}></span>
+                                                                    <span>{item.label}</span>
+                                                                </div>
+                                                                {isActive && <span className="text-white/90">›</span>}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             )}
                                         </div>
-                                        {activeTab === item.id && <span className="text-white/90">›</span>}
-                                    </button>
-                                );
-                             })}
+                                    );
+                                })}
                             </div>
                         </nav>
                     </aside>
