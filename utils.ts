@@ -145,7 +145,16 @@ export function sanitizeMember(raw: any): Member {
             ? (findVal(['active', 'isActive', 'status']) as boolean)
             : true,
         // Ensure createdAt is never empty string
-        createdAt: sanitizeString(findVal(['createdAt', 'created_at'])) || new Date().toISOString()
+        createdAt: sanitizeString(findVal(['createdAt', 'created_at'])) || new Date().toISOString(),
+        // Development fund pledge fields
+        devFundPledge: typeof findVal(['devFundPledge', 'dev_fund_pledge', 'developmentFundPledge']) === 'boolean'
+            ? (findVal(['devFundPledge', 'dev_fund_pledge', 'developmentFundPledge']) as boolean)
+            : false,
+        devFundPledgeAmount: (() => {
+            const val = findVal(['devFundPledgeAmount', 'dev_fund_pledge_amount', 'developmentFundPledgeAmount']);
+            const num = parseFloat(val);
+            return !isNaN(num) && num >= 0 ? num : 0;
+        })()
     };
 
     // Populate DOB from separate fields or combined text

@@ -55,14 +55,19 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [newDesc, setNewDesc] = useState('');
 
     // --- Derived Data ---
+    // Filter members to show only those who have pledged to development fund
+    const pledgedMembers = useMemo(() => {
+        return members.filter(m => m.devFundPledge === true);
+    }, [members]);
+
     const selectedMember = useMemo(() => {
         const term = memberInput.trim().toLowerCase();
         if (!term) return null;
-        return members.find(m =>
+        return pledgedMembers.find(m =>
             m.name.toLowerCase() === term ||
             (m.memberNumber && m.memberNumber.toLowerCase() === term)
         ) || null;
-    }, [members, memberInput]);
+    }, [pledgedMembers, memberInput]);
 
     const displayEntries = useMemo(() => {
         let filtered = entries.filter(e => {
@@ -635,7 +640,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                             className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 font-medium"
                                         />
                                         <datalist id="devfund-members">
-                                            {members.slice(0, 400).map(m => (
+                                            {pledgedMembers.slice(0, 400).map(m => (
                                                 <React.Fragment key={m.id}>
                                                     <option value={m.name} />
                                                     {m.memberNumber && <option value={m.memberNumber} />}
@@ -643,12 +648,22 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                             ))}
                                         </datalist>
                                         <p className="text-xs text-slate-500 mt-2">
-                                            Directory required: {settings.enforceDirectory ? 'Yes' : 'No'}
+                                            Directory required: {settings.enforceDirectory ? 'Yes' : 'No'} • Showing {pledgedMembers.length} pledged members
                                         </p>
                                         {selectedMember && (
-                                            <div className="mt-3 flex gap-2 text-xs font-bold text-slate-700">
-                                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md">Class {selectedMember.classNumber || '-'}</span>
-                                                <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-md">ID: {selectedMember.memberNumber || 'N/A'}</span>
+                                            <div className="mt-3 space-y-2">
+                                                <div className="flex gap-2 text-xs font-bold text-slate-700">
+                                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md">Class {selectedMember.classNumber || '-'}</span>
+                                                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-md">ID: {selectedMember.memberNumber || 'N/A'}</span>
+                                                </div>
+                                                {selectedMember.devFundPledgeAmount && selectedMember.devFundPledgeAmount > 0 && (
+                                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs font-bold text-green-700">💰 PLEDGED AMOUNT:</span>
+                                                            <span className="text-lg font-bold text-green-700">{formatCurrency(selectedMember.devFundPledgeAmount, settings.currency)}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -760,7 +775,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                             </tbody>
                                         </table>
                                         <datalist id="devfund-bulk-members">
-                                            {members.slice(0, 400).map(m => (
+                                            {pledgedMembers.slice(0, 400).map(m => (
                                                 <React.Fragment key={m.id}>
                                                     <option value={m.name} />
                                                     {m.memberNumber && <option value={m.memberNumber} />}

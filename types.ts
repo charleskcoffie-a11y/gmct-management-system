@@ -73,6 +73,8 @@ export interface Member {
     dobDay?: number;   // 1-31
     active?: boolean;
     createdAt?: string;
+    devFundPledge?: boolean; // Has pledged to development fund
+    devFundPledgeAmount?: number; // Amount pledged to development fund
 }
 
 export interface Settings {

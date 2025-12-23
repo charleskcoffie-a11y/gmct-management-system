@@ -58,6 +58,8 @@ ALTER TABLE public.members ADD COLUMN IF NOT EXISTS profession text;
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS dob_month int;
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS dob_day int;
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS created_at timestamp with time zone default timezone('utc'::text, now());
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS dev_fund_pledge boolean default false;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS dev_fund_pledge_amount numeric default 0;
 
 -- 3. Create Financial Entries Table
 create table if not exists public.entries (

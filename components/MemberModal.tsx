@@ -205,6 +205,36 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                             </label>
                             <p className="text-xs text-gray-500 mt-1">Uncheck to mark this member as inactive.</p>
                         </div>
+                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                            <label htmlFor="devFundPledge" className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    id="devFundPledge"
+                                    name="devFundPledge"
+                                    type="checkbox"
+                                    checked={formData.devFundPledge ?? false}
+                                    onChange={handleChange}
+                                    className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="font-bold text-gray-800">Development Fund Pledge</span>
+                            </label>
+                            <p className="text-xs text-gray-500 mt-1">Check if member has pledged to the development fund.</p>
+                            {formData.devFundPledge && (
+                                <div className="mt-3">
+                                    <label htmlFor="devFundPledgeAmount" className="block font-medium text-gray-700 mb-1">Pledge Amount</label>
+                                    <input
+                                        id="devFundPledgeAmount"
+                                        name="devFundPledgeAmount"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        value={formData.devFundPledgeAmount || ''}
+                                        onChange={handleChange}
+                                        className="block w-full border border-blue-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-b-lg flex justify-end gap-2">
                         <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
