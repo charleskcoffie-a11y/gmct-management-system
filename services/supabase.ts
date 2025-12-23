@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -321,6 +321,119 @@ export const markETransferReconciled = async (url: string, key: string, id: stri
     if (!supabase) throw new Error('Invalid Supabase configuration');
     const { error } = await supabase.from('etransfers').update({ reconciled }).eq('id', id);
     if (error) throw new Error(error.message);
+};
+
+// --- Requisitions ---
+const mapRequisitionToDB = (r: Requisition) => ({
+    id: r.id,
+    requester_username: r.requesterUsername,
+    title: r.title,
+    purpose: r.purpose,
+    fund: r.fund,
+    needed_by: r.neededBy || null,
+    total_amount: r.totalAmount,
+    status: r.status,
+    updated_by: r.updatedBy || null,
+    last_updated: r.lastUpdated || null,
+});
+
+const mapRequisitionFromDB = (r: any): Requisition => ({
+    id: r.id,
+    requesterUsername: r.requester_username,
+    title: r.title,
+    purpose: r.purpose || undefined,
+    fund: r.fund || undefined,
+    neededBy: r.needed_by || undefined,
+    totalAmount: parseFloat(r.total_amount || 0),
+    status: r.status,
+    createdAt: r.created_at || undefined,
+    updatedBy: r.updated_by || undefined,
+    lastUpdated: r.last_updated || undefined,
+});
+
+const mapReqItemToDB = (i: RequisitionItem) => ({
+    id: i.id,
+    requisition_id: i.requisitionId,
+    description: i.description,
+    qty: i.qty,
+    unit_price: i.unitPrice,
+    account_code: i.accountCode || null,
+});
+
+const mapReqItemFromDB = (i: any): RequisitionItem => ({
+    id: i.id,
+    requisitionId: i.requisition_id,
+    description: i.description,
+    qty: parseFloat(i.qty || 0),
+    unitPrice: parseFloat(i.unit_price || 0),
+    accountCode: i.account_code || undefined,
+});
+
+const mapApprovalToDB = (a: RequisitionApproval) => ({
+    id: a.id,
+    requisition_id: a.requisitionId,
+    approver_username: a.approverUsername,
+    decision: a.decision,
+    note: a.note || null,
+    decided_at: a.decidedAt || null,
+});
+
+const mapApprovalFromDB = (a: any): RequisitionApproval => ({
+    id: a.id,
+    requisitionId: a.requisition_id,
+    approverUsername: a.approver_username,
+    decision: a.decision,
+    note: a.note || undefined,
+    decidedAt: a.decided_at || undefined,
+});
+
+export const loadRequisitions = async (url: string, key: string): Promise<Requisition[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('requisitions').select('*').order('created_at', { ascending: false });
+    if (error) {
+        console.warn('Failed to load requisitions:', error.message);
+        return [];
+    }
+    const reqs = (data || []).map(mapRequisitionFromDB);
+    // Attach items
+    const ids = reqs.map(r => r.id);
+    if (ids.length > 0) {
+        const { data: itemsData } = await supabase.from('requisition_items').select('*').in('requisition_id', ids);
+        const items = (itemsData || []).map(mapReqItemFromDB);
+        const byReq: Record<string, RequisitionItem[]> = {};
+        items.forEach(i => { (byReq[i.requisitionId] ||= []).push(i); });
+        reqs.forEach(r => { r.items = byReq[r.id] || []; });
+    }
+    return reqs;
+};
+
+export const saveRequisition = async (url: string, key: string, req: Requisition) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase.from('requisitions').upsert([mapRequisitionToDB(req)]);
+    if (error) throw new Error(error.message);
+    if (req.items && req.items.length > 0) {
+        // Upsert items
+        const { error: itemErr } = await supabase.from('requisition_items').upsert(req.items.map(mapReqItemToDB));
+        if (itemErr) throw new Error(itemErr.message);
+    }
+};
+
+export const submitRequisition = async (url: string, key: string, id: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: new Date().toISOString() }).eq('id', id);
+    if (error) throw new Error(error.message);
+};
+
+export const decideRequisition = async (url: string, key: string, approval: RequisitionApproval, newStatus: 'approved' | 'rejected') => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error: insErr } = await supabase.from('requisition_approvals').insert([mapApprovalToDB(approval)]);
+    if (insErr) throw new Error(insErr.message);
+    const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: new Date().toISOString() }).eq('id', approval.requisitionId);
+    if (updErr) throw new Error(updErr.message);
 };
 
 // --- Individual Entry Operations (for multi-user real-time collaboration) ---

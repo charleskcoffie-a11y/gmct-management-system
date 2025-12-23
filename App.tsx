@@ -14,6 +14,8 @@ import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
 import UpcomingBirthdays from './components/UpcomingBirthdays';
 import ETransfers from './components/ETransfers';
+import Requisitions from './components/Requisitions';
+import MyApprovals from './components/MyApprovals';
 import Reports from './components/Reports';
 import ConfirmationModal from './components/ConfirmationModal';
 import DevelopmentFund from './components/DevelopmentFund';
@@ -505,6 +507,14 @@ const App: React.FC = () => {
                         setEntries={setEntries}
                     />
                 );
+            case 'requisitions':
+                return (
+                    <Requisitions settings={settings} currentUser={currentUser} />
+                );
+            case 'my-approvals':
+                return (
+                    <MyApprovals settings={settings} currentUser={currentUser} />
+                );
             case 'records':
                 return (
                     <div className="space-y-6">
@@ -943,6 +953,8 @@ const App: React.FC = () => {
                 { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
+                { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team'] },
             ]
         },
         {

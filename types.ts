@@ -163,8 +163,51 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'requisitions' | 'my-approvals' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
+
+export type RequisitionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'funded' | 'paid' | 'closed';
+export type ApprovalDecision = 'approved' | 'rejected';
+
+export interface RequisitionItem {
+    id: string;
+    requisitionId: string;
+    description: string;
+    qty: number;
+    unitPrice: number;
+    accountCode?: string;
+}
+
+export interface Requisition {
+    id: string;
+    requesterUsername: string;
+    title: string;
+    purpose?: string;
+    fund?: string;
+    neededBy?: string; // ISO date
+    totalAmount: number;
+    status: RequisitionStatus;
+    createdAt?: string;
+    updatedBy?: string;
+    lastUpdated?: string;
+    items?: RequisitionItem[];
+}
+
+export interface RequisitionApproval {
+    id: string;
+    requisitionId: string;
+    approverUsername: string;
+    decision: ApprovalDecision;
+    note?: string;
+    decidedAt?: string;
+}
+
+export interface RequisitionComment {
+    id: string;
+    requisitionId: string;
+    authorUsername: string;
+    body: string;
+    createdAt?: string;
+}
 
 export interface ETransfer {
     id: string;
