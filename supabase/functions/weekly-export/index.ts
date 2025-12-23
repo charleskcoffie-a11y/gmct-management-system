@@ -3,12 +3,12 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10'
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
-const BACKUP_BUCKET = process.env.BACKUP_BUCKET || 'backups'
-const BACKUP_EMAIL = process.env.BACKUP_EMAIL // recipient email
-const RESEND_API_KEY = process.env.RESEND_API_KEY
-const FROM_EMAIL = process.env.FROM_EMAIL || 'backups@no-reply.example.com'
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_KEY')
+const BACKUP_BUCKET = Deno.env.get('BACKUP_BUCKET') || 'backups'
+const BACKUP_EMAIL = Deno.env.get('BACKUP_EMAIL') // recipient email
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'backups@no-reply.example.com'
 
 function toCsv(rows: any[]): string {
   const headers = [
@@ -65,8 +65,7 @@ Deno.serve(async () => {
     const dd = String(now.getUTCDate()).padStart(2, '0')
     const fileName = `entries_${yyyy}-${mm}-${dd}.csv`
 
-    // 3) Ensure bucket exists (Storage API will error if not). Prefer creating once manually.
-    // Attempt upload
+    // 3) Upload to Storage (ensure bucket exists in advance)
     const uploadRes = await supabase.storage
       .from(BACKUP_BUCKET)
       .upload(fileName, new Blob([csv], { type: 'text/csv' }), {

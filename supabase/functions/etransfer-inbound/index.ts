@@ -2,11 +2,14 @@
 // Receives inbound email webhooks (SendGrid/Mailgun/Resend-like), parses basic
 // e-Transfer details, stores in 'etransfers' table.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10'
+// If running in Deno Deploy or Supabase Edge Functions, ensure your environment supports remote imports.
+// If running locally with Node.js/TypeScript, use the npm package instead:
+// import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_KEY')
-const INBOUND_SECRET = Deno.env.get('INBOUND_SECRET')
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+const INBOUND_SECRET = process.env.INBOUND_SECRET
 
 function parseAmount(text: string): { amount?: number; currency?: string } {
   // Try to match typical patterns like: $123.45 or CAD 123.45
@@ -24,7 +27,7 @@ function headerToString(v: unknown): string | undefined {
   try { return String(v) } catch { return undefined }
 }
 
-Deno.serve(async (req) => {
+export default async function handler(req: Request) {
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) throw new Error('Missing Supabase env')
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -89,4 +92,4 @@ Deno.serve(async (req) => {
     console.error(e)
     return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 })
   }
-})
+}
