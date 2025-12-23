@@ -2,6 +2,7 @@
 // utils.ts
 import { v4 as uuidv4 } from 'uuid';
 import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 
 // --- String & Sanitization ---
 
@@ -134,11 +135,11 @@ export function sanitizeUser(raw: any): User {
 
 export function sanitizeSettings(raw: any): Settings {
     return {
-        currency: sanitizeString(raw.currency) || 'USD',
-        maxClasses: typeof raw.maxClasses === 'number' && raw.maxClasses > 0 ? raw.maxClasses : 10,
+        currency: sanitizeString(raw.currency) || DEFAULT_CURRENCY,
+        maxClasses: typeof raw.maxClasses === 'number' && raw.maxClasses > 0 ? raw.maxClasses : DEFAULT_MAX_CLASSES,
         enforceDirectory: typeof raw.enforceDirectory === 'boolean' ? raw.enforceDirectory : true,
-        supabaseUrl: sanitizeString(raw.supabaseUrl),
-        supabaseKey: sanitizeString(raw.supabaseKey),
+        supabaseUrl: sanitizeString(raw.supabaseUrl) || SUPABASE_URL,
+        supabaseKey: sanitizeString(raw.supabaseKey) || SUPABASE_KEY,
         logoUrl: raw.logoUrl ? sanitizeString(raw.logoUrl) : undefined,
         orgName: sanitizeString(raw.orgName),
         orgAddress: sanitizeString(raw.orgAddress),
