@@ -34,12 +34,12 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6 border-b">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+                <form onSubmit={handleSubmit} className="flex flex-col h-full">
+                    <div className="p-6 border-b flex-shrink-0">
                         <h2 className="text-xl font-bold text-gray-800">{member ? 'Edit Member' : 'Add New Member'}</h2>
                     </div>
-                    <div className="p-6 space-y-4">
+                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
                         <div>
                             <label htmlFor="id" className="block font-medium text-gray-700">System ID</label>
                             <input
@@ -236,7 +236,7 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                             )}
                         </div>
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-b-lg flex justify-end gap-2">
+                    <div className="p-4 bg-gray-50 rounded-b-lg flex justify-end gap-2 flex-shrink-0 border-t">
                         <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
                         <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save Member</button>
                     </div>
