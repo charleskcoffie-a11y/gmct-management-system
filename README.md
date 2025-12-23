@@ -71,7 +71,9 @@ create table if not exists public.entries (
     updated_by text,    
     last_updated timestamp with time zone,
     deleted boolean default false, 
-    created_at timestamp with time zone default timezone('utc'::text, now())
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    remaining numeric, -- For pledges: tracks unpaid balance
+    group_name text -- For harvest pledges: Men, Women, Youth, Dayborn, Main
 );
 
 -- 4. Create Attendance Table
@@ -185,6 +187,78 @@ create policy "Enable all access for anon users" on public.month_locks for all u
 
 -- Ensure members table has createdAt
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS created_at timestamp with time zone default timezone('utc'::text, now());
+```
+
+### MIGRATION: Harvest Pledges and Payment Tracking
+Run this SQL **in separate queries** in Supabase SQL Editor to avoid dependency issues:
+
+**Step 1: Add columns to entries table**
+```sql
+ALTER TABLE public.entries ADD COLUMN IF NOT EXISTS remaining numeric;
+ALTER TABLE public.entries ADD COLUMN IF NOT EXISTS group_name text;
+```
+
+**Step 2: Create harvest pledges table**
+```sql
+create table if not exists public.harvest_pledges (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid references public.members(id) on delete cascade,
+  member_name text not null,
+  class_number text,
+  group_name text,
+  date date not null,
+  amount numeric not null,
+  remaining numeric not null,
+  category text,
+  note text,
+  deleted boolean default false,
+  created_by text,
+  updated_by text,
+  last_updated timestamptz,
+  created_at timestamptz default now()
+);
+```
+
+**IMPORTANT: Verify Step 2 worked before continuing**
+Run this to check if the table was created:
+```sql
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public' AND table_name = 'harvest_pledges';
+```
+You should see `harvest_pledges` in the results. If not, Step 2 failed - check for errors.
+
+**Step 3: Create harvest pledge payments table**
+```sql
+create table if not exists public.harvest_pledge_payments (
+  id uuid primary key default gen_random_uuid(),
+  pledge_id uuid references public.harvest_pledges(id) on delete cascade,
+  payment_entry_id uuid references public.entries(id) on delete cascade,
+  payment_date date not null,
+  amount numeric not null,
+  paid_by text,
+  notes text,
+  created_at timestamptz default now()
+);
+```
+
+**Step 4: Enable Row Level Security**
+```sql
+alter table public.harvest_pledges enable row level security;
+create policy "Enable all access for anon users" on public.harvest_pledges 
+  for all using (true) with check (true);
+
+alter table public.harvest_pledge_payments enable row level security;
+create policy "Enable all access for anon users" on public.harvest_pledge_payments 
+  for all using (true) with check (true);
+```
+
+**Step 5: Create indexes for performance**
+```sql
+create index if not exists idx_harvest_pledges_date on public.harvest_pledges(date);
+create index if not exists idx_harvest_pledges_member on public.harvest_pledges(member_id);
+create index if not exists idx_pledge_payments_pledge_id on public.harvest_pledge_payments(pledge_id);
+create index if not exists idx_pledge_payments_payment_id on public.harvest_pledge_payments(payment_entry_id);
+create index if not exists idx_pledge_payments_date on public.harvest_pledge_payments(payment_date);
 ```
 
 ## Part 2: User Roles Definition
@@ -305,5 +379,6 @@ git commit -m "Updated financial entry form validation"
 # 3. Push to GitHub
 git push
 ```
-/ /   t r i g g e r   r e d e p l o y  
+/ /   t r i g g e r   r e d e p l o y 
+ 
  

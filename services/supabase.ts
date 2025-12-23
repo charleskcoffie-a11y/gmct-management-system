@@ -103,9 +103,11 @@ const mapEntryToDB = (e: Entry) => ({
     amount: e.amount,
     note: e.note,
     class_number: e.classNumber,
+    remaining: e.remaining,
+    group_name: e.groupName,
     created_by: e.createdBy,
     updated_by: e.updatedBy,
-    last_updated: toTimestamp(e.lastUpdated), // Handle empty string
+    last_updated: toTimestamp(e.lastUpdated),
     deleted: e.deleted,
     created_at: e.createdAt || new Date().toISOString()
 });
@@ -121,6 +123,8 @@ const mapEntryFromDB = (e: any): Entry => ({
     amount: parseFloat(e.amount),
     note: e.note,
     classNumber: e.class_number,
+    remaining: e.remaining ? parseFloat(e.remaining) : undefined,
+    groupName: e.group_name,
     createdBy: e.created_by,
     updatedBy: e.updated_by,
     lastUpdated: e.last_updated,
@@ -345,4 +349,136 @@ export const deleteMemberFromSupabase = async (url: string, key: string, memberI
     const { error } = await supabase.from('members').delete().eq('id', memberId);
     if (error) throw new Error(`Delete member failed: ${error.message}`);
     return { success: true };
+};
+
+// --- Harvest Pledge Functions ---
+interface HarvestPledgeDB {
+    id: string;
+    member_id: string;
+    member_name: string;
+    class_number: string;
+    group_name?: string;
+    date: string;
+    amount: number;
+    remaining: number;
+    category: string;
+    note?: string;
+    created_by?: string;
+    updated_by?: string;
+    last_updated?: string;
+    deleted?: boolean;
+    created_at: string;
+}
+
+export interface HarvestPledge {
+    id: string;
+    memberID: string;
+    memberName: string;
+    classNumber: string;
+    groupName?: string;
+    date: string;
+    amount: number;
+    remaining: number;
+    category: string;
+    note?: string;
+    createdBy?: string;
+    updatedBy?: string;
+    lastUpdated?: string;
+    deleted?: boolean;
+    createdAt: string;
+}
+
+const mapHarvestPledgeToDB = (p: HarvestPledge): HarvestPledgeDB => ({
+    id: p.id,
+    member_id: p.memberID,
+    member_name: p.memberName,
+    class_number: p.classNumber,
+    group_name: p.groupName,
+    date: p.date,
+    amount: p.amount,
+    remaining: p.remaining,
+    category: p.category,
+    note: p.note,
+    created_by: p.createdBy,
+    updated_by: p.updatedBy,
+    last_updated: toTimestamp(p.lastUpdated),
+    deleted: p.deleted,
+    created_at: p.createdAt || new Date().toISOString()
+});
+
+const mapHarvestPledgeFromDB = (p: any): HarvestPledge => ({
+    id: p.id,
+    memberID: p.member_id,
+    memberName: p.member_name,
+    classNumber: p.class_number,
+    groupName: p.group_name,
+    date: p.date,
+    amount: parseFloat(p.amount),
+    remaining: parseFloat(p.remaining),
+    category: p.category,
+    note: p.note,
+    createdBy: p.created_by,
+    updatedBy: p.updated_by,
+    lastUpdated: p.last_updated,
+    deleted: p.deleted,
+    createdAt: p.created_at
+});
+
+// Save single harvest pledge to Supabase
+export const saveHarvestPledgeToSupabase = async (url: string, key: string, pledge: HarvestPledge) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase
+        .from('harvest_pledges')
+        .upsert([mapHarvestPledgeToDB(pledge)]);
+    
+    if (error) throw new Error(`Save harvest pledge failed: ${error.message}`);
+    return { success: true };
+};
+
+// Save harvest pledge payment
+export const saveHarvestPledgePayment = async (
+    url: string, 
+    key: string, 
+    pledgeId: string, 
+    paymentEntryId: string,
+    amount: number,
+    paymentDate: string,
+    paidBy?: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase
+        .from('harvest_pledge_payments')
+        .insert([{
+            pledge_id: pledgeId,
+            payment_entry_id: paymentEntryId,
+            payment_date: paymentDate,
+            amount: amount,
+            paid_by: paidBy,
+            created_at: new Date().toISOString()
+        }]);
+    
+    if (error) throw new Error(`Save harvest pledge payment failed: ${error.message}`);
+    return { success: true };
+};
+
+// Load all harvest pledges from Supabase
+export const loadHarvestPledgesFromSupabase = async (url: string, key: string): Promise<HarvestPledge[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+        .from('harvest_pledges')
+        .select('*')
+        .order('date', { ascending: false });
+    
+    if (error) {
+        console.error("Load harvest pledges failed:", error.message);
+        return [];
+    }
+    
+    return (data || []).map(mapHarvestPledgeFromDB);
 };

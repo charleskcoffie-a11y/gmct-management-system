@@ -1,20 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastProvider';
-import type { HarvestEntry, Member, Settings, SyncStatus, User } from '../types';
+import type { Entry, Member, Settings, SyncStatus, User } from '../types';
 import { formatCurrency } from '../utils';
 
 interface HarvestProps {
     members: Member[];
-    entries: HarvestEntry[];
-    setEntries: React.Dispatch<React.SetStateAction<HarvestEntry[]>>;
+    entries: Entry[];
+    setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
     settings: Settings;
     currentUser?: User | null;
     syncStatus?: SyncStatus;
+    onCreatePledges?: (pledges: Entry[]) => void;
 }
 
-const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, settings, currentUser, syncStatus }) => {
+const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, settings, currentUser, syncStatus, onCreatePledges }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedEntry, setSelectedEntry] = useState<HarvestEntry | null>(null);
+    const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     
@@ -25,21 +26,25 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [searchFilter, setSearchFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
 
+    // Harvest types to filter
+    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge'] as const;
+
     // Form state
-    const [formData, setFormData] = useState<HarvestEntry>({
+    const [formData, setFormData] = useState<Entry>({
         id: '',
         date: new Date().toISOString().split('T')[0],
         memberID: '',
         memberName: '',
         classNumber: '',
+        type: 'harvest-levy',
+        fund: 'harvest',
+        method: 'cash',
         amount: 0,
-        category: 'harvest-levy',
         note: '',
         createdAt: new Date().toISOString()
     });
     const harvestCategories = [
         { value: 'harvest-levy', label: 'Harvest Levy' },
-        { value: 'harvest-pledge', label: 'Harvest Pledge' },
         { value: 'harvest-sales', label: 'Harvest Sales' },
         { value: 'chairperson-supporter', label: 'Chairperson Supporter' }
     ];
@@ -51,9 +56,11 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : false;
     const isConnected = isOnline && !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
-    // Filtered entries
+    // Filtered entries - get only harvest-type entries from entries table
     const filteredEntries = useMemo(() => {
         return entries.filter(entry => {
+            // Only include harvest-related types
+            if (!harvestTypes.includes(entry.type as any)) return false;
             if (entry.deleted && !showDeleted) return false;
             if (searchFilter && !entry.memberName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
             if (startDateFilter && entry.date < startDateFilter) return false;
@@ -68,7 +75,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
 
     // Group by date
     const entriesByDate = useMemo(() => {
-        const groups: Record<string, HarvestEntry[]> = {};
+        const groups: Record<string, Entry[]> = {};
         filteredEntries.forEach(entry => {
             if (!groups[entry.date]) {
                 groups[entry.date] = [];
@@ -91,7 +98,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         };
     }, [filteredEntries]);
 
-    const handleOpenModal = (entry: HarvestEntry | null = null) => {
+    const handleOpenModal = (entry: Entry | null = null) => {
         if (!isConnected) {
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             return;
@@ -108,8 +115,10 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 memberID: '',
                 memberName: '',
                 classNumber: '',
+                type: 'harvest-levy',
+                fund: 'harvest',
+                method: 'cash',
                 amount: 0,
-                category: 'harvest-levy',
                 note: '',
                 createdBy: currentUser?.username,
                 createdAt: new Date().toISOString()
@@ -216,14 +225,20 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                             </div>
                         </div>
                     </div>
-                    {currentUser?.role !== 'pastor' && (
-                        <button onClick={() => handleOpenModal()} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection to add records' : undefined} className={`bg-gradient-to-br from-amber-400 to-orange-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:from-amber-500 hover:to-orange-500 hover:scale-105'}`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                            </svg>
-                            Record Harvest
+                    <div className="flex gap-3">
+                        {currentUser?.role !== 'pastor' && (
+                            <button onClick={() => handleOpenModal()} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection to add records' : undefined} className={`bg-gradient-to-br from-amber-400 to-orange-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:from-amber-500 hover:to-orange-500 hover:scale-105'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                </svg>
+                                Record Harvest
+                            </button>
+                        )}
+                        <button onClick={() => (window as any).GMCTNavigateTab && (window as any).GMCTNavigateTab('harvest-pledges')} className="bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all hover:from-indigo-600 hover:to-fuchsia-700 hover:scale-105">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 4a1 1 0 011-1h8a1 1 0 01.894.553l3 6A1 1 0 0115 11H9.618l.447 2.236A1 1 0 019.09 14H7a1 1 0 110-2h1.382l-.724-3.618A1 1 0 006.676 8H4a1 1 0 01-1-1V4z" clipRule="evenodd" /></svg>
+                            Harvest Pledges
                         </button>
-                    )}
+                    </div>
                 </div>
             </div>
 
@@ -547,6 +562,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                     </div>
                 </div>
             )}
+            
         </div>
     );
 };

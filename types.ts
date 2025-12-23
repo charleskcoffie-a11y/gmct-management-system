@@ -1,5 +1,5 @@
 
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest" | "kofi-and-ama" | "development-fund" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "kofi-and-ama" | "development-fund" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {
@@ -13,6 +13,10 @@ export interface Entry {
     method: Method;
     amount: number;
     note?: string;
+    
+    // Pledge-specific fields (only used when type="harvest-pledge")
+    remaining?: number; // Unpaid balance for pledges
+    groupName?: string; // Men, Women, Youth, Dayborn, Main
     
     // Audit Trail & Soft Delete
     createdBy?: string;

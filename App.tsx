@@ -18,6 +18,7 @@ import DevelopmentFund from './components/DevelopmentFund';
 import NoName from './components/NoName';
 import FinancialControl from './components/FinancialControl';
 import HarvestPledges from './components/HarvestPledges';
+import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import TaxReceipts from './components/TaxReceipts';
 import { ToastProvider } from './components/ToastProvider';
@@ -26,10 +27,10 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
-import type { HarvestPledge } from './types/harvestPledge';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase } from './services/supabase';
+import type { HarvestPledge } from './services/supabase';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -67,6 +68,7 @@ const App: React.FC = () => {
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
+
 
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
@@ -121,6 +123,46 @@ const App: React.FC = () => {
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [syncStatus.state]);
+
+    // --- Sync new entries to Supabase ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+        
+        // Save all entries that don't have a sync timestamp or were recently created
+        const entriesToSync = entries.filter(e => !e.lastUpdated || 
+            new Date(e.createdAt || '').getTime() > Date.now() - 5000); // Last 5 seconds
+        
+        entriesToSync.forEach(async (entry) => {
+            try {
+                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            } catch (err) {
+                console.error('Failed to sync entry to Supabase:', err);
+            }
+        });
+    }, [entries, settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+
+    // --- Auto-load from Supabase on startup if configured ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey) return;
+        if (entries.length > 0 || members.length > 0) return; // Only load if empty
+        
+        // Trigger sync by updating settings reference
+        // This will cause the sync hook to perform initial pull
+    }, [settings.supabaseUrl, settings.supabaseKey]);
+
+    // --- Load Harvest Pledges from Supabase on startup ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey) return;
+        if (harvestPledges.length > 0) return; // Only load if empty
+        
+        loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey)
+            .then(pledges => {
+                if (pledges && pledges.length > 0) {
+                    setHarvestPledges(pledges);
+                }
+            })
+            .catch(err => console.error('Failed to load harvest pledges:', err));
+    }, [settings.supabaseUrl, settings.supabaseKey]);
     
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -385,21 +427,64 @@ const App: React.FC = () => {
 
         const canWrite = syncStatus.state === 'synced';
 
-        const handlePayPledge = (pledge: HarvestPledge, amount: number) => {
+        const handlePayPledge = (pledge: HarvestPledge, amount: number, paymentDate: string) => {
             if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
                 alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
                 return;
             }
-            if (amount <= 0) return;
-            setHarvestPledges(prev => prev.map(p => p.id === pledge.id ? {
-                ...p,
-                remaining: Math.max(0, (p.remaining || 0) - amount),
-                updatedBy: currentUser?.username || p.updatedBy,
+            if (amount <= 0 || amount > pledge.remaining) return;
+
+            // Create a financial entry for the payment
+            const paymentEntry: Entry = {
+                id: crypto.randomUUID(),
+                date: paymentDate,
+                memberID: pledge.memberID,
+                memberName: pledge.memberName,
+                classNumber: pledge.classNumber,
+                type: 'harvest-levy',
+                fund: 'harvest',
+                method: 'cash',
+                amount: amount,
+                note: `Harvest pledge payment (Pledge ID: ${pledge.id.substring(0, 8)})`,
+                createdBy: currentUser?.username,
+                createdAt: new Date().toISOString(),
+            };
+
+            // Update pledge remaining amount
+            const updatedPledge: HarvestPledge = {
+                ...pledge,
+                remaining: Math.max(0, pledge.remaining - amount),
+                updatedBy: currentUser?.username,
                 lastUpdated: new Date().toISOString()
-            } : p));
+            };
+
+            // Update local state
+            setHarvestPledges(prev => prev.map(p => p.id === pledge.id ? updatedPledge : p));
+            setEntries(prev => [...prev, paymentEntry]);
+
+            // Save to Supabase
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                Promise.all([
+                    saveHarvestPledgeToSupabase(settings.supabaseUrl, settings.supabaseKey, updatedPledge),
+                    saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, paymentEntry),
+                    saveHarvestPledgePayment(settings.supabaseUrl, settings.supabaseKey, pledge.id, paymentEntry.id, amount, paymentDate, currentUser?.username)
+                ]).catch(err => console.error("Error saving pledge payment:", err));
+            }
         };
         switch (activeTab) {
             case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
+            case 'harvest':
+                return (
+                    <Harvest 
+                        members={members}
+                        entries={entries.filter(e => ['harvest-levy', 'harvest', 'harvest-pledge'].includes(e.type))}
+                        setEntries={setEntries}
+                        settings={settings}
+                        currentUser={currentUser}
+                        syncStatus={syncStatus}
+                        onCreatePledges={(newPledges) => setEntries(prev => [...prev, ...newPledges])}
+                    />
+                );
             case 'reports':
                 return (
                     <Reports 
@@ -763,7 +848,8 @@ const App: React.FC = () => {
         { id: 'home', label: 'Home', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
         { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
-        { id: 'harvest-pledges', label: 'Harvest Pledges', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+        { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+        
         { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
         { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
