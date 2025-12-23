@@ -109,19 +109,66 @@ export function sanitizeMember(raw: any): Member {
         return foundKey ? raw[foundKey] : undefined;
     };
 
-    return {
+    // Helper to parse a date string into month/day (no year)
+    const parseDob = (val: any): { month?: number; day?: number } => {
+        const s = sanitizeString(val);
+        if (!s) return {};
+        // Try formats: MM-DD, M/D, Month Day
+        const mdMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+        if (mdMatch) {
+            const m = parseInt(mdMatch[1], 10);
+            const d = parseInt(mdMatch[2], 10);
+            if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return { month: m, day: d };
+        }
+        // Month name and day, e.g., "March 5"
+        const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+        const parts = s.toLowerCase().split(/[ ,]+/);
+        const mi = months.indexOf(parts[0]);
+        if (mi >= 0) {
+            const dayNum = parseInt(parts[1], 10);
+            if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) return { month: mi + 1, day: dayNum };
+        }
+        return {};
+    };
+
+    const member: Member = {
         id: sanitizeString(findVal(['id', 'uuid'])) || uuidv4(),
         spId: sanitizeString(findVal(['spId', 'legacyId'])),
         name: sanitizeString(findVal(['name', 'fullName', 'member name'])) || "Unnamed Member",
         classNumber: sanitizeString(findVal(['classNumber', 'class', 'class #', 'classNo'])),
         memberNumber: sanitizeString(findVal(['memberNumber', 'member #', 'number', 'memberId', 'memberNo'])),
         address: sanitizeString(findVal(['address', 'member address', 'home address', 'street', 'mailing address'])),
+        email: sanitizeString(findVal(['email', 'e-mail'])),
+        profession: sanitizeString(findVal(['profession', 'occupation'])),
+        phone: sanitizeString(findVal(['phone', 'phoneNumber', 'telephone', 'mobile'])),
         active: typeof findVal(['active', 'isActive', 'status']) === 'boolean'
             ? (findVal(['active', 'isActive', 'status']) as boolean)
             : true,
         // Ensure createdAt is never empty string
         createdAt: sanitizeString(findVal(['createdAt', 'created_at'])) || new Date().toISOString()
     };
+
+    // Populate DOB from separate fields or combined text
+    const dobMonthRaw = findVal(['dobMonth','birthdayMonth','birthMonth']);
+    const dobDayRaw = findVal(['dobDay','birthdayDay','birthDay']);
+    const dobCombined = findVal(['dob','dateOfBirth','birthday']);
+    let monthNum: number | undefined;
+    let dayNum: number | undefined;
+    if (typeof dobMonthRaw !== 'undefined' && typeof dobDayRaw !== 'undefined') {
+        const m = parseInt(dobMonthRaw, 10);
+        const d = parseInt(dobDayRaw, 10);
+        if (m >= 1 && m <= 12) monthNum = m;
+        if (d >= 1 && d <= 31) dayNum = d;
+    } else if (dobCombined) {
+        const parsed = parseDob(dobCombined);
+        monthNum = parsed.month;
+        dayNum = parsed.day;
+    }
+
+    if (monthNum) member.dobMonth = monthNum;
+    if (dayNum) member.dobDay = dayNum;
+
+    return member;
 }
 
 export function sanitizeUser(raw: any): User {
@@ -147,6 +194,7 @@ export function sanitizeSettings(raw: any): Settings {
         orgEmail: sanitizeString(raw.orgEmail),
         charityNumber: sanitizeString(raw.charityNumber),
         signatureImage: raw.signatureImage ? sanitizeString(raw.signatureImage) : undefined,
+        annualLevyAmount: typeof raw.annualLevyAmount === 'number' && !isNaN(raw.annualLevyAmount) ? raw.annualLevyAmount : 0,
     }
 }
 

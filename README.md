@@ -53,6 +53,10 @@ ALTER TABLE public.members ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS city text;
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS province text;
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS profession text;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS dob_month int;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS dob_day int;
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS created_at timestamp with time zone default timezone('utc'::text, now());
 
 -- 3. Create Financial Entries Table
@@ -260,6 +264,131 @@ create index if not exists idx_pledge_payments_pledge_id on public.harvest_pledg
 create index if not exists idx_pledge_payments_payment_id on public.harvest_pledge_payments(payment_entry_id);
 create index if not exists idx_pledge_payments_date on public.harvest_pledge_payments(payment_date);
 ```
+
+### Member Levies (Annual Harvest Levy)
+Apply a fixed yearly levy to all active members on January 1st. Unpaid balances carry forward.
+
+**Step 1: Create member levies table**
+```sql
+create table if not exists public.member_levies (
+  id text primary key, -- "<member_id>-<year>" for easy upserts
+  member_id uuid references public.members(id) on delete cascade,
+  year int not null,
+  base_amount numeric not null, -- levy set for this year
+  carry_over numeric default 0,  -- unpaid from previous year
+  remaining numeric not null,    -- base_amount + carry_over - payments
+  class_number text,
+  group_name text,
+  created_at timestamptz default now(),
+  unique(member_id, year)
+);
+```
+
+**Step 2: Enable Row Level Security**
+```sql
+alter table public.member_levies enable row level security;
+create policy "Enable all access for anon users" on public.member_levies 
+  for all using (true) with check (true);
+```
+
+**Step 3: Indexes**
+```sql
+create index if not exists idx_member_levies_member_year on public.member_levies(member_id, year);
+create index if not exists idx_member_levies_year on public.member_levies(year);
+```
+
+Notes:
+- Use the Utilities tab → Annual Harvest Levy to set the amount and generate levies for the current year.
+- Payments saved as `harvest-levy` entries automatically reduce the member's `remaining` for the corresponding year.
+- Carryover: When generating a new year, previous year's `remaining` is added to `carry_over` and included in the new `remaining`.
+
+### Automatic Weekly Backups (Entries → CSV → Email)
+To automatically export the `entries` table every Sunday morning, set up a Supabase Edge Function + Schedule:
+
+**Step A: Create Storage bucket (one time)**
+```sql
+-- In SQL Editor
+select storage.create_bucket('backups', public := false);
+```
+
+**Step B: Deploy Edge Function**
+- Ensure you have Supabase CLI installed and project linked.
+- Function code is in `supabase/functions/weekly-export/index.ts`.
+
+```bash
+# Install CLI (if needed)
+npm i -g supabase
+
+# Link your project (replace with your ref)
+supabase link --project-ref YOUR_PROJECT_REF
+
+# Deploy the function
+supabase functions deploy weekly-export
+
+# Set required secrets
+supabase secrets set \
+  SUPABASE_URL=YOUR_SUPABASE_URL \
+  SUPABASE_SERVICE_KEY=YOUR_SERVICE_ROLE_KEY \
+  BACKUP_BUCKET=backups \
+  BACKUP_EMAIL=you@example.com \
+  RESEND_API_KEY=YOUR_RESEND_KEY \
+  FROM_EMAIL="GMCT Backups <no-reply@example.com>"
+```
+
+**Step C: Schedule the function (EST)**
+Supabase schedules run in UTC. For 6:00 AM every Sunday in EST, use 11:00 UTC:
+```bash
+supabase functions schedule create weekly-export --cron "0 11 * * 0"
+```
+
+Daylight Saving Time note (EDT): 6:00 AM EDT corresponds to 10:00 UTC. If you need exactly 6:00 AM year‑round, update the schedule at DST changes:
+```bash
+# Switch to EDT (summer)
+supabase functions schedule update weekly-export --cron "0 10 * * 0"
+
+# Switch back to EST (winter)
+supabase functions schedule update weekly-export --cron "0 11 * * 0"
+```
+
+Notes:
+- The function uploads a dated CSV (e.g., `entries_YYYY-MM-DD.csv`) to the `backups` bucket and emails a 7-day signed URL.
+- Use a dedicated email provider API key (e.g., Resend). Update recipients via `BACKUP_EMAIL` secret.
+- For permanent retention, download the CSV or configure Storage lifecycle rules.
+
+### Wesley Hall Rentals (Receipts)
+Record amounts received from Wesley Hall rentals in a dedicated table.
+
+**Step 1: Create table**
+```sql
+create table if not exists public.wesley_hall_receipts (
+  id uuid primary key default uuid_generate_v4(),
+  date date not null,
+  amount numeric not null,
+  notes text,
+  created_by text,
+  updated_by text,
+  last_updated timestamptz,
+  deleted boolean default false,
+  created_at timestamptz default timezone('utc'::text, now())
+);
+```
+
+**Step 2: Enable Row Level Security**
+```sql
+alter table public.wesley_hall_receipts enable row level security;
+create policy "Enable all access for anon users" on public.wesley_hall_receipts
+  for all using (true) with check (true);
+```
+
+**Step 3: Indexes**
+```sql
+create index if not exists idx_wesley_hall_date on public.wesley_hall_receipts(date);
+create index if not exists idx_wesley_hall_deleted on public.wesley_hall_receipts(deleted);
+```
+
+Notes:
+- Use the Wesley Hall tab to add receipts, view totals to date, and see monthly trend.
+- Deleting a receipt removes it from the table; consider soft delete for audit by setting `deleted = true` if needed.
 
 ## Part 2: User Roles Definition
 

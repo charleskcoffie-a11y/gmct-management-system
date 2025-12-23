@@ -89,6 +89,96 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 />
                             </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="dobMonth" className="block font-medium text-gray-700">Birth Month</label>
+                                <select
+                                    id="dobMonth"
+                                    name="dobMonth"
+                                    value={formData.dobMonth || ''}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                >
+                                    <option value="">Select month</option>
+                                    <option value={1}>January</option>
+                                    <option value={2}>February</option>
+                                    <option value={3}>March</option>
+                                    <option value={4}>April</option>
+                                    <option value={5}>May</option>
+                                    <option value={6}>June</option>
+                                    <option value={7}>July</option>
+                                    <option value={8}>August</option>
+                                    <option value={9}>September</option>
+                                    <option value={10}>October</option>
+                                    <option value={11}>November</option>
+                                    <option value={12}>December</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="dobDay" className="block font-medium text-gray-700">Birth Day</label>
+                                <input
+                                    id="dobDay"
+                                    name="dobDay"
+                                    type="number"
+                                    min={1}
+                                    max={31}
+                                    placeholder="e.g. 15"
+                                    value={formData.dobDay || ''}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">We store month and day only.</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="email" className="block font-medium text-gray-700">Email</label>
+                                <input
+                                    id="email"
+                                    name="email"
+                                    type="email"
+                                    placeholder="example@domain.com"
+                                    value={formData.email || ''}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="phone" className="block font-medium text-gray-700">Phone Number</label>
+                                <input
+                                    id="phone"
+                                    name="phone"
+                                    type="tel"
+                                    placeholder="e.g. (555) 123-4567"
+                                    value={formData.phone || ''}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="profession" className="block font-medium text-gray-700">Profession</label>
+                            <div className="flex gap-2">
+                                <input
+                                    id="profession"
+                                    name="profession"
+                                    type="text"
+                                    placeholder="e.g. Teacher"
+                                    value={formData.profession || ''}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData(prev => ({ ...prev, profession: 'Retired' }))}
+                                    className="mt-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-3 rounded-md"
+                                    title="Quick set to Retired"
+                                >
+                                    Retired
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">You can enter any profession or click Retired.</p>
+                        </div>
                         <div>
                             <label htmlFor="address" className="block font-medium text-gray-700">Address</label>
                             <input

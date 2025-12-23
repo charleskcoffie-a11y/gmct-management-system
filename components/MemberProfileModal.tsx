@@ -114,9 +114,23 @@ const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ member, entries
                             </div>
                             <div>
                                 <h2 className="text-3xl font-bold mb-2">{sanitizeString(member.name)}</h2>
-                                <div className="flex gap-3 text-sm">
+                                <div className="flex flex-wrap gap-2 text-sm">
                                     <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">Class {member.classNumber || 'N/A'}</span>
                                     <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">Member #{member.memberNumber || 'N/A'}</span>
+                                    {member.email && (
+                                        <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">📧 {member.email}</span>
+                                    )}
+                                    {member.phone && (
+                                        <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">📞 {member.phone}</span>
+                                    )}
+                                    {member.profession && (
+                                        <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">💼 {member.profession}</span>
+                                    )}
+                                    {member.dobMonth && member.dobDay && (
+                                        <span className="bg-white/20 backdrop-blur px-3 py-1 rounded-full font-semibold">
+                                            🎂 {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][member.dobMonth-1]} {member.dobDay}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -408,6 +408,38 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                             Member #
                                         </div>
                                     </th>
+                                    <th className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M2.94 6.94a2.5 2.5 0 013.54 0L10 10.46l3.52-3.52a2.5 2.5 0 113.54 3.54l-5.26 5.26a3 3 0 01-4.24 0L2.94 10.48a2.5 2.5 0 010-3.54z" />
+                                            </svg>
+                                            Email
+                                        </div>
+                                    </th>
+                                    <th className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M2 3a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-.293.707L4.414 7.414a13.97 13.97 0 006.172 6.172l1.707-1.293A1 1 0 0113 12h2a1 1 0 011 1v2a1 1 0 01-1 1h-2C5.477 16 0 10.523 0 4V3a1 1 0 011-1z" clipRule="evenodd" />
+                                            </svg>
+                                            Phone
+                                        </div>
+                                    </th>
+                                    <th className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 00-1-1H6zm8 3H6V3h8v2z" />
+                                            </svg>
+                                            Profession
+                                        </div>
+                                    </th>
+                                    <th className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M6 2a1 1 0 011-1h6a1 1 0 011 1v3h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1h3V2zm1 4V3h6v3H7z" clipRule="evenodd" />
+                                            </svg>
+                                            Birthday
+                                        </div>
+                                    </th>
                                     <th className="px-8 py-5">Status</th>
                                     <th className="px-8 py-5 text-right">Actions</th>
                                 </tr>
@@ -435,10 +467,21 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-slate-800 font-semibold text-base">{sanitizeString(member.memberNumber) || '-'}</td>
+                                        <td className="px-8 py-5 text-slate-800 text-base">{sanitizeString(member.email) || '-'}</td>
+                                        <td className="px-8 py-5 text-slate-800 text-base">{sanitizeString(member.phone) || '-'}</td>
+                                        <td className="px-8 py-5 text-slate-800 text-base">{sanitizeString(member.profession) || '-'}</td>
                                         <td className="px-8 py-5">
                                             <span className={`px-3 py-1 rounded-full text-sm font-bold ${member.active === false ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                 {member.active === false ? 'Inactive' : 'Active'}
                                             </span>
+                                        </td>
+                                        <td className="px-8 py-5 text-slate-800 text-base">
+                                            {(() => {
+                                                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                                const m = member.dobMonth;
+                                                const d = member.dobDay;
+                                                return m && d ? `${months[m-1]} ${d}` : '-';
+                                            })()}
                                         </td>
                                         <td className="px-8 py-5 text-right">
                                             <div className="flex justify-end gap-2">

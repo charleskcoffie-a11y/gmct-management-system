@@ -5,6 +5,7 @@ import type { Entry, Member, Settings, WeeklyHistoryRecord, DevelopmentFundEntry
 import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeMember } from '../utils';
 import { DownloadIcon, UploadIcon } from './icons';
 import BackupSettings from './BackupSettings';
+import { generateMemberLeviesForYear, loadMemberLeviesForYear } from '../services/supabase';
 
 interface UtilitiesProps {
     entries: Entry[];
@@ -21,6 +22,8 @@ interface UtilitiesProps {
 const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, developmentFund, settings, setEntries, setMembers, setSettings, setDevelopmentFund }) => {
     const today = new Date().toISOString().slice(0, 10);
     const [showBackupSettings, setShowBackupSettings] = useState(false);
+    const [levyAmount, setLevyAmount] = useState<number>(settings.annualLevyAmount || 0);
+    const [outstandingLevies, setOutstandingLevies] = useState<Array<{ memberID: string; year: number; baseAmount: number; carryOver: number; remaining: number; classNumber?: string }>>([]);
 
     // --- Helpers for Filtering ---
     const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -68,19 +71,24 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
     };
 
     const exportMembers = () => {
-        // Export specific columns that match the import template
+        // Export columns including contact and profession
         const exportData = members.map(m => ({
             name: m.name,
             classNumber: m.classNumber || '',
             memberNumber: m.memberNumber || '',
             address: m.address || '',
+            email: m.email || '',
+            phone: m.phone || '',
+            profession: m.profession || '',
+            dobMonth: typeof m.dobMonth === 'number' ? m.dobMonth : '',
+            dobDay: typeof m.dobDay === 'number' ? m.dobDay : '',
             id: m.id // Optional: Useful for system admin, ignored during import if not needed
         }));
         generateAndDownloadCsv(exportData, `Members_Directory_${today}.csv`);
     };
 
     const downloadMemberTemplate = () => {
-        const headers = "name,classNumber,memberNumber,address";
+        const headers = "name,classNumber,memberNumber,address,email,phone,profession,dobMonth,dobDay";
         const blob = new Blob([headers], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -88,6 +96,60 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
         link.click();
         URL.revokeObjectURL(link.href);
     }
+
+    // --- Annual Harvest Levy ---
+    const currentYear = new Date().getUTCFullYear();
+    const activeMembersCount = useMemo(() => members.filter(m => m.active !== false).length, [members]);
+
+    const handleSaveLevyAmount = () => {
+        if (levyAmount < 0) {
+            alert('Levy amount must be zero or greater.');
+            return;
+        }
+        setSettings(prev => ({ ...prev, annualLevyAmount: levyAmount }));
+        alert('Annual levy amount saved.');
+    };
+
+    const handleGenerateLevies = async () => {
+        if (!settings.supabaseUrl || !settings.supabaseKey) {
+            alert('Supabase is not configured. Please add URL/Key in Settings.');
+            return;
+        }
+        if (!levyAmount || levyAmount <= 0) {
+            alert('Please set a valid annual levy amount (> 0).');
+            return;
+        }
+        try {
+            const res = await generateMemberLeviesForYear(settings.supabaseUrl, settings.supabaseKey, currentYear, levyAmount);
+            alert(`Member levies generated for ${currentYear}. Created: ${res.created}, Updated: ${res.updated}.`);
+        } catch (e: any) {
+            console.error(e);
+            alert(`Failed to generate levies: ${e.message || 'Unknown error'}`);
+        }
+    };
+
+    const handleLoadOutstandingLevies = async () => {
+        if (!settings.supabaseUrl || !settings.supabaseKey) {
+            alert('Supabase is not configured. Please add URL/Key in Settings.');
+            return;
+        }
+        try {
+            const levies = await loadMemberLeviesForYear(settings.supabaseUrl, settings.supabaseKey, currentYear);
+            const outstanding = levies.filter(l => (l.remaining || 0) > 0);
+            // Map to minimal shape for display
+            setOutstandingLevies(outstanding.map(l => ({
+                memberID: l.memberID,
+                year: l.year,
+                baseAmount: l.baseAmount,
+                carryOver: l.carryOver,
+                remaining: l.remaining,
+                classNumber: l.classNumber,
+            })));
+        } catch (e: any) {
+            console.error(e);
+            alert(`Failed to load outstanding levies: ${e.message || 'Unknown error'}`);
+        }
+    };
     
     // Weekly History export moved to Reports tab
 
@@ -329,6 +391,140 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                                 ✓ Backs up Entries & Development Fund tables as JSON
                             </p>
                         </div>
+                    </div>
+                </div>
+
+                {/* Annual Harvest Levy */}
+                <div className="bg-gradient-to-br from-slate-50 to-zinc-50 rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-slate-700 to-zinc-700 p-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            🌾 Annual Harvest Levy
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-slate-600 font-medium">Set a yearly levy amount applied to all active members starting January 1st. Unpaid balances carry forward to the next year automatically when levies are generated.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Levy Amount ({settings.currency})</label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    value={levyAmount}
+                                    onChange={e => setLevyAmount(parseFloat(e.target.value))}
+                                    className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                />
+                                <p className="text-xs text-slate-500 mt-2">Active members: {activeMembersCount}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Target Year</label>
+                                <input
+                                    type="text"
+                                    value={currentYear}
+                                    disabled
+                                    className="w-full rounded-lg border-2 border-slate-300 bg-slate-100 px-3 py-2"
+                                />
+                                <p className="text-xs text-slate-500 mt-2">Levy starts on Jan 1 {currentYear}.</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-4 pt-2">
+                            <button
+                                onClick={handleSaveLevyAmount}
+                                className="flex-1 min-w-[140px] bg-white hover:bg-slate-50 text-slate-800 font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all border-2 border-slate-300"
+                            >
+                                💾 Save Levy Amount
+                            </button>
+                            <button
+                                onClick={handleGenerateLevies}
+                                className="flex-1 min-w-[180px] bg-gradient-to-br from-slate-700 to-zinc-700 hover:from-slate-800 hover:to-zinc-800 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-slate-500"
+                            >
+                                ⚙️ Generate Levies for {currentYear}
+                            </button>
+                        </div>
+                        <div className="pt-3 border-t-2 border-slate-100">
+                            <p className="text-xs text-slate-500 font-medium">Payments recorded as Harvest Levy reduce each member's remaining balance for the current year.</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Outstanding Levy Report */}
+                <div className="bg-gradient-to-br from-sky-50 to-indigo-50 rounded-xl shadow-lg border-2 border-sky-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-sky-600 to-indigo-600 p-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            📊 Outstanding Levy (Current Year)
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-slate-600 font-medium">View members who still owe their annual levy for {currentYear}. Paid amounts are computed from base + carryover minus current remaining.</p>
+                        <div className="flex flex-wrap gap-4">
+                            <button
+                                onClick={handleLoadOutstandingLevies}
+                                className="flex-1 min-w-[180px] bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-sky-400"
+                            >
+                                🔄 Load Outstanding Levies
+                            </button>
+                            {outstandingLevies.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        const rows = outstandingLevies.map(l => {
+                                            const m = membersById.get(l.memberID);
+                                            const paid = (l.baseAmount + (l.carryOver || 0)) - l.remaining;
+                                            return {
+                                                Member: m ? m.name : 'Unknown',
+                                                Class: l.classNumber || (m?.classNumber || ''),
+                                                Year: l.year,
+                                                Base: l.baseAmount,
+                                                CarryOver: l.carryOver || 0,
+                                                Paid: paid,
+                                                Remaining: l.remaining,
+                                            };
+                                        });
+                                        generateAndDownloadCsv(rows, `Outstanding_Levy_${currentYear}.csv`);
+                                    }}
+                                    className="flex-1 min-w-[160px] bg-white hover:bg-sky-50 text-sky-700 font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all border-2 border-sky-300"
+                                >
+                                    ⬇️ Export CSV
+                                </button>
+                            )}
+                        </div>
+
+                        {outstandingLevies.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-slate-200 bg-white rounded-lg border-2 border-slate-200">
+                                    <thead className="bg-slate-100">
+                                        <tr>
+                                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-700">Member</th>
+                                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-700">Class</th>
+                                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-700">Base</th>
+                                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-700">Carry Over</th>
+                                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-700">Paid</th>
+                                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-700">Remaining</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200">
+                                        {outstandingLevies
+                                            .slice()
+                                            .sort((a, b) => b.remaining - a.remaining)
+                                            .map((l, idx) => {
+                                                const m = membersById.get(l.memberID);
+                                                const paid = (l.baseAmount + (l.carryOver || 0)) - l.remaining;
+                                                return (
+                                                    <tr key={`${l.memberID}-${idx}`} className="hover:bg-slate-50">
+                                                        <td className="px-4 py-2 text-sm text-slate-800">{m ? m.name : 'Unknown'}</td>
+                                                        <td className="px-4 py-2 text-sm text-slate-800">{l.classNumber || (m?.classNumber || '')}</td>
+                                                        <td className="px-4 py-2 text-sm text-slate-800">{l.baseAmount.toFixed(2)}</td>
+                                                        <td className="px-4 py-2 text-sm text-slate-800">{(l.carryOver || 0).toFixed(2)}</td>
+                                                        <td className="px-4 py-2 text-sm text-slate-800">{paid.toFixed(2)}</td>
+                                                        <td className="px-4 py-2 text-sm font-semibold text-rose-700">{l.remaining.toFixed(2)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-500">No outstanding levy records loaded yet.</p>
+                        )}
                     </div>
                 </div>
                 

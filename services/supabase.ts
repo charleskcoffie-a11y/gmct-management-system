@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -78,6 +78,11 @@ const mapMemberToDB = (m: Member) => ({
     class_number: m.classNumber,
     member_number: m.memberNumber,
     address: m.address,
+    email: m.email,
+    profession: m.profession,
+    phone: m.phone,
+    dob_month: typeof m.dobMonth === 'number' ? m.dobMonth : null,
+    dob_day: typeof m.dobDay === 'number' ? m.dobDay : null,
     active: typeof m.active === 'boolean' ? m.active : true,
     created_at: m.createdAt || new Date().toISOString() // Ensure never empty
 });
@@ -88,6 +93,11 @@ const mapMemberFromDB = (m: any): Member => ({
     classNumber: m.class_number,
     memberNumber: m.member_number,
     address: m.address,
+    email: m.email,
+    profession: m.profession,
+    phone: m.phone,
+    dobMonth: typeof m.dob_month === 'number' ? m.dob_month : undefined,
+    dobDay: typeof m.dob_day === 'number' ? m.dob_day : undefined,
     active: typeof m.active === 'boolean' ? m.active : true,
     createdAt: m.created_at
 });
@@ -287,6 +297,29 @@ export const saveEntryToSupabase = async (url: string, key: string, entry: Entry
     
     const { error } = await supabase.from('entries').upsert([mapEntryToDB(entry)]);
     if (error) throw new Error(`Save entry failed: ${error.message}`);
+
+    // For harvest levy payments, reduce the member's annual levy remaining for that year
+    try {
+        if (entry.type === 'harvest-levy' && entry.memberID && entry.date) {
+            const year = new Date(entry.date).getUTCFullYear();
+            const { data: levyRows } = await supabase
+                .from('member_levies')
+                .select('id, remaining')
+                .eq('member_id', entry.memberID)
+                .eq('year', year)
+                .limit(1);
+            if (levyRows && levyRows.length > 0) {
+                const currentRemaining = parseFloat(levyRows[0].remaining || 0);
+                const newRemaining = Math.max(currentRemaining - entry.amount, 0);
+                await supabase
+                    .from('member_levies')
+                    .update({ remaining: newRemaining })
+                    .eq('id', levyRows[0].id);
+            }
+        }
+    } catch (e) {
+        console.warn('Levy reduction failed or table not present:', e);
+    }
     return { success: true };
 };
 
@@ -481,4 +514,192 @@ export const loadHarvestPledgesFromSupabase = async (url: string, key: string): 
     }
     
     return (data || []).map(mapHarvestPledgeFromDB);
+};
+
+// --- Member Levy (Annual Harvest Levy) ---
+
+interface MemberLevyDB {
+    id: string;
+    member_id: string;
+    year: number;
+    base_amount: number; // annual levy amount for the year
+    carry_over: number;  // unpaid from previous year
+    remaining: number;   // base_amount + carry_over - payments
+    class_number?: string;
+    group_name?: string;
+    created_at: string;
+}
+
+export interface MemberLevy {
+    id: string;
+    memberID: string;
+    year: number;
+    baseAmount: number;
+    carryOver: number;
+    remaining: number;
+    classNumber?: string;
+    groupName?: string;
+    createdAt?: string;
+}
+
+const mapMemberLevyToDB = (l: MemberLevy): MemberLevyDB => ({
+    id: l.id,
+    member_id: l.memberID,
+    year: l.year,
+    base_amount: l.baseAmount,
+    carry_over: l.carryOver,
+    remaining: l.remaining,
+    class_number: l.classNumber,
+    group_name: l.groupName,
+    created_at: l.createdAt || new Date().toISOString(),
+});
+
+const mapMemberLevyFromDB = (l: any): MemberLevy => ({
+    id: l.id,
+    memberID: l.member_id,
+    year: l.year,
+    baseAmount: parseFloat(l.base_amount),
+    carryOver: parseFloat(l.carry_over || 0),
+    remaining: parseFloat(l.remaining),
+    classNumber: l.class_number,
+    groupName: l.group_name,
+    createdAt: l.created_at,
+});
+
+export const loadMemberLeviesForYear = async (url: string, key: string, year: number): Promise<MemberLevy[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('member_levies')
+        .select('*')
+        .eq('year', year);
+    if (error) {
+        console.warn('Load member levies failed:', error.message);
+        return [];
+    }
+    return (data || []).map(mapMemberLevyFromDB);
+};
+
+export const upsertMemberLevies = async (url: string, key: string, levies: MemberLevy[]): Promise<{ success: boolean }> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    if (!levies || levies.length === 0) return { success: true };
+    const { error } = await supabase
+        .from('member_levies')
+        .upsert(levies.map(mapMemberLevyToDB));
+    if (error) throw new Error(`Upsert member levies failed: ${error.message}`);
+    return { success: true };
+};
+
+export const generateMemberLeviesForYear = async (
+    url: string,
+    key: string,
+    year: number,
+    annualAmount: number
+): Promise<{ success: boolean; created: number; updated: number }> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    if (!annualAmount || annualAmount <= 0) throw new Error('Annual levy amount must be greater than 0');
+
+    // Load active members
+    const { data: membersDB, error: memErr } = await supabase
+        .from('members')
+        .select('id, class_number, active');
+    if (memErr) throw new Error(`Fetch members failed: ${memErr.message}`);
+    const activeMembers = (membersDB || []).filter((m: any) => m.active !== false);
+
+    // Load previous year levies
+    const { data: prevLeviesDB } = await supabase
+        .from('member_levies')
+        .select('member_id, remaining')
+        .eq('year', year - 1);
+    const prevRemaining = new Map<string, number>();
+    (prevLeviesDB || []).forEach((l: any) => prevRemaining.set(l.member_id, parseFloat(l.remaining || 0)));
+
+    // Load existing current year levies to detect updates
+    const { data: currLeviesDB } = await supabase
+        .from('member_levies')
+        .select('member_id')
+        .eq('year', year);
+    const existingSet = new Set<string>((currLeviesDB || []).map((l: any) => l.member_id));
+
+    const levies: MemberLevy[] = activeMembers.map((m: any) => {
+        const carry = prevRemaining.get(m.id) || 0;
+        const total = annualAmount + carry;
+        return {
+            id: `${m.id}-${year}`,
+            memberID: m.id,
+            year,
+            baseAmount: annualAmount,
+            carryOver: carry,
+            remaining: total,
+            classNumber: m.class_number,
+        };
+    });
+
+    await upsertMemberLevies(url, key, levies);
+    const created = levies.filter(l => !existingSet.has(l.memberID)).length;
+    const updated = levies.length - created;
+    return { success: true, created, updated };
+};
+
+// --- Wesley Hall Receipts ---
+
+const mapWesleyHallToDB = (r: WesleyHallReceipt) => ({
+    id: r.id,
+    date: r.date,
+    amount: r.amount,
+    notes: r.notes,
+    created_by: r.createdBy,
+    updated_by: r.updatedBy,
+    last_updated: toTimestamp(r.lastUpdated),
+    deleted: r.deleted,
+    created_at: r.createdAt || new Date().toISOString(),
+});
+
+const mapWesleyHallFromDB = (r: any): WesleyHallReceipt => ({
+    id: r.id,
+    date: r.date,
+    amount: parseFloat(r.amount),
+    notes: r.notes,
+    createdBy: r.created_by,
+    updatedBy: r.updated_by,
+    lastUpdated: r.last_updated,
+    deleted: r.deleted,
+    createdAt: r.created_at,
+});
+
+export const loadWesleyHallReceipts = async (url: string, key: string): Promise<WesleyHallReceipt[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('wesley_hall_receipts')
+        .select('*')
+        .order('date', { ascending: false });
+    if (error) {
+        console.warn('Load Wesley Hall receipts failed:', error.message);
+        return [];
+    }
+    return (data || []).map(mapWesleyHallFromDB);
+};
+
+export const saveWesleyHallReceipt = async (url: string, key: string, receipt: WesleyHallReceipt) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('wesley_hall_receipts')
+        .upsert([mapWesleyHallToDB(receipt)]);
+    if (error) throw new Error(`Save Wesley Hall receipt failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteWesleyHallReceipt = async (url: string, key: string, id: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('wesley_hall_receipts')
+        .delete()
+        .eq('id', id);
+    if (error) throw new Error(`Delete Wesley Hall receipt failed: ${error.message}`);
+    return { success: true };
 };

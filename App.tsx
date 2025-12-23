@@ -21,6 +21,7 @@ import HarvestPledges from './components/HarvestPledges';
 import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import TaxReceipts from './components/TaxReceipts';
+import WesleyHall from './components/WesleyHall';
 import { ToastProvider } from './components/ToastProvider';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -822,6 +823,14 @@ const App: React.FC = () => {
                         settings={settings}
                     />
                 );
+            case 'wesley-hall':
+                return (
+                    <WesleyHall
+                        settings={settings}
+                        currentUser={currentUser}
+                        syncStatus={syncStatus}
+                    />
+                );
             // 'history' moved under Reports tab
             case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} syncStatus={syncStatus} />;
@@ -855,6 +864,7 @@ const App: React.FC = () => {
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
         { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
         { id: 'reports', label: 'Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'] },
+        { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
         { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
         { id: 'users', label: 'Manage Users', roles: ['admin'] },
         { id: 'utilities', label: 'Utilities', roles: ['admin'] },
@@ -886,7 +896,7 @@ const App: React.FC = () => {
                 )}
                 <main className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     <aside className="lg:col-span-1 no-print">
-                        <nav className="relative overflow-hidden rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900 no-print">
+                        <nav className="relative overflow-y-auto max-h-[80vh] rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900 no-print">
                             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_40%),radial-gradient(ellipse_at_bottom_right,rgba(236,72,153,0.12),transparent_35%)]"></div>
                             <div className="relative space-y-3">
                                 <div className="mb-3 flex items-center justify-between">

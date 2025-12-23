@@ -66,6 +66,11 @@ export interface Member {
     classNumber?: string; // e.g. "1"
     memberNumber?: string; // e.g. "128"
     address?: string;
+    email?: string;
+    profession?: string; // e.g. "Retired" or free-text
+    phone?: string;
+    dobMonth?: number; // 1-12
+    dobDay?: number;   // 1-31
     active?: boolean;
     createdAt?: string;
 }
@@ -83,6 +88,7 @@ export interface Settings {
     orgEmail?: string;
     charityNumber?: string;
     signatureImage?: string; // Base64 or URL for authorized signature
+    annualLevyAmount?: number; // Annual Harvest Levy applied per member each year
 }
 
 export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician';
@@ -152,7 +158,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities' | 'tax-receipts';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall';
 
 export interface CloudState {
   ready: boolean;
@@ -175,4 +181,16 @@ export interface MonthLock {
     isLocked: boolean;
     lockedBy?: string;
     lockedAt?: string;
+}
+
+export interface WesleyHallReceipt {
+    id: string;
+    date: string; // ISO format YYYY-MM-DD
+    amount: number;
+    notes?: string;
+    createdBy?: string;
+    updatedBy?: string;
+    lastUpdated?: string; // ISO Timestamp
+    deleted?: boolean;
+    createdAt?: string; // ISO Timestamp
 }
