@@ -1,19 +1,28 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Member, Settings, User, AttendanceStatus, SyncStatus } from '../types';
-import { saveAttendanceToSupabase, loadAttendanceForDate } from '../services/supabase';
+import { saveAttendanceToSupabase, loadAttendanceForDate, loadAttendanceReport, saveMemberToSupabase as saveMemberToSupabaseFn } from '../services/supabase';
+import MemberModal from './MemberModal';
+import { useToast } from './ToastProvider';
 
 interface ClassAttendanceProps {
     members: Member[];
+    setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
     settings: Settings;
     currentUser: User;
     syncStatus?: SyncStatus;
 }
-
-const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, currentUser, syncStatus }) => {
+const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, settings, currentUser, syncStatus }) => {
+    const { showToast } = useToast();
+    // Base date selector; we will snap it to the week start (Sunday)
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
     const [attendance, setAttendance] = useState<Map<string, AttendanceStatus>>(new Map());
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isAlertOpen, setIsAlertOpen] = useState(false);
+    const [alertType, setAlertType] = useState<'month' | 'quarter' | null>(null);
+    const [alertList, setAlertList] = useState<Array<{ memberId: string; name: string; phone?: string; weeksAbsent: number; selected: boolean }>>([]);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editMember, setEditMember] = useState<Member | null>(null);
 
     const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
@@ -24,19 +33,65 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
         return members.filter(m => m.classNumber === assignedClass && m.active !== false).sort((a, b) => a.name.localeCompare(b.name));
     }, [members, currentUser]);
 
-    // Load existing attendance for selected date
+    // Helper: compute week start (Sunday) and end (Saturday) for a given ISO date string
+    const getWeekStart = (isoDate: string) => {
+        const d = new Date(isoDate + 'T00:00:00');
+        const day = d.getUTCDay(); // 0=Sun,6=Sat
+        const start = new Date(d);
+        start.setUTCDate(d.getUTCDate() - day);
+        return start.toISOString().slice(0, 10);
+    };
+    const getWeekEnd = (isoDate: string) => {
+        const startStr = getWeekStart(isoDate);
+        const start = new Date(startStr + 'T00:00:00');
+        const end = new Date(start);
+        end.setUTCDate(start.getUTCDate() + 6);
+        return end.toISOString().slice(0, 10);
+    };
+    const currentWeekStart = getWeekStart(new Date().toISOString().slice(0, 10));
+    const selectedWeekStart = getWeekStart(selectedDate);
+    const selectedWeekEnd = getWeekEnd(selectedDate);
+    const isCurrentWeek = selectedWeekStart === currentWeekStart;
+
+    // Helpers for month/quarter ranges (calendar based, ending at current week end)
+    const getMonthStart = (isoDate: string) => {
+        const d = new Date(isoDate + 'T00:00:00');
+        const ms = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+        return ms.toISOString().slice(0, 10);
+    };
+    const getQuarterStart = (isoDate: string) => {
+        const d = new Date(isoDate + 'T00:00:00');
+        const q = Math.floor(d.getUTCMonth() / 3); // 0..3
+        const qs = new Date(Date.UTC(d.getUTCFullYear(), q * 3, 1));
+        return qs.toISOString().slice(0, 10);
+    };
+
+    // Load existing attendance for selected week (store as a single record per member using date = weekStart)
     useEffect(() => {
-        if (!isConnected || !selectedDate) return;
-        loadAttendanceForDate(settings.supabaseUrl, settings.supabaseKey, selectedDate)
+        if (!isConnected || !selectedWeekStart) return;
+        loadAttendanceForDate(settings.supabaseUrl, settings.supabaseKey, selectedWeekStart)
             .then(records => {
                 const map = new Map<string, AttendanceStatus>();
-                records.forEach(r => map.set(r.member_id, r.status as AttendanceStatus));
+                records.forEach(r => map.set(r.member_id, (r.status as AttendanceStatus) || 'absent'));
                 setAttendance(map);
             })
             .catch(err => console.error('Load attendance failed:', err));
-    }, [selectedDate, isConnected, settings.supabaseUrl, settings.supabaseKey]);
+    }, [selectedWeekStart, isConnected, settings.supabaseUrl, settings.supabaseKey]);
+
+    // Default all members to 'absent' for the selected week (fills gaps for new members or no prior data)
+    useEffect(() => {
+        if (classMembers.length === 0) return;
+        setAttendance(prev => {
+            const next = new Map(prev);
+            classMembers.forEach(m => {
+                if (!next.has(m.id)) next.set(m.id, 'absent');
+            });
+            return next;
+        });
+    }, [classMembers, selectedWeekStart]);
 
     const handleStatusChange = (memberId: string, status: AttendanceStatus) => {
+        if (!isCurrentWeek) return; // prevent editing past/future weeks
         setAttendance(prev => new Map(prev).set(memberId, status));
     };
 
@@ -48,7 +103,8 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
         setIsSaving(true);
         try {
             const records = Array.from(attendance.entries()).map(([member_id, status]) => ({
-                date: selectedDate,
+                // Persist weekly attendance using the week start (Sunday) as the record date
+                date: selectedWeekStart,
                 member_id,
                 status,
             }));
@@ -64,11 +120,43 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
 
     const stats = useMemo(() => {
         const present = Array.from(attendance.values()).filter(s => s === 'present').length;
-        const absent = Array.from(attendance.values()).filter(s => s === 'absent').length;
-        const sick = Array.from(attendance.values()).filter(s => s === 'sick').length;
-        const travel = Array.from(attendance.values()).filter(s => s === 'travel').length;
-        return { present, absent, sick, travel, total: classMembers.length };
+        const absent = classMembers.length - present;
+        return { present, absent, total: classMembers.length };
     }, [attendance, classMembers]);
+
+    const handleSaveMemberLimited = async (updated: Member) => {
+        if (!isConnected) {
+            alert('Writes are disabled until connected to the cloud.');
+            return;
+        }
+        // Only allow edits for members in assigned class
+        const assignedClass = currentUser.assignedClass || currentUser.classLed;
+        const original = members.find(m => m.id === updated.id);
+        if (!original || original.classNumber !== assignedClass) {
+            showToast('You can only edit members in your class.', 'error', 3500);
+            setIsEditModalOpen(false);
+            setEditMember(null);
+            return;
+        }
+        // Restrict to allowed fields
+        const toSave: Member = {
+            ...original,
+            name: updated.name,
+            email: updated.email,
+            phone: updated.phone,
+            address: updated.address,
+        };
+        try {
+            await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, toSave);
+            setMembers(prev => prev.map(m => m.id === toSave.id ? toSave : m));
+            showToast(`✅ ${toSave.name} contact updated`, 'success', 3000);
+        } catch (e: any) {
+            showToast(`❌ Failed to save: ${e.message || e}`, 'error', 4000);
+        } finally {
+            setIsEditModalOpen(false);
+            setEditMember(null);
+        }
+    };
 
     if (!currentUser.assignedClass && !currentUser.classLed) {
         return (
@@ -104,17 +192,44 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
                         <div>
                             <h2 className="text-3xl font-bold text-slate-800">Class Attendance</h2>
                             <p className="text-base text-slate-500 mt-1 font-medium">Class {currentUser.assignedClass || currentUser.classLed} • {classMembers.length} members</p>
+                            <p className="text-sm text-slate-500 mt-1">Week: {new Date(selectedWeekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric'})} – {new Date(selectedWeekEnd + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric'})} {isCurrentWeek ? '• Editing current week' : '• Read-only (past week)'}
+                            </p>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-indigo-100 to-blue-100 p-6 rounded-xl border-2 border-indigo-200 min-w-[200px]">
-                        <label className="block text-sm font-bold text-indigo-800 mb-2">Service Date</label>
-                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full border-2 border-indigo-300 rounded-lg py-3 px-4 font-bold text-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                    {/* Week navigation: previous/next week */}
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => {
+                                const start = new Date(selectedWeekStart + 'T00:00:00');
+                                start.setUTCDate(start.getUTCDate() - 7);
+                                setSelectedDate(start.toISOString().slice(0,10));
+                            }}
+                            className="bg-white border-2 border-indigo-300 text-indigo-700 px-4 py-3 rounded-xl font-bold hover:bg-indigo-50"
+                        >
+                            ← Prev Week
+                        </button>
+                        <div className="bg-gradient-to-br from-indigo-100 to-blue-100 p-4 rounded-xl border-2 border-indigo-200 min-w-[220px] text-center">
+                            <div className="text-sm font-bold text-indigo-800">Week of</div>
+                            <div className="font-bold text-lg">
+                                {new Date(selectedWeekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                const start = new Date(selectedWeekStart + 'T00:00:00');
+                                start.setUTCDate(start.getUTCDate() + 7);
+                                setSelectedDate(start.toISOString().slice(0,10));
+                            }}
+                            className="bg-white border-2 border-indigo-300 text-indigo-700 px-4 py-3 rounded-xl font-bold hover:bg-indigo-50"
+                        >
+                            Next Week →
+                        </button>
                     </div>
                 </div>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="bg-gradient-to-br from-green-400 to-emerald-500 p-5 rounded-xl shadow-lg text-white">
                     <div className="text-sm font-bold uppercase">Present</div>
                     <div className="text-3xl font-bold mt-1">{stats.present}</div>
@@ -123,18 +238,77 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
                     <div className="text-sm font-bold uppercase">Absent</div>
                     <div className="text-3xl font-bold mt-1">{stats.absent}</div>
                 </div>
-                <div className="bg-gradient-to-br from-orange-400 to-amber-500 p-5 rounded-xl shadow-lg text-white">
-                    <div className="text-sm font-bold uppercase">Sick</div>
-                    <div className="text-3xl font-bold mt-1">{stats.sick}</div>
-                </div>
-                <div className="bg-gradient-to-br from-blue-400 to-cyan-500 p-5 rounded-xl shadow-lg text-white">
-                    <div className="text-sm font-bold uppercase">Travel</div>
-                    <div className="text-3xl font-bold mt-1">{stats.travel}</div>
-                </div>
                 <div className="bg-gradient-to-br from-slate-600 to-slate-700 p-5 rounded-xl shadow-lg text-white">
                     <div className="text-sm font-bold uppercase">Total</div>
                     <div className="text-3xl font-bold mt-1">{stats.total}</div>
                 </div>
+            </div>
+
+            {/* Alerts */}
+            <div className="bg-white rounded-2xl shadow-lg border-2 border-slate-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-slate-800">Absence Alerts</h3>
+                    <div className="text-sm text-slate-500">Generate lists for follow-up</div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        onClick={async () => {
+                            if (!isConnected) return;
+                            setAlertType('month');
+                            const today = new Date().toISOString().slice(0,10);
+                            const start = getMonthStart(today);
+                            const end = getWeekEnd(today);
+                            const rows = await loadAttendanceReport(settings.supabaseUrl, settings.supabaseKey, start, end);
+                            // Build absent list: members with no 'present' in the period
+                            const byMember: Record<string, AttendanceStatus[]> = {};
+                            (rows || []).forEach(r => {
+                                byMember[r.member_id] ||= [];
+                                byMember[r.member_id].push(r.status as AttendanceStatus);
+                            });
+                            const list = classMembers
+                                .filter(m => {
+                                    const statuses = byMember[m.id] || [];
+                                    // Count weeks in range (approx by distinct week-start dates)
+                                    const presentAny = statuses.some(s => s === 'present');
+                                    return !presentAny; // absent entire period
+                                })
+                                .map(m => ({ memberId: m.id, name: m.name, phone: m.phone, weeksAbsent: (byMember[m.id]?.length || 0), selected: true }));
+                            setAlertList(list);
+                            setIsAlertOpen(true);
+                        }}
+                        className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-5 py-3 rounded-xl font-bold shadow hover:scale-105"
+                    >
+                        Generate Monthly Absentees
+                    </button>
+                    <button
+                        onClick={async () => {
+                            if (!isConnected) return;
+                            setAlertType('quarter');
+                            const today = new Date().toISOString().slice(0,10);
+                            const start = getQuarterStart(today);
+                            const end = getWeekEnd(today);
+                            const rows = await loadAttendanceReport(settings.supabaseUrl, settings.supabaseKey, start, end);
+                            const byMember: Record<string, AttendanceStatus[]> = {};
+                            (rows || []).forEach(r => {
+                                byMember[r.member_id] ||= [];
+                                byMember[r.member_id].push(r.status as AttendanceStatus);
+                            });
+                            const list = classMembers
+                                .filter(m => {
+                                    const statuses = byMember[m.id] || [];
+                                    const presentAny = statuses.some(s => s === 'present');
+                                    return !presentAny;
+                                })
+                                .map(m => ({ memberId: m.id, name: m.name, phone: m.phone, weeksAbsent: (byMember[m.id]?.length || 0), selected: true }));
+                            setAlertList(list);
+                            setIsAlertOpen(true);
+                        }}
+                        className="bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white px-5 py-3 rounded-xl font-bold shadow hover:scale-105"
+                    >
+                        Generate Quarterly Absentees
+                    </button>
+                </div>
+                <p className="text-slate-500 text-sm mt-3">Tip: Lists include members with no "present" for the period.</p>
             </div>
 
             {/* Member List */}
@@ -156,22 +330,30 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
                                         {member.phone && <div className="text-sm text-slate-500">{member.phone}</div>}
                                     </div>
                                     <div className="flex gap-2">
-                                        {(['present', 'absent', 'sick', 'travel'] as AttendanceStatus[]).map(status => (
+                                        {(['present', 'absent'] as AttendanceStatus[]).map(status => (
                                             <button
                                                 key={status}
                                                 onClick={() => handleStatusChange(member.id, status)}
+                                                disabled={!isCurrentWeek}
                                                 className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-all capitalize ${
                                                     attendance.get(member.id) === status
                                                         ? status === 'present' ? 'bg-green-500 text-white shadow-lg'
-                                                        : status === 'absent' ? 'bg-red-500 text-white shadow-lg'
-                                                        : status === 'sick' ? 'bg-orange-500 text-white shadow-lg'
-                                                        : 'bg-blue-500 text-white shadow-lg'
-                                                        : 'bg-white border-2 border-slate-300 text-slate-700 hover:border-slate-400'
+                                                        : 'bg-red-500 text-white shadow-lg'
+                                                        : (!isCurrentWeek ? 'bg-white border-2 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border-2 border-slate-300 text-slate-700 hover:border-slate-400')
                                                 }`}
                                             >
                                                 {status}
                                             </button>
                                         ))}
+                                        <button
+                                            onClick={() => {
+                                                setEditMember(member);
+                                                setIsEditModalOpen(true);
+                                            }}
+                                            className="py-2 px-3 rounded-lg font-bold text-sm bg-white border-2 border-indigo-300 text-indigo-700 hover:border-indigo-400"
+                                        >
+                                            Edit Contact
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -181,9 +363,9 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
                 <div className="p-6 bg-slate-50 border-t-2 border-slate-200 flex justify-end">
                     <button
                         onClick={handleSave}
-                        disabled={!isConnected || isSaving || classMembers.length === 0}
+                        disabled={!isConnected || isSaving || classMembers.length === 0 || !isCurrentWeek}
                         className={`bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center gap-3 ${
-                            !isConnected || isSaving ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
+                            (!isConnected || isSaving || !isCurrentWeek) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
                         }`}
                     >
                         {isSaving ? (
@@ -199,12 +381,91 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, settings, cu
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                 </svg>
-                                Save Attendance
+                                Save Weekly Attendance
                             </>
                         )}
                     </button>
                 </div>
             </div>
+            {/* Alert Modal */}
+            {isAlertOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsAlertOpen(false)}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border-2 border-slate-200" onClick={e => e.stopPropagation()}>
+                    <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white p-5 rounded-t-2xl flex items-center justify-between">
+                        <div>
+                            <h3 className="text-xl font-bold">{alertType === 'month' ? 'Monthly' : 'Quarterly'} Absentees — Class {currentUser.assignedClass || currentUser.classLed}</h3>
+                            <p className="text-white/70 text-sm">Uncheck anyone you know attended.</p>
+                        </div>
+                        <button className="text-white/80 hover:text-white text-2xl font-bold" onClick={() => setIsAlertOpen(false)}>×</button>
+                    </div>
+                    <div className="p-5 max-h-[60vh] overflow-y-auto space-y-2">
+                        {alertList.length === 0 ? (
+                            <div className="text-slate-500 text-center py-10">No members absent for the entire period.</div>
+                        ) : (
+                            alertList.map(item => (
+                                <label key={item.memberId} className="flex items-center justify-between p-3 rounded-lg border-2 border-slate-200 bg-slate-50">
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={item.selected}
+                                            onChange={e => setAlertList(prev => prev.map(x => x.memberId === item.memberId ? { ...x, selected: e.target.checked } : x))}
+                                            className="h-5 w-5 rounded border-slate-300"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-slate-800">{item.name}</div>
+                                            <div className="text-xs text-slate-500">Weeks in period: {item.weeksAbsent}{item.phone ? ` • ${item.phone}` : ''}</div>
+                                        </div>
+                                    </div>
+                                    <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-1 rounded">Absent</span>
+                                </label>
+                            ))
+                        )}
+                    </div>
+                    <div className="p-5 bg-slate-50 rounded-b-2xl border-t-2 border-slate-200 flex items-center justify-between">
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    const selected = alertList.filter(x => x.selected);
+                                    const lines = selected.map(x => `${x.name}${x.phone ? ' ('+x.phone+')' : ''}`);
+                                    const csv = ['Name,Phone', ...selected.map(x => `${JSON.stringify(x.name)},${JSON.stringify(x.phone || '')}`)].join('\n');
+                                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `${alertType || 'alert'}_absentees_class_${currentUser.assignedClass || currentUser.classLed}.csv`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                                className="bg-white border-2 border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-bold hover:bg-slate-100"
+                            >
+                                Download CSV
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const selected = alertList.filter(x => x.selected);
+                                    const names = selected.map(x => x.name).join(', ');
+                                    const subject = encodeURIComponent(`${alertType === 'month' ? 'Monthly' : 'Quarterly'} Absentees — Class ${currentUser.assignedClass || currentUser.classLed}`);
+                                    const body = encodeURIComponent(`Dear ${currentUser.assignedClass || currentUser.classLed} Class Leader,\n\nPlease follow up with the following members who were absent for the ${alertType === 'month' ? 'month' : 'quarter'}:\n\n${names}\n\nThank you.`);
+                                    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                                }}
+                                className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:opacity-90"
+                            >
+                                Email List
+                            </button>
+                        </div>
+                        <button onClick={() => setIsAlertOpen(false)} className="bg-slate-700 text-white px-4 py-2 rounded-lg font-bold">Close</button>
+                    </div>
+                </div>
+            </div>
+            )}
+            {isEditModalOpen && editMember && (
+                <MemberModal
+                    member={editMember}
+                    onSave={handleSaveMemberLimited}
+                    onClose={() => { setIsEditModalOpen(false); setEditMember(null); }}
+                    allowedFields={['name','email','phone','address']}
+                />
+            )}
         </div>
     );
 };

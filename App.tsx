@@ -897,6 +897,7 @@ const App: React.FC = () => {
                 return (
                     <ClassAttendance
                         members={members}
+                        setMembers={setMembers}
                         settings={settings}
                         currentUser={currentUser}
                         syncStatus={syncStatus}

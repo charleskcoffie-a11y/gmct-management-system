@@ -8,9 +8,10 @@ interface MemberModalProps {
     member: Member | null;
     onSave: (member: Member) => void;
     onClose: () => void;
+    allowedFields?: Array<'name' | 'email' | 'phone' | 'address'>;
 }
 
-const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) => {
+const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose, allowedFields }) => {
     const [formData, setFormData] = useState<Member>(member || sanitizeMember({}));
 
     useEffect(() => {
@@ -33,14 +34,19 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
         onSave(sanitizeMember(formData));
     };
 
+    const canEdit = (field: 'name' | 'email' | 'phone' | 'address') => {
+        if (!allowedFields || allowedFields.length === 0) return true;
+        return allowedFields.includes(field);
+    };
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 overflow-hidden backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
                 <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
                     {/* Header with gradient */}
                     <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-8 py-6 flex-shrink-0">
-                        <h2 className="text-2xl font-bold text-white">{member ? '✏️ Edit Member' : '➕ Add New Member'}</h2>
-                        <p className="text-indigo-100 text-sm mt-1">Update member information and preferences</p>
+                        <h2 className="text-2xl font-bold text-white">{allowedFields && allowedFields.length > 0 ? '✏️ Edit Contact Information' : (member ? '✏️ Edit Member' : '➕ Add New Member')}</h2>
+                        <p className="text-indigo-100 text-sm mt-1">{allowedFields && allowedFields.length > 0 ? 'Update name, email, phone, and address' : 'Update member information and preferences'}</p>
                     </div>
                     {/* Content with improved spacing */}
                     <div className="p-8 space-y-6 overflow-y-auto" style={{maxHeight: 'calc(90vh - 180px)'}}>
@@ -64,12 +70,13 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 value={formData.name}
                                 onChange={handleChange}
                                 required
-                                className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                disabled={!canEdit('name')}
+                                className={`w-full border-2 rounded-lg py-2.5 px-4 text-sm outline-none transition ${canEdit('name') ? 'border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100' : 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'}`}
                             />
                         </div>
 
                         {/* Personal Info Section */}
-                        <div className="pt-2">
+                        {!allowedFields && (<div className="pt-2">
                             <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <span className="text-indigo-600">👤</span> Personal Information
                             </h3>
@@ -99,10 +106,10 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                     />
                                 </div>
                             </div>
-                        </div>
+                        </div>)}
 
                         {/* Birth Date Section */}
-                        <div className="pt-2">
+                        {!allowedFields && (<div className="pt-2">
                             <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <span className="text-indigo-600">📅</span> Date of Birth
                             </h3>
@@ -147,7 +154,7 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 </div>
                             </div>
                             <p className="text-xs text-gray-500 mt-2">We store month and day only</p>
-                        </div>
+                        </div>)}
 
                         {/* Contact Information Section */}
                         <div className="pt-2">
@@ -164,7 +171,8 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                         placeholder="example@domain.com"
                                         value={formData.email || ''}
                                         onChange={handleChange}
-                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                        disabled={!canEdit('email')}
+                                        className={`w-full border-2 rounded-lg py-2.5 px-4 text-sm outline-none transition ${canEdit('email') ? 'border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100' : 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'}`}
                                     />
                                 </div>
                                 <div>
@@ -176,7 +184,8 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                         placeholder="(555) 123-4567"
                                         value={formData.phone || ''}
                                         onChange={handleChange}
-                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                        disabled={!canEdit('phone')}
+                                        className={`w-full border-2 rounded-lg py-2.5 px-4 text-sm outline-none transition ${canEdit('phone') ? 'border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100' : 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'}`}
                                     />
                                 </div>
                             </div>
@@ -218,13 +227,14 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                     placeholder="Street, City, Province, Postal Code"
                                     value={formData.address || ''}
                                     onChange={handleChange}
-                                    className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    disabled={!canEdit('address')}
+                                    className={`w-full border-2 rounded-lg py-2.5 px-4 text-sm outline-none transition ${canEdit('address') ? 'border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100' : 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'}`}
                                 />
                             </div>
                         </div>
 
                         {/* Status Section */}
-                        <div className="pt-4">
+                        {!allowedFields && (<div className="pt-4">
                             <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-5 border-2 border-indigo-200">
                                 <label htmlFor="active" className="flex items-center gap-3 cursor-pointer">
                                     <input
@@ -239,10 +249,10 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 </label>
                                 <p className="text-xs text-gray-600 mt-2 ml-8">Uncheck to mark this member as inactive</p>
                             </div>
-                        </div>
+                        </div>)}
 
                         {/* Development Fund Section */}
-                        <div className="pt-2">
+                        {!allowedFields && (<div className="pt-2">
                             <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border-2 border-blue-200">
                                 <label htmlFor="devFundPledge" className="flex items-center gap-3 cursor-pointer">
                                     <input
@@ -273,7 +283,7 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        </div>)}
                     </div>
                     {/* Footer with gradient buttons */}
                     <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-4 flex justify-end gap-3 flex-shrink-0 border-t border-gray-200">
