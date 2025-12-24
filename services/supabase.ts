@@ -541,10 +541,16 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
 export const saveMemberToSupabase = async (url: string, key: string, member: Member) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
-    
-    const { error } = await supabase.from('members').upsert([mapMemberToDB(member)]);
+    // Explicitly upsert on primary key 'id' and return updated row for verification
+    const { data, error } = await supabase
+        .from('members')
+        .upsert([mapMemberToDB(member)], { onConflict: 'id' })
+        .select('*')
+        .eq('id', member.id)
+        .limit(1);
     if (error) throw new Error(`Save member failed: ${error.message}`);
-    return { success: true };
+    // Optionally, we could validate that returned data matches, but returning success is sufficient
+    return { success: true, row: data && data[0] } as { success: true; row?: any };
 };
 
 export const saveMonthLockToSupabase = async (url: string, key: string, lock: MonthLock) => {
