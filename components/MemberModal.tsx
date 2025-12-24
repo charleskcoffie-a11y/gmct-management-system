@@ -35,15 +35,15 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 overflow-hidden backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] min-h-[200px] flex flex-col overflow-hidden">
-                <form onSubmit={handleSubmit} className="flex flex-col h-full w-full">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+                <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
                     {/* Header with gradient */}
                     <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-8 py-6 flex-shrink-0">
                         <h2 className="text-2xl font-bold text-white">{member ? '✏️ Edit Member' : '➕ Add New Member'}</h2>
                         <p className="text-indigo-100 text-sm mt-1">Update member information and preferences</p>
                     </div>
                     {/* Content with improved spacing */}
-                    <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                    <div className="p-8 space-y-6 overflow-y-auto" style={{maxHeight: 'calc(90vh - 180px)'}}>
                         <div>
                             <label htmlFor="id" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">System ID</label>
                             <input
