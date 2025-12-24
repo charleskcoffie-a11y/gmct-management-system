@@ -33,9 +33,9 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-                <form onSubmit={handleSubmit} className="flex flex-col h-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 overflow-hidden">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] min-h-[200px] flex flex-col">
+                <form onSubmit={handleSubmit} className="flex flex-col h-full w-full">
                     <div className="p-6 border-b flex-shrink-0">
                         <h2 className="text-xl font-bold text-gray-800">{member ? 'Edit Member' : 'Add New Member'}</h2>
                     </div>
