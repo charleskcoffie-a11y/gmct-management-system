@@ -22,8 +22,9 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
         }
     }, [member]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        const checked = 'checked' in e.target ? e.target.checked : undefined;
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
