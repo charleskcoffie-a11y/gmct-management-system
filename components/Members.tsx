@@ -58,6 +58,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
     const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [showInactive, setShowInactive] = useState<boolean>(false);
+    const [syncConfirmation, setSyncConfirmation] = useState<{ memberName: string; mode: 'added' | 'updated'; ts: number } | null>(null);
     
     // New State for Profile Modal
     const [viewProfileMember, setViewProfileMember] = useState<Member | null>(null);
@@ -140,6 +141,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         if (settings.supabaseUrl && settings.supabaseKey) {
             try {
                 await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
+                setSyncConfirmation({ memberName: member.name, mode: isEdit ? 'updated' : 'added', ts: Date.now() });
                 showToast(
                     `✅ ${member.name} ${isEdit ? 'updated' : 'added'} successfully!`,
                     'success',
@@ -151,6 +153,13 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         }
         setIsModalOpen(false);
     };
+
+    // Auto-hide the sync confirmation after a short duration
+    React.useEffect(() => {
+        if (!syncConfirmation) return;
+        const timer = setTimeout(() => setSyncConfirmation(null), 4200);
+        return () => clearTimeout(timer);
+    }, [syncConfirmation]);
     
     const handleDelete = (id: string) => {
         setMemberToDeleteId(id);
@@ -203,6 +212,25 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
 
     return (
         <div className="pb-12 space-y-8">
+            {syncConfirmation && (
+                <div className="fixed bottom-6 right-6 z-50 animate-[fadeInUp_0.25s_ease]">
+                    <div className="bg-white border border-emerald-200 shadow-2xl rounded-2xl px-4 py-3 flex items-center gap-3 min-w-[280px]">
+                        <div className="h-11 w-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl font-bold">✓</div>
+                        <div className="flex-1">
+                            <div className="text-sm font-bold text-emerald-800">Saved & Synced</div>
+                            <div className="text-xs text-slate-500">{syncConfirmation.memberName} {syncConfirmation.mode} • {new Date(syncConfirmation.ts).toLocaleTimeString()}</div>
+                        </div>
+                        <button
+                            onClick={() => setSyncConfirmation(null)}
+                            className="text-slate-400 hover:text-slate-600 text-lg leading-none px-2"
+                            aria-label="Dismiss confirmation"
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-2xl shadow-lg border-2 border-blue-200">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
