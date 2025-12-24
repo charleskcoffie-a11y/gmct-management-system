@@ -26,6 +26,7 @@ export function useSupabaseAutoSync(
         setHistory: (d: WeeklyHistoryRecord[]) => void;
         setUsers: (d: User[]) => void;
         setMonthLocks?: (d: MonthLock[]) => void;
+        setSettings?: (d: Settings) => void;
     }
 ): SyncStatus {
     // Initialize state based on whether credentials exist
@@ -49,6 +50,7 @@ export function useSupabaseAutoSync(
         lastEntry: data.entries.length > 0 ? data.entries[data.entries.length - 1] : null,
         lastHist: data.history.length > 0 ? data.history[data.history.length - 1] : null,
         lastLock: data.monthLocks && data.monthLocks.length > 0 ? data.monthLocks[data.monthLocks.length - 1] : null,
+        settingsHash: settings.classAccessCodes ? JSON.stringify(settings.classAccessCodes) : '',
     });
 
     // 1. Initial Pull on Mount (Smart Merge)
@@ -70,7 +72,8 @@ export function useSupabaseAutoSync(
                 const mergedUsers = mergeUnique(data.users, cloudData.users, 'username');
                 const mergedLocks = mergeUnique(data.monthLocks || [], cloudData.monthLocks || [], 'month');
                 
-
+                // For settings, prefer cloud settings if they exist (to sync class codes etc)
+                const mergedSettings = cloudData.settings || settings;
 
                 // Update UI with merged data
                 setters.setEntries(mergedEntries);
@@ -78,6 +81,9 @@ export function useSupabaseAutoSync(
                 setters.setHistory(mergedHistory);
                 setters.setUsers(mergedUsers);
                 setters.setMonthLocks?.(mergedLocks);
+                if (cloudData.settings && setters.setSettings) {
+                    setters.setSettings(mergedSettings);
+                }
 
 
                 hasInitialPulled.current = true;
@@ -108,6 +114,9 @@ export function useSupabaseAutoSync(
                 setters.setHistory(cloudData.history);
                 setters.setUsers(cloudData.users);
                 setters.setMonthLocks?.(cloudData.monthLocks || []);
+                if (cloudData.settings && setters.setSettings) {
+                    setters.setSettings(cloudData.settings);
+                }
                 setStatus({ state: 'synced', lastSynced: new Date() });
             } catch (e: any) {
                 console.error("Periodic sync failed:", e);

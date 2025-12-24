@@ -95,6 +95,8 @@ export interface Settings {
     etransferNotificationEmail?: string; // mailbox that receives Interac notifications
     etransferInboundSecret?: string; // webhook secret to validate inbound provider
     etransferProvider?: 'sendgrid' | 'mailgun' | 'resend' | 'generic';
+    // Class Leader Access Codes
+    classAccessCodes?: Record<string, string>; // Map of class number to access code, e.g. {"1": "alpha", "2": "beta"}
 }
 
 export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader';

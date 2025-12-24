@@ -2,7 +2,7 @@
 // components/Settings.tsx
 import React, { useState } from 'react';
 import type { Settings, CloudState, Entry, Member, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock } from '../types';
-import { testSupabaseConnection, uploadDataToSupabase, downloadDataFromSupabase } from '../services/supabase';
+import { testSupabaseConnection, uploadDataToSupabase, downloadDataFromSupabase, saveSettingsToSupabase } from '../services/supabase';
 
 interface SettingsProps {
     settings: Settings;
@@ -46,8 +46,18 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         }));
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setSettings(localSettings);
+        
+        // Also save to Supabase if configured
+        if (localSettings.supabaseUrl && localSettings.supabaseKey) {
+            try {
+                await saveSettingsToSupabase(localSettings.supabaseUrl, localSettings.supabaseKey, localSettings);
+            } catch (e: any) {
+                console.warn('Failed to sync settings to Supabase:', e.message);
+            }
+        }
+        
         alert('Settings saved successfully!');
     };
 
@@ -111,7 +121,8 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 members: allData.members,
                 history: allData.weeklyHistory,
                 users: allData.users,
-                monthLocks: allData.monthLocks
+                monthLocks: allData.monthLocks,
+                settings: localSettings
             });
             setSyncStatus({ type: 'success', message: "Upload successful!" });
         } catch (e: any) {
@@ -138,6 +149,10 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             allData.setUsers(data.users);
             allData.setWeeklyHistory(data.history);
             if(data.monthLocks) allData.setMonthLocks(data.monthLocks);
+            if(data.settings) {
+                setSettings(data.settings);
+                setLocalSettings(data.settings);
+            }
 
             setSyncStatus({ type: 'success', message: "Download successful! Local data updated." });
         } catch (e: any) {
@@ -265,6 +280,49 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             ) : (
                 <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
                     🔒 Only Administrators can modify Organization Details.
+                </div>
+            )}
+            
+            {/* 2b. Class Access Codes - Admin Only */}
+            {currentUser.role === 'admin' ? (
+                <div className="bg-gradient-to-br from-yellow-50 to-amber-50 p-6 rounded-xl shadow-lg border-2 border-yellow-200">
+                    <h3 className="text-xl font-bold text-yellow-800 border-b-2 border-yellow-100 pb-3 mb-4">🔑 Class Leader Access Codes</h3>
+                    <p className="text-sm text-yellow-900 bg-yellow-100 border border-yellow-200 rounded-lg p-3 mb-4 font-medium">
+                        Set unique access codes for each class. Class leaders log in with username "ClassLeader" (or any class-leader role user) and the code for their class as the password.
+                    </p>
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {Array.from({ length: localSettings.maxClasses }, (_, i) => {
+                                const classNum = String(i + 1);
+                                const currentCode = localSettings.classAccessCodes?.[classNum] || '';
+                                return (
+                                    <div key={classNum} className="bg-white rounded-lg p-3 border-2 border-yellow-200">
+                                        <label className="block font-bold text-yellow-800 text-sm mb-1">Class {classNum}</label>
+                                        <input
+                                            type="text"
+                                            value={currentCode}
+                                            onChange={(e) => {
+                                                const newCodes = { ...(localSettings.classAccessCodes || {}) };
+                                                newCodes[classNum] = e.target.value;
+                                                setLocalSettings(prev => ({ ...prev, classAccessCodes: newCodes }));
+                                            }}
+                                            placeholder="e.g., alpha, beta, omega"
+                                            className="w-full border-2 border-yellow-300 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="flex justify-end pt-4">
+                            <button onClick={handleSave} className="bg-gradient-to-br from-yellow-600 to-amber-600 hover:from-yellow-700 hover:to-amber-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-yellow-300">
+                                ✓ Save Access Codes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
+                    🔒 Only Administrators can modify Class Access Codes.
                 </div>
             )}
             

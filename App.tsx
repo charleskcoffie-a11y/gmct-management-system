@@ -112,7 +112,7 @@ const App: React.FC = () => {
     const syncStatus = useSupabaseAutoSync(settings, {
         entries, members, history: weeklyHistory, users, monthLocks
     }, {
-        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings
     });
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);
@@ -254,20 +254,65 @@ const App: React.FC = () => {
 
     // --- Handlers ---
     const handleLogin = (username: string, password: string) => {
-        const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
-        if (user) {
-            setCurrentUser(user);
-            setLoginError(null);
-            // Intelligent Redirect based on Role
-            if (user.role === 'admin' || user.role === 'finance-chair') setActiveTab('home');
-            else if (user.role === 'finance-team') setActiveTab('records');
-            else if (user.role === 'data-entry') setActiveTab('records');
-            else if (user.role === 'pastor') setActiveTab('insights');
-            else if (user.role === 'statistician') setActiveTab('history');
-            else setActiveTab('home');
-        } else {
+        const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (!foundUser) {
             setLoginError('Invalid username or password.');
+            return;
         }
+
+        // Special handling for class leaders: validate access codes from Settings
+        if (foundUser.role === 'class-leader') {
+            const raw = (password || '').trim();
+            let assignedClass = foundUser.assignedClass || foundUser.classLed;
+
+            // If exact password matches stored user password, accept as-is (admin override)
+            if (foundUser.password && password === foundUser.password) {
+                // keep assignedClass as stored (if any)
+            } else {
+                // Check if password matches any class access code
+                const classAccessCodes = settings.classAccessCodes || {};
+                let matchedClass: string | null = null;
+
+                for (const [classNum, code] of Object.entries(classAccessCodes)) {
+                    if (code && raw === code) {
+                        const clsNum = parseInt(classNum, 10);
+                        if (clsNum >= 1 && clsNum <= settings.maxClasses) {
+                            matchedClass = String(clsNum);
+                            break;
+                        }
+                    }
+                }
+
+                if (matchedClass) {
+                    assignedClass = matchedClass;
+                } else {
+                    setLoginError('Invalid class access code. Contact admin for your class code.');
+                    return;
+                }
+            }
+
+            const sessionUser = { ...foundUser, assignedClass } as typeof foundUser;
+            setCurrentUser(sessionUser);
+            setLoginError(null);
+            setActiveTab('attendance');
+            return;
+        }
+
+        // All other roles: require exact password match
+        if (foundUser.password !== password) {
+            setLoginError('Invalid username or password.');
+            return;
+        }
+
+        setCurrentUser(foundUser);
+        setLoginError(null);
+        // Intelligent Redirect based on Role
+        if (foundUser.role === 'admin' || foundUser.role === 'finance-chair') setActiveTab('home');
+        else if (foundUser.role === 'finance-team') setActiveTab('records');
+        else if (foundUser.role === 'data-entry') setActiveTab('records');
+        else if (foundUser.role === 'pastor') setActiveTab('insights');
+        else if (foundUser.role === 'statistician') setActiveTab('history');
+        else setActiveTab('home');
     };
 
     const handleLogout = () => setCurrentUser(null);
@@ -963,7 +1008,7 @@ const App: React.FC = () => {
             icon: '👥',
             roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor', 'class-leader'],
             items: [
-                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor', 'class-leader'] },
+                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
                 { id: 'attendance', label: 'Class Attendance', roles: ['admin', 'pastor', 'class-leader'] },
             ]
         },

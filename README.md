@@ -118,7 +118,31 @@ create table if not exists public.month_locks (
     locked_at timestamp with time zone
 );
 
--- 8. Create No Name Entries Table (for anonymous/flexible entries)
+-- 8. Create App Settings Table (for centralized config including class access codes)
+create table if not exists public.app_settings (
+    id text primary key default 'app_settings', -- Single row for org-wide settings
+    currency text,
+    max_classes int,
+    enforce_directory boolean,
+    supabase_url text,
+    supabase_key text,
+    logo_url text,
+    org_name text,
+    org_address text,
+    org_phone text,
+    org_email text,
+    charity_number text,
+    signature_image text,
+    annual_levy_amount numeric,
+    etransfer_notification_email text,
+    etransfer_inbound_secret text,
+    etransfer_provider text,
+    class_access_codes text, -- JSON string: {"1": "alpha", "2": "beta", ...}
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- 9. Create No Name Entries Table (for anonymous/flexible entries)
 create table if not exists public.no_name_entries (
     id uuid primary key default uuid_generate_v4(),
     date date not null,
@@ -130,7 +154,7 @@ create table if not exists public.no_name_entries (
     data jsonb -- For flexible JSON storage if needed
 );
 
--- 9. Configure Access Policies (Row Level Security)
+-- 10. Configure Access Policies (Row Level Security)
 alter table public.members enable row level security;
 create policy "Enable all access for anon users" on public.members for all using (true) with check (true);
 
@@ -148,6 +172,9 @@ create policy "Enable all access for anon users" on public.app_users for all usi
 
 alter table public.month_locks enable row level security;
 create policy "Enable all access for anon users" on public.month_locks for all using (true) with check (true);
+
+alter table public.app_settings enable row level security;
+create policy "Enable all access for anon users" on public.app_settings for all using (true) with check (true);
 
 alter table public.no_name_entries enable row level security;
 create policy "Enable all access for anon users" on public.no_name_entries for all using (true) with check (true);

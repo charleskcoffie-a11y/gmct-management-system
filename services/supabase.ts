@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -202,6 +202,47 @@ const mapLockFromDB = (l: any): MonthLock => ({
     lockedAt: l.locked_at
 });
 
+const mapSettingsToDB = (s: Settings) => ({
+    id: 'app_settings', // Single row for app-wide settings
+    currency: s.currency,
+    max_classes: s.maxClasses,
+    enforce_directory: s.enforceDirectory,
+    supabase_url: s.supabaseUrl,
+    supabase_key: s.supabaseKey,
+    logo_url: s.logoUrl,
+    org_name: s.orgName,
+    org_address: s.orgAddress,
+    org_phone: s.orgPhone,
+    org_email: s.orgEmail,
+    charity_number: s.charityNumber,
+    signature_image: s.signatureImage,
+    annual_levy_amount: s.annualLevyAmount,
+    etransfer_notification_email: s.etransferNotificationEmail,
+    etransfer_inbound_secret: s.etransferInboundSecret,
+    etransfer_provider: s.etransferProvider,
+    class_access_codes: s.classAccessCodes ? JSON.stringify(s.classAccessCodes) : null,
+});
+
+const mapSettingsFromDB = (s: any): Settings => ({
+    currency: s.currency || 'GH₵',
+    maxClasses: s.max_classes || 14,
+    enforceDirectory: s.enforce_directory !== false,
+    supabaseUrl: s.supabase_url || '',
+    supabaseKey: s.supabase_key || '',
+    logoUrl: s.logo_url,
+    orgName: s.org_name,
+    orgAddress: s.org_address,
+    orgPhone: s.org_phone,
+    orgEmail: s.org_email,
+    charityNumber: s.charity_number,
+    signatureImage: s.signature_image,
+    annualLevyAmount: s.annual_levy_amount,
+    etransferNotificationEmail: s.etransfer_notification_email,
+    etransferInboundSecret: s.etransfer_inbound_secret,
+    etransferProvider: s.etransfer_provider,
+    classAccessCodes: s.class_access_codes ? JSON.parse(s.class_access_codes) : undefined,
+});
+
 // --- Sync Functions ---
 
 export const uploadDataToSupabase = async (
@@ -212,7 +253,8 @@ export const uploadDataToSupabase = async (
         entries: Entry[], 
         history: WeeklyHistoryRecord[], 
         users: User[],
-        monthLocks?: MonthLock[]
+        monthLocks?: MonthLock[],
+        settings?: Settings
     }
 ) => {
     const supabase = getSupabaseClient(url, key);
@@ -248,7 +290,14 @@ export const uploadDataToSupabase = async (
         if (error) console.warn(`Month Locks upload warning: ${error.message}`);
     }
 
-
+    if (data.settings) {
+        try {
+            const { error } = await supabase.from('app_settings').upsert([mapSettingsToDB(data.settings)]);
+            if (error) console.warn(`Settings upload warning: ${error.message}`);
+        } catch (e) {
+            console.warn('Settings table may not exist yet.');
+        }
+    }
 
     return { success: true };
 };
@@ -281,12 +330,21 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
         console.log("Month locks table may not exist yet.");
     }
 
+    let settings: Settings | undefined;
+    try {
+        const { data: settingsDB } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
+        if (settingsDB) settings = mapSettingsFromDB(settingsDB);
+    } catch (e) {
+        console.log("Settings table may not exist yet.");
+    }
+
     return {
         members,
         entries,
         users,
         history,
-        monthLocks
+        monthLocks,
+        settings
     };
 };
 
@@ -493,6 +551,15 @@ export const saveMonthLockToSupabase = async (url: string, key: string, lock: Mo
 
     const { error } = await supabase.from('month_locks').upsert([mapLockToDB(lock)]);
     if (error) throw new Error(`Save month lock failed: ${error.message}`);
+    return { success: true };
+};
+
+export const saveSettingsToSupabase = async (url: string, key: string, settings: Settings) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('app_settings').upsert([mapSettingsToDB(settings)]);
+    if (error) throw new Error(`Save settings failed: ${error.message}`);
     return { success: true };
 };
 
