@@ -7,6 +7,7 @@ import ConfirmationModal from './ConfirmationModal';
 import MemberProfileModal from './MemberProfileModal';
 import { UploadIcon } from './icons';
 import { saveMemberToSupabase as saveMemberToSupabaseFn, deleteMemberFromSupabase } from '../services/supabase';
+import { useToast } from './ToastProvider';
 
 interface MembersProps {
     members: Member[];
@@ -48,6 +49,7 @@ const getColorForClass = (classNumber: string | undefined) => {
 };
 
 const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entries = [], developmentEntries = [], syncStatus }) => {
+    const { showToast } = useToast();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -121,13 +123,14 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
 
     const handleSave = async (member: Member) => {
         if (!settings.supabaseUrl || !settings.supabaseKey || (syncStatus && syncStatus.state !== 'synced')) {
-            alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            showToast('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.', 'error', 4000);
             return;
         }
         const newMembers = [...members];
         const index = newMembers.findIndex(m => m.id === member.id);
+        const isEdit = index > -1;
 
-        if (index > -1) { // Edit
+        if (isEdit) { // Edit
             newMembers[index] = member;
         } else { // Add
             newMembers.push(member);
@@ -137,8 +140,13 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
         if (settings.supabaseUrl && settings.supabaseKey) {
             try {
                 await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
+                showToast(
+                    `✅ ${member.name} ${isEdit ? 'updated' : 'added'} successfully!`,
+                    'success',
+                    3000
+                );
             } catch (e: any) {
-                alert(`Cloud save failed. Local updated only. Details: ${e.message || e}`);
+                showToast(`❌ Cloud save failed. Local updated only. Details: ${e.message || e}`, 'error', 5000);
             }
         }
         setIsModalOpen(false);
