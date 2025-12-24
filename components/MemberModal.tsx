@@ -33,26 +33,29 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 overflow-hidden">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] min-h-[200px] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 overflow-hidden backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] min-h-[200px] flex flex-col overflow-hidden">
                 <form onSubmit={handleSubmit} className="flex flex-col h-full w-full">
-                    <div className="p-6 border-b flex-shrink-0">
-                        <h2 className="text-xl font-bold text-gray-800">{member ? 'Edit Member' : 'Add New Member'}</h2>
+                    {/* Header with gradient */}
+                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-8 py-6 flex-shrink-0">
+                        <h2 className="text-2xl font-bold text-white">{member ? '✏️ Edit Member' : '➕ Add New Member'}</h2>
+                        <p className="text-indigo-100 text-sm mt-1">Update member information and preferences</p>
                     </div>
-                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                    {/* Content with improved spacing */}
+                    <div className="p-8 space-y-6 overflow-y-auto flex-1">
                         <div>
-                            <label htmlFor="id" className="block font-medium text-gray-700">System ID</label>
+                            <label htmlFor="id" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">System ID</label>
                             <input
                                 id="id"
                                 name="id"
                                 type="text"
                                 value={formData.id}
                                 disabled
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-gray-100 cursor-not-allowed text-xs text-gray-500"
+                                className="w-full bg-gray-100 border border-gray-300 rounded-lg py-2.5 px-4 text-sm text-gray-500 cursor-not-allowed transition"
                             />
                         </div>
                         <div>
-                            <label htmlFor="name" className="block font-medium text-gray-700">Full Name</label>
+                            <label htmlFor="name" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Full Name *</label>
                             <input
                                 id="name"
                                 name="name"
@@ -60,185 +63,232 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose }) =>
                                 value={formData.name}
                                 onChange={handleChange}
                                 required
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="classNumber" className="block font-medium text-gray-700">Class (Group)</label>
-                                <input
-                                    id="classNumber"
-                                    name="classNumber"
-                                    type="text"
-                                    placeholder="e.g. 1"
-                                    value={formData.classNumber || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="memberNumber" className="block font-medium text-gray-700">Member #</label>
-                                <input
-                                    id="memberNumber"
-                                    name="memberNumber"
-                                    type="text"
-                                    placeholder="e.g. 128"
-                                    value={formData.memberNumber || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="dobMonth" className="block font-medium text-gray-700">Birth Month</label>
-                                <select
-                                    id="dobMonth"
-                                    name="dobMonth"
-                                    value={formData.dobMonth || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                >
-                                    <option value="">Select month</option>
-                                    <option value={1}>January</option>
-                                    <option value={2}>February</option>
-                                    <option value={3}>March</option>
-                                    <option value={4}>April</option>
-                                    <option value={5}>May</option>
-                                    <option value={6}>June</option>
-                                    <option value={7}>July</option>
-                                    <option value={8}>August</option>
-                                    <option value={9}>September</option>
-                                    <option value={10}>October</option>
-                                    <option value={11}>November</option>
-                                    <option value={12}>December</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor="dobDay" className="block font-medium text-gray-700">Birth Day</label>
-                                <input
-                                    id="dobDay"
-                                    name="dobDay"
-                                    type="number"
-                                    min={1}
-                                    max={31}
-                                    placeholder="e.g. 15"
-                                    value={formData.dobDay || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">We store month and day only.</p>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="email" className="block font-medium text-gray-700">Email</label>
-                                <input
-                                    id="email"
-                                    name="email"
-                                    type="email"
-                                    placeholder="example@domain.com"
-                                    value={formData.email || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="phone" className="block font-medium text-gray-700">Phone Number</label>
-                                <input
-                                    id="phone"
-                                    name="phone"
-                                    type="tel"
-                                    placeholder="e.g. (555) 123-4567"
-                                    value={formData.phone || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label htmlFor="profession" className="block font-medium text-gray-700">Profession</label>
-                            <div className="flex gap-2">
-                                <input
-                                    id="profession"
-                                    name="profession"
-                                    type="text"
-                                    placeholder="e.g. Teacher"
-                                    value={formData.profession || ''}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData(prev => ({ ...prev, profession: 'Retired' }))}
-                                    className="mt-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-3 rounded-md"
-                                    title="Quick set to Retired"
-                                >
-                                    Retired
-                                </button>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">You can enter any profession or click Retired.</p>
-                        </div>
-                        <div>
-                            <label htmlFor="address" className="block font-medium text-gray-700">Address</label>
-                            <input
-                                id="address"
-                                name="address"
-                                type="text"
-                                placeholder="Street, City, Province, Postal Code"
-                                value={formData.address || ''}
-                                onChange={handleChange}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                            <label htmlFor="active" className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    id="active"
-                                    name="active"
-                                    type="checkbox"
-                                    checked={formData.active ?? true}
-                                    onChange={handleChange}
-                                    className="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                                />
-                                <span className="font-bold text-gray-800">Active Member</span>
-                            </label>
-                            <p className="text-xs text-gray-500 mt-1">Uncheck to mark this member as inactive.</p>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                            <label htmlFor="devFundPledge" className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    id="devFundPledge"
-                                    name="devFundPledge"
-                                    type="checkbox"
-                                    checked={formData.devFundPledge ?? false}
-                                    onChange={handleChange}
-                                    className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="font-bold text-gray-800">Development Fund Pledge</span>
-                            </label>
-                            <p className="text-xs text-gray-500 mt-1">Check if member has pledged to the development fund.</p>
-                            {formData.devFundPledge && (
-                                <div className="mt-3">
-                                    <label htmlFor="devFundPledgeAmount" className="block font-medium text-gray-700 mb-1">Pledge Amount</label>
+
+                        {/* Personal Info Section */}
+                        <div className="pt-2">
+                            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-indigo-600">👤</span> Personal Information
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="classNumber" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Class</label>
                                     <input
-                                        id="devFundPledgeAmount"
-                                        name="devFundPledgeAmount"
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        placeholder="0.00"
-                                        value={formData.devFundPledgeAmount || ''}
+                                        id="classNumber"
+                                        name="classNumber"
+                                        type="text"
+                                        placeholder="e.g. 1"
+                                        value={formData.classNumber || ''}
                                         onChange={handleChange}
-                                        className="block w-full border border-blue-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
                                     />
                                 </div>
-                            )}
+                                <div>
+                                    <label htmlFor="memberNumber" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Member #</label>
+                                    <input
+                                        id="memberNumber"
+                                        name="memberNumber"
+                                        type="text"
+                                        placeholder="e.g. 128"
+                                        value={formData.memberNumber || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Birth Date Section */}
+                        <div className="pt-2">
+                            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-indigo-600">📅</span> Date of Birth
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="dobMonth" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Birth Month</label>
+                                    <select
+                                        id="dobMonth"
+                                        name="dobMonth"
+                                        value={formData.dobMonth || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    >
+                                        <option value="">Select month</option>
+                                        <option value={1}>January</option>
+                                        <option value={2}>February</option>
+                                        <option value={3}>March</option>
+                                        <option value={4}>April</option>
+                                        <option value={5}>May</option>
+                                        <option value={6}>June</option>
+                                        <option value={7}>July</option>
+                                        <option value={8}>August</option>
+                                        <option value={9}>September</option>
+                                        <option value={10}>October</option>
+                                        <option value={11}>November</option>
+                                        <option value={12}>December</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="dobDay" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Birth Day</label>
+                                    <input
+                                        id="dobDay"
+                                        name="dobDay"
+                                        type="number"
+                                        min={1}
+                                        max={31}
+                                        placeholder="e.g. 15"
+                                        value={formData.dobDay || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">We store month and day only</p>
+                        </div>
+
+                        {/* Contact Information Section */}
+                        <div className="pt-2">
+                            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-indigo-600">📞</span> Contact Information
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="email" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Email</label>
+                                    <input
+                                        id="email"
+                                        name="email"
+                                        type="email"
+                                        placeholder="example@domain.com"
+                                        value={formData.email || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="phone" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Phone Number</label>
+                                    <input
+                                        id="phone"
+                                        name="phone"
+                                        type="tel"
+                                        placeholder="(555) 123-4567"
+                                        value={formData.phone || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Other Information Section */}
+                        <div className="pt-2">
+                            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-indigo-600">ℹ️</span> Additional Information
+                            </h3>
+                            <div>
+                                <label htmlFor="profession" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Profession</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        id="profession"
+                                        name="profession"
+                                        type="text"
+                                        placeholder="e.g. Teacher"
+                                        value={formData.profession || ''}
+                                        onChange={handleChange}
+                                        className="flex-1 border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData(prev => ({ ...prev, profession: 'Retired' }))}
+                                        className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition duration-200 text-sm"
+                                        title="Quick set to Retired"
+                                    >
+                                        Retired
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="mt-4">
+                                <label htmlFor="address" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Address</label>
+                                <input
+                                    id="address"
+                                    name="address"
+                                    type="text"
+                                    placeholder="Street, City, Province, Postal Code"
+                                    value={formData.address || ''}
+                                    onChange={handleChange}
+                                    className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Status Section */}
+                        <div className="pt-4">
+                            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-5 border-2 border-indigo-200">
+                                <label htmlFor="active" className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        id="active"
+                                        name="active"
+                                        type="checkbox"
+                                        checked={formData.active ?? true}
+                                        onChange={handleChange}
+                                        className="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                    <span className="font-semibold text-gray-900">Active Member</span>
+                                </label>
+                                <p className="text-xs text-gray-600 mt-2 ml-8">Uncheck to mark this member as inactive</p>
+                            </div>
+                        </div>
+
+                        {/* Development Fund Section */}
+                        <div className="pt-2">
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border-2 border-blue-200">
+                                <label htmlFor="devFundPledge" className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        id="devFundPledge"
+                                        name="devFundPledge"
+                                        type="checkbox"
+                                        checked={formData.devFundPledge ?? false}
+                                        onChange={handleChange}
+                                        className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    <span className="font-semibold text-gray-900">💙 Development Fund Pledge</span>
+                                </label>
+                                <p className="text-xs text-gray-600 mt-2 ml-8">Check if member has pledged to the development fund</p>
+                                {formData.devFundPledge && (
+                                    <div className="mt-4 ml-8 p-4 bg-white rounded-lg border border-blue-200">
+                                        <label htmlFor="devFundPledgeAmount" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Pledge Amount ($)</label>
+                                        <input
+                                            id="devFundPledgeAmount"
+                                            name="devFundPledgeAmount"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            value={formData.devFundPledgeAmount || ''}
+                                            onChange={handleChange}
+                                            className="w-full border-2 border-blue-300 rounded-lg py-2.5 px-4 text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition font-semibold"
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-b-lg flex justify-end gap-2 flex-shrink-0 border-t">
-                        <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
-                        <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save Member</button>
+                    {/* Footer with gradient buttons */}
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-4 flex justify-end gap-3 flex-shrink-0 border-t border-gray-200">
+                        <button 
+                            type="button" 
+                            onClick={onClose} 
+                            className="px-6 py-2.5 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-semibold rounded-lg transition duration-200 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold rounded-lg transition duration-200 shadow-lg hover:shadow-xl"
+                        >
+                            Save Member
+                        </button>
                     </div>
                 </form>
             </div>
