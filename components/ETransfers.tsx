@@ -12,15 +12,19 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [showOnlyUnreconciled, setShowOnlyUnreconciled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const canLoad = !!settings.supabaseUrl && !!settings.supabaseKey;
 
   const fetchItems = async () => {
     if (!canLoad) return;
     setLoading(true);
+    setError(null);
     try {
       const rows = await loadETransfersFromSupabase(settings.supabaseUrl, settings.supabaseKey);
       setItems(rows);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load e-transfers');
     } finally {
       setLoading(false);
     }
@@ -41,6 +45,13 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
       );
     });
   }, [items, query, showOnlyUnreconciled]);
+
+  const stats = useMemo(() => {
+    const total = filtered.reduce((sum, r) => sum + (r.amount || 0), 0);
+    const unreconciled = filtered.filter(r => !r.reconciled).length;
+    const lastReceived = filtered.length ? filtered.map(r => r.receivedAt).sort().slice(-1)[0] : null;
+    return { total, unreconciled, lastReceived };
+  }, [filtered]);
 
   const exportCsv = () => {
     const rows = filtered.map(r => ({
@@ -70,14 +81,35 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-extrabold text-slate-800">E-Transfer Notifications</h2>
-          <p className="text-sm text-slate-600">Incoming Interac e-Transfer emails forwarded via webhook.</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={exportCsv} className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 border-2 border-indigo-400 shadow">Export CSV</button>
-          <button onClick={fetchItems} disabled={!canLoad || loading} className="px-4 py-2 rounded-lg text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border-2 border-slate-300">Refresh</button>
+      <div className="bg-gradient-to-br from-indigo-600 to-blue-600 text-white rounded-2xl p-6 shadow-lg border border-indigo-500/40">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm uppercase tracking-wide text-indigo-100 font-semibold">E-Transfers</p>
+            <h2 className="text-3xl font-extrabold">Incoming Notifications</h2>
+            <p className="text-indigo-100 text-sm">Monitor Interac e-Transfer emails captured by your inbound webhook.</p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${canLoad ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                {canLoad ? 'Cloud connected' : 'Connect Supabase to sync'}
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/20 text-white">Webhook: /functions/v1/etransfer-inbound</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={fetchItems}
+              disabled={!canLoad || loading}
+              className={`px-4 py-2 rounded-xl text-sm font-bold border-2 bg-white text-indigo-700 hover:-translate-y-0.5 transition shadow ${(!canLoad || loading) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-lg'}`}
+            >
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+            <button
+              onClick={exportCsv}
+              disabled={filtered.length === 0}
+              className={`px-4 py-2 rounded-xl text-sm font-bold border-2 border-white/60 bg-white/10 text-white backdrop-blur hover:bg-white/20 transition ${filtered.length === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
       </div>
 
@@ -87,18 +119,45 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
         </div>
       )}
 
-      <div className="bg-white border-2 border-slate-200 rounded-xl p-4 shadow-md">
-        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name, email, memo, subject" className="w-full sm:w-80 border-2 border-slate-200 rounded-lg py-2 px-3 text-sm" />
-          <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <input type="checkbox" className="h-4 w-4" checked={showOnlyUnreconciled} onChange={e => setShowOnlyUnreconciled(e.target.checked)} />
-            Show only unreconciled
-          </label>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs uppercase font-bold text-slate-500">Total amount (filtered)</p>
+          <p className="text-2xl font-extrabold text-slate-800 mt-1">{(settings.currency || 'CAD')} {stats.total.toFixed(2)}</p>
         </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs uppercase font-bold text-slate-500">Unreconciled</p>
+          <p className="text-2xl font-extrabold text-amber-600 mt-1">{stats.unreconciled}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs uppercase font-bold text-slate-500">Last received</p>
+          <p className="text-base font-semibold text-slate-800 mt-1">{stats.lastReceived ? new Date(stats.lastReceived).toLocaleString() : '—'}</p>
+        </div>
+      </div>
+
+      <div className="bg-white border-2 border-slate-200 rounded-2xl p-5 shadow-md">
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search name, email, memo, subject"
+              className="w-full sm:w-80 border-2 border-slate-200 rounded-xl py-2.5 px-3 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+            />
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg">
+              <input type="checkbox" className="h-4 w-4" checked={showOnlyUnreconciled} onChange={e => setShowOnlyUnreconciled(e.target.checked)} />
+              Only unreconciled
+            </label>
+          </div>
+          <div className="text-sm text-slate-500">{filtered.length} result{filtered.length === 1 ? '' : 's'}</div>
+        </div>
+
+        {error && (
+          <div className="mt-3 p-3 rounded-lg border-2 border-amber-300 bg-amber-50 text-amber-800 text-sm">{error}</div>
+        )}
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-left text-slate-700">
-            <thead className="bg-slate-100 text-slate-700 text-sm uppercase font-bold">
+            <thead className="bg-slate-100 text-slate-700 text-xs uppercase font-bold tracking-wide">
               <tr>
                 <th className="px-4 py-2">Received</th>
                 <th className="px-4 py-2">Amount</th>
@@ -106,37 +165,39 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
                 <th className="px-4 py-2">Email</th>
                 <th className="px-4 py-2">Memo</th>
                 <th className="px-4 py-2">Subject</th>
-                <th className="px-4 py-2">Reconciled</th>
+                <th className="px-4 py-2 text-center">Reconciled</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 text-sm">
               {filtered.map(r => (
-                <tr key={r.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 text-sm">{new Date(r.receivedAt).toLocaleString()}</td>
-                  <td className="px-4 py-2 font-semibold">{(r.currency || 'CAD') + ' ' + r.amount.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-sm">{r.senderName || '-'}</td>
-                  <td className="px-4 py-2 text-sm">{r.senderEmail || '-'}</td>
-                  <td className="px-4 py-2 text-sm">{r.memo || '-'}</td>
-                  <td className="px-4 py-2 text-sm truncate max-w-[24ch]" title={r.rawSubject}>{r.rawSubject || '-'}</td>
-                  <td className="px-4 py-2">
-                    <label className="inline-flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="h-4 w-4" checked={!!r.reconciled} onChange={e => toggleReconciled(r.id, e.target.checked)} />
-                      {r.reconciled ? 'Yes' : 'No'}
-                    </label>
+                <tr key={r.id} className="hover:bg-indigo-50/40">
+                  <td className="px-4 py-3 whitespace-nowrap text-slate-700">{new Date(r.receivedAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 font-bold text-slate-900">{(r.currency || 'CAD') + ' ' + r.amount.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-slate-800">{r.senderName || '-'}</td>
+                  <td className="px-4 py-3 text-slate-600">{r.senderEmail || '-'}</td>
+                  <td className="px-4 py-3 text-slate-700">{r.memo || '-'}</td>
+                  <td className="px-4 py-3 text-slate-700 truncate max-w-[24ch]" title={r.rawSubject}>{r.rawSubject || '-'}</td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => toggleReconciled(r.id, !r.reconciled)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${r.reconciled ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'}`}
+                    >
+                      {r.reconciled ? 'Reconciled' : 'Mark reconciled'}
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <div className="text-center text-slate-500 p-8">No items to show.</div>
+            <div className="text-center text-slate-500 p-10 text-sm">No items match your filters.</div>
           )}
         </div>
       </div>
 
-      <div className="p-4 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-700 text-sm">
-        <div className="font-bold mb-1">Setup (one-time):</div>
-        <ol className="list-decimal list-inside space-y-1">
+      <div className="p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-700 text-sm shadow-sm">
+        <div className="font-bold mb-2 text-slate-900">Setup (one-time)</div>
+        <ol className="list-decimal list-inside space-y-1 leading-relaxed">
           <li>Choose a provider (SendGrid, Mailgun, or Resend Inbound) and configure an inbound route/webhook to POST raw email data to your Supabase Function endpoint <code>/functions/v1/etransfer-inbound</code>.</li>
           <li>Set a secret token in the provider and the same value in Settings (E-Transfer Inbound Secret) so the function can validate requests.</li>
           <li>Forward Interac e-Transfer notifications from your mailbox (<em>Settings → E-Transfer Notification Email</em>) to the provider’s inbound address.</li>
