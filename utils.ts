@@ -158,11 +158,12 @@ export function sanitizeMember(raw: any): Member {
     };
 
     // Populate DOB from separate fields or combined text
-    const dobMonthRaw = findVal(['dobMonth','birthdayMonth','birthMonth']);
-    const dobDayRaw = findVal(['dobDay','birthdayDay','birthDay']);
-    const dobCombined = findVal(['dob','dateOfBirth','birthday']);
+    const dobMonthRaw = findVal(['dobMonth','dob_month','birthdayMonth','birthMonth']);
+    const dobDayRaw = findVal(['dobDay','dob_day','birthdayDay','birthDay']);
+    const dobCombined = findVal(['dob','dateOfBirth','date_of_birth','birthday']);
     let monthNum: number | undefined;
     let dayNum: number | undefined;
+    let dateOfBirthIso: string | undefined;
     if (typeof dobMonthRaw !== 'undefined' && typeof dobDayRaw !== 'undefined') {
         const m = parseInt(dobMonthRaw, 10);
         const d = parseInt(dobDayRaw, 10);
@@ -172,10 +173,20 @@ export function sanitizeMember(raw: any): Member {
         const parsed = parseDob(dobCombined);
         monthNum = parsed.month;
         dayNum = parsed.day;
+
+        // If the provided value has a year, persist full ISO date
+        const dobStr = sanitizeString(dobCombined);
+        if (dobStr && /\d{4}/.test(dobStr)) {
+            const parsedDate = new Date(dobStr);
+            if (!isNaN(parsedDate.getTime())) {
+                dateOfBirthIso = parsedDate.toISOString().slice(0, 10);
+            }
+        }
     }
 
     if (monthNum) member.dobMonth = monthNum;
     if (dayNum) member.dobDay = dayNum;
+    if (dateOfBirthIso) member.dateOfBirth = dateOfBirthIso;
 
     return member;
 }

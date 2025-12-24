@@ -83,6 +83,7 @@ const mapMemberToDB = (m: Member) => ({
     phone: m.phone,
     dob_month: typeof m.dobMonth === 'number' ? m.dobMonth : null,
     dob_day: typeof m.dobDay === 'number' ? m.dobDay : null,
+    date_of_birth: m.dateOfBirth || null,
     active: typeof m.active === 'boolean' ? m.active : true,
     created_at: m.createdAt || new Date().toISOString() // Ensure never empty
 });
@@ -98,6 +99,7 @@ const mapMemberFromDB = (m: any): Member => ({
     phone: m.phone,
     dobMonth: typeof m.dob_month === 'number' ? m.dob_month : undefined,
     dobDay: typeof m.dob_day === 'number' ? m.dob_day : undefined,
+    dateOfBirth: m.date_of_birth || undefined,
     active: typeof m.active === 'boolean' ? m.active : true,
     createdAt: m.created_at
 });

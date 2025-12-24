@@ -71,6 +71,7 @@ export interface Member {
     phone?: string;
     dobMonth?: number; // 1-12
     dobDay?: number;   // 1-31
+    dateOfBirth?: string; // ISO date YYYY-MM-DD
     active?: boolean;
     createdAt?: string;
     devFundPledge?: boolean; // Has pledged to development fund
