@@ -28,6 +28,7 @@ import TaxReceipts from './components/TaxReceipts';
 import WesleyHall from './components/WesleyHall';
 import ClassAttendance from './components/ClassAttendance';
 import Assets from './components/Assets';
+import DayBorn from './components/DayBorn';
 import { ToastProvider } from './components/ToastProvider';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -36,7 +37,7 @@ import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitize
 import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 
 // Initial Data
@@ -61,20 +62,20 @@ const INITIAL_SETTINGS: Settings = {
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
 const App: React.FC = () => {
-    // --- State Management ---
-    const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
-    const [members, setMembers] = useLocalStorage<Member[]>('gmct-members', [], (data) => Array.isArray(data) ? data.map(sanitizeMember) : []);
-    const [users, setUsers] = useLocalStorage<User[]>('gmct-users', INITIAL_USERS, (data) => Array.isArray(data) && data.length > 0 ? data.map(sanitizeUser) : INITIAL_USERS);
+    // --- State Management (Database-Driven - No localStorage for data) ---
+    const [entries, setEntries] = useState<Entry[]>([]);
+    const [members, setMembers] = useState<Member[]>([]);
+    const [users, setUsers] = useState<User[]>(INITIAL_USERS);
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
 
-    const [weeklyHistory, setWeeklyHistory] = useLocalStorage<WeeklyHistoryRecord[]>('gmct-weekly-history', [], (data) => Array.isArray(data) ? data.map(sanitizeWeeklyHistoryRecord) : []);
-    const [developmentFund, setDevelopmentFund] = useLocalStorage<DevelopmentFundEntry[]>('gmct-dev-fund', [], (data) => Array.isArray(data) ? data.map(sanitizeDevelopmentFundEntry) : []);
-    const [noNameEntries, setNoNameEntries] = useLocalStorage<NoNameEntry[]>('gmct-no-name', [], (data) => Array.isArray(data) ? data.map(sanitizeNoNameEntry) : []);
-    const [harvestEntries, setHarvestEntries] = useLocalStorage<HarvestEntry[]>('gmct-harvest', [], (data) => Array.isArray(data) ? data.map(sanitizeHarvestEntry) : []);
-    const [harvestPledges, setHarvestPledges] = useLocalStorage<HarvestPledge[]>('gmct-harvest-pledges', [], (data) => Array.isArray(data) ? data : []);
+    const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
+    const [developmentFund, setDevelopmentFund] = useState<DevelopmentFundEntry[]>([]);
+    const [noNameEntries, setNoNameEntries] = useState<NoNameEntry[]>([]);
+    const [harvestEntries, setHarvestEntries] = useState<HarvestEntry[]>([]);
+    const [harvestPledges, setHarvestPledges] = useState<HarvestPledge[]>([]);
     
     // New State for Month Locks
-    const [monthLocks, setMonthLocks] = useLocalStorage<MonthLock[]>('gmct-locks', [], (data) => Array.isArray(data) ? data : []);
+    const [monthLocks, setMonthLocks] = useState<MonthLock[]>([]);
 
 
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -120,6 +121,29 @@ const App: React.FC = () => {
         if (syncStatus.state === 'synced') setHasConnected(true);
     }, [syncStatus.state]);
     
+    // --- Load All Data from Database on mount or when connection is ready ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey) return;
+        if (syncStatus.state !== 'synced') return; // Wait until synced
+        
+        // Load all data from database in parallel
+        Promise.all([
+            loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey),
+            loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey),
+            loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey)
+        ]).then(([loadedMembers, loadedEntries, loadedPledges]) => {
+            if (loadedMembers && loadedMembers.length > 0) {
+                setMembers(loadedMembers);
+            }
+            if (loadedEntries && loadedEntries.length > 0) {
+                setEntries(loadedEntries);
+            }
+            if (loadedPledges && loadedPledges.length > 0) {
+                setHarvestPledges(loadedPledges);
+            }
+        }).catch(err => console.error('Failed to load data from database:', err));
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+    
     // --- Safe Close Protection ---
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -133,32 +157,6 @@ const App: React.FC = () => {
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [syncStatus.state]);
-
-    // --- Sync new entries to Supabase ---
-    useEffect(() => {
-        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
-        
-        // Save all entries that don't have a sync timestamp or were recently created
-        const entriesToSync = entries.filter(e => !e.lastUpdated || 
-            new Date(e.createdAt || '').getTime() > Date.now() - 5000); // Last 5 seconds
-        
-        entriesToSync.forEach(async (entry) => {
-            try {
-                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
-            } catch (err) {
-                console.error('Failed to sync entry to Supabase:', err);
-            }
-        });
-    }, [entries, settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
-
-    // --- Auto-load from Supabase on startup if configured ---
-    useEffect(() => {
-        if (!settings.supabaseUrl || !settings.supabaseKey) return;
-        if (entries.length > 0 || members.length > 0) return; // Only load if empty
-        
-        // Trigger sync by updating settings reference
-        // This will cause the sync hook to perform initial pull
-    }, [settings.supabaseUrl, settings.supabaseKey]);
 
     // --- Load Harvest Pledges from Supabase on startup ---
     useEffect(() => {
@@ -336,19 +334,12 @@ const App: React.FC = () => {
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             return;
         }
-        const newEntries = [...entries];
-        const index = newEntries.findIndex(e => e.id === entry.id);
-        if (index > -1) {
-            newEntries[index] = entry;
-        } else {
-            newEntries.push(entry);
-        }
 
         try {
-            if (settings.supabaseUrl && settings.supabaseKey) {
-                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
-            }
-            setEntries(newEntries);
+            await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            // Reload entries from database
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            setEntries(updatedEntries);
             setIsModalOpen(false);
         } catch (error: any) {
             alert(`Failed to save entry: ${error.message}`);
@@ -360,14 +351,12 @@ const App: React.FC = () => {
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             return;
         }
-        const newEntries = [...entries];
-        newEntries.push(entry);
 
         try {
-            if (settings.supabaseUrl && settings.supabaseKey) {
-                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
-            }
-            setEntries(newEntries);
+            await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            // Reload entries from database
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            setEntries(updatedEntries);
         } catch (error: any) {
             alert(`Failed to save entry: ${error.message}`);
         }
@@ -389,20 +378,18 @@ const App: React.FC = () => {
         if (entryToDeleteId) {
             const entryIndex = entries.findIndex(e => e.id === entryToDeleteId);
             if (entryIndex > -1) {
-                const newEntries = [...entries];
-                // Soft Delete: Mark as deleted, keep data
-                newEntries[entryIndex] = {
-                    ...newEntries[entryIndex],
+                const entryToDelete = {
+                    ...entries[entryIndex],
                     deleted: true,
                     updatedBy: currentUser?.username || 'Unknown',
                     lastUpdated: new Date().toISOString()
                 };
 
                 try {
-                    if (settings.supabaseUrl && settings.supabaseKey) {
-                        await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntries[entryIndex]);
-                    }
-                    setEntries(newEntries);
+                    await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entryToDelete);
+                    // Reload entries from database
+                    const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                    setEntries(updatedEntries);
                 } catch (error: any) {
                     alert(`Failed to delete entry: ${error.message}`);
                 }
@@ -466,7 +453,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "development-fund", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "development-fund", "other"];
 
     const renderTabContent = () => {
         // Double check access before rendering restrictive tabs
@@ -513,17 +500,22 @@ const App: React.FC = () => {
                 lastUpdated: new Date().toISOString()
             };
 
-            // Update local state
-            setHarvestPledges(prev => prev.map(p => p.id === pledge.id ? updatedPledge : p));
-            setEntries(prev => [...prev, paymentEntry]);
-
-            // Save to Supabase
+            // Save to Supabase and reload data
             if (settings.supabaseUrl && settings.supabaseKey) {
                 Promise.all([
                     saveHarvestPledgeToSupabase(settings.supabaseUrl, settings.supabaseKey, updatedPledge),
                     saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, paymentEntry),
                     saveHarvestPledgePayment(settings.supabaseUrl, settings.supabaseKey, pledge.id, paymentEntry.id, amount, paymentDate, currentUser?.username)
-                ]).catch(err => console.error("Error saving pledge payment:", err));
+                ]).then(() => {
+                    // Reload data from database
+                    return Promise.all([
+                        loadHarvestPledgesFromSupabase(settings.supabaseUrl!, settings.supabaseKey!),
+                        loadEntriesFromSupabase(settings.supabaseUrl!, settings.supabaseKey!)
+                    ]);
+                }).then(([updatedPledges, updatedEntries]) => {
+                    setHarvestPledges(updatedPledges);
+                    setEntries(updatedEntries);
+                }).catch(err => console.error("Error saving pledge payment:", err));
             }
         };
         switch (activeTab) {
@@ -537,7 +529,13 @@ const App: React.FC = () => {
                         settings={settings}
                         currentUser={currentUser}
                         syncStatus={syncStatus}
-                        onCreatePledges={(newPledges) => setEntries(prev => [...prev, ...newPledges])}
+                        onCreatePledges={async (newPledges) => {
+                            // Reload entries from database after pledges are created
+                            if (settings.supabaseUrl && settings.supabaseKey) {
+                                const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                                setEntries(updatedEntries);
+                            }
+                        }}
                     />
                 );
             case 'reports':
@@ -867,6 +865,18 @@ const App: React.FC = () => {
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} />;
+            case 'day-born':
+                return (
+                    <DayBorn
+                        members={members}
+                        entries={entries}
+                        setEntries={setEntries}
+                        settings={settings}
+                        currentUser={currentUser}
+                        monthLocks={monthLocks}
+                        syncStatus={syncStatus}
+                    />
+                );
             case 'insights':
                 return (
                     <Insights
@@ -945,7 +955,7 @@ const App: React.FC = () => {
                 setDevelopmentFund: (d) => setDevelopmentFund(d),
                 setMonthLocks: (d) => setMonthLocks(d)
             }} />;
-            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
+            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} currentUser={currentUser} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
             default: return <div>Select a tab</div>;
         }
     };
@@ -992,6 +1002,7 @@ const App: React.FC = () => {
             items: [
                 { id: 'home', label: 'Home', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'records', label: 'Financial Records', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry'] },
+                { id: 'day-born', label: 'Day Born', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },

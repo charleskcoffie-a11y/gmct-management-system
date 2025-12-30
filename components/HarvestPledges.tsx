@@ -145,12 +145,20 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
               </div>
             </div>
           </div>
-          <button onClick={() => { setShowBulkModal(true); setBulkEntries([{memberID: '', amount: ''}]); }} className="bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all hover:from-purple-600 hover:to-pink-600 hover:scale-105">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-            </svg>
-            Bulk Entry
-          </button>
+          <div className="flex gap-3">
+            <button onClick={() => (window as any).GMCTNavigateTab && (window as any).GMCTNavigateTab('harvest')} className="bg-gradient-to-br from-slate-500 to-slate-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all hover:from-slate-600 hover:to-slate-700 hover:scale-105">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:-translate-x-1 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+              </svg>
+              Back to Harvest
+            </button>
+            <button onClick={() => { setShowBulkModal(true); setBulkEntries([{memberID: '', amount: ''}]); }} className="bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all hover:from-purple-600 hover:to-pink-600 hover:scale-105">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              Bulk Entry
+            </button>
+          </div>
         </div>
       </div>
 

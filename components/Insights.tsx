@@ -197,7 +197,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, harvestEntries, settings }
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
                     <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as any)} className="border-slate-300 rounded-lg shadow-sm">
                         <option value="all">All Types</option>
-                        {["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "harvest", "kofi-and-ama", "development-fund", "other"].map(t => (
+                        {["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "harvest", "day-born", "development-fund", "other"].map(t => (
                             <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>
                         ))}
                     </select>

@@ -127,30 +127,30 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
             showToast('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.', 'error', 4000);
             return;
         }
-        const newMembers = [...members];
-        const index = newMembers.findIndex(m => m.id === member.id);
-        const isEdit = index > -1;
+        
+        const isEdit = members.some(m => m.id === member.id);
 
-        if (isEdit) { // Edit
-            newMembers[index] = member;
-        } else { // Add
-            newMembers.push(member);
-        }
-        setMembers(newMembers.sort((a,b) => a.name.localeCompare(b.name)));
-        // Persist to Supabase if configured
-        if (settings.supabaseUrl && settings.supabaseKey) {
-            try {
-                await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
-                setSyncConfirmation({ memberName: member.name, mode: isEdit ? 'updated' : 'added', ts: Date.now() });
-                showToast(
-                    `✅ ${member.name} ${isEdit ? 'updated' : 'added'} successfully!`,
-                    'success',
-                    3000
-                );
-            } catch (e: any) {
-                showToast(`❌ Cloud save failed. Local updated only. Details: ${e.message || e}`, 'error', 5000);
+        try {
+            // Save to database and get the updated member back
+            const result = await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
+            
+            // Update local state with the member from database
+            if (isEdit) {
+                setMembers(prev => prev.map(m => m.id === result.member.id ? result.member : m).sort((a,b) => a.name.localeCompare(b.name)));
+            } else {
+                setMembers(prev => [...prev, result.member].sort((a,b) => a.name.localeCompare(b.name)));
             }
+            
+            setSyncConfirmation({ memberName: member.name, mode: isEdit ? 'updated' : 'added', ts: Date.now() });
+            showToast(
+                `✅ ${member.name} ${isEdit ? 'updated' : 'added'} successfully!`,
+                'success',
+                3000
+            );
+        } catch (e: any) {
+            showToast(`❌ Save failed: ${e.message || e}`, 'error', 5000);
         }
+        
         setIsModalOpen(false);
     };
 

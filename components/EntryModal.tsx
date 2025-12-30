@@ -15,11 +15,13 @@ interface EntryModalProps {
     onSaveAndNew: (entry: Entry) => void | Promise<void>;
     onClose: () => void;
     onDelete: (id: string) => void;
+    lockedType?: boolean;
+    selectedDay?: string;
 }
 
-const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "kofi-and-ama", "other"];
+const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "other"];
 
-const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members, settings, currentUser, monthLocks = [], onSave, onSaveAndNew, onClose, onDelete }) => {
+const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members, settings, currentUser, monthLocks = [], onSave, onSaveAndNew, onClose, onDelete, lockedType = false, selectedDay }) => {
     const [formData, setFormData] = useState<Entry>(entry || sanitizeEntry({}));
     const [amountInput, setAmountInput] = useState<string>('');
     const [classFilter, setClassFilter] = useState('all');
@@ -260,7 +262,9 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                     </div>
                                     <div>
                                         <h2 className="text-2xl font-bold">{entry ? 'Edit Contribution' : 'Record Contribution'}</h2>
-                                        <p className="text-sm text-blue-100 mt-1">Press Enter to Save & Add Another</p>
+                                        <p className="text-sm text-blue-100 mt-1">
+                                            {selectedDay ? `📅 ${selectedDay} - Day Born Offering` : 'Press Enter to Save & Add Another'}
+                                        </p>
                                     </div>
                                 </div>
                                 <button type="button" onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-lg text-2xl font-bold transition-all">×</button>
@@ -320,7 +324,11 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                         </svg>
                                         Type
                                     </label>
-                                    <select name="type" value={formData.type} onChange={handleChange} className="w-full border-2 border-slate-300 rounded-lg p-3 capitalize font-semibold text-slate-700 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all">
+                                    <select name="type" value={formData.type} onChange={handleChange} disabled={lockedType} className={`w-full border-2 rounded-lg p-3 capitalize font-semibold transition-all ${
+                                        lockedType
+                                            ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed'
+                                            : 'border-slate-300 text-slate-700 focus:ring-2 focus:ring-amber-400 focus:border-amber-400'
+                                    }`}>
                                         {ENTRY_TYPES.map(t => (
                                             <option key={t} value={t}>
                                                 {t.replace(/-/g, ' ')}

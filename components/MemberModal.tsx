@@ -113,7 +113,7 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose, allo
                             <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <span className="text-indigo-600">📅</span> Date of Birth
                             </h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label htmlFor="dobMonth" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Birth Month</label>
                                     <select
@@ -151,6 +151,25 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose, allo
                                         onChange={handleChange}
                                         className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
                                     />
+                                </div>
+                                <div>
+                                    <label htmlFor="dayBorn" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Day Born</label>
+                                    <select
+                                        id="dayBorn"
+                                        name="dayBorn"
+                                        value={formData.dayBorn || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    >
+                                        <option value="">Select day</option>
+                                        <option value="Sunday">Sunday</option>
+                                        <option value="Monday">Monday</option>
+                                        <option value="Tuesday">Tuesday</option>
+                                        <option value="Wednesday">Wednesday</option>
+                                        <option value="Thursday">Thursday</option>
+                                        <option value="Friday">Friday</option>
+                                        <option value="Saturday">Saturday</option>
+                                    </select>
                                 </div>
                             </div>
                             <p className="text-xs text-gray-500 mt-2">We store month and day only</p>
@@ -224,12 +243,38 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose, allo
                                     id="address"
                                     name="address"
                                     type="text"
-                                    placeholder="Street, City, Province, Postal Code"
+                                    placeholder="Street Address"
                                     value={formData.address || ''}
                                     onChange={handleChange}
                                     disabled={!canEdit('address')}
                                     className={`w-full border-2 rounded-lg py-2.5 px-4 text-sm outline-none transition ${canEdit('address') ? 'border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100' : 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'}`}
                                 />
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="city" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">City</label>
+                                    <input
+                                        id="city"
+                                        name="city"
+                                        type="text"
+                                        placeholder="e.g. Toronto"
+                                        value={formData.city || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="province" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Province</label>
+                                    <input
+                                        id="province"
+                                        name="province"
+                                        type="text"
+                                        placeholder="e.g. Ontario"
+                                        value={formData.province || ''}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+                                    />
+                                </div>
                             </div>
                         </div>
 

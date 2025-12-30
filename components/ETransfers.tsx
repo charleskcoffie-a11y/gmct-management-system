@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import type { ETransfer, Settings } from '../types';
 import { toCsv } from '../utils';
 import { loadETransfersFromSupabase, markETransferReconciled } from '../services/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 interface ETransfersProps {
   settings: Settings;
@@ -13,6 +14,9 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
   const [query, setQuery] = useState('');
   const [showOnlyUnreconciled, setShowOnlyUnreconciled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const subscriptionRef = useRef<any>(null);
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
   const canLoad = !!settings.supabaseUrl && !!settings.supabaseKey;
 
@@ -23,12 +27,79 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
     try {
       const rows = await loadETransfersFromSupabase(settings.supabaseUrl, settings.supabaseKey);
       setItems(rows);
+      // Mark all current items as seen
+      rows.forEach(r => seenIdsRef.current.add(r.id));
     } catch (e: any) {
       setError(e?.message || 'Failed to load e-transfers');
     } finally {
       setLoading(false);
     }
   };
+
+  // Request notification permission on component mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          setNotificationsEnabled(true);
+        }
+      });
+    } else if ('Notification' in window && Notification.permission === 'granted') {
+      setNotificationsEnabled(true);
+    }
+  }, []);
+
+  // Subscribe to real-time e-transfer updates
+  useEffect(() => {
+    if (!canLoad || !notificationsEnabled) return;
+
+    const supabase = createClient(settings.supabaseUrl, settings.supabaseKey);
+
+    const subscription = supabase
+      .channel('etransfers-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'etransfers' }, (payload) => {
+        const newTransfer = {
+          id: payload.new.id,
+          receivedAt: payload.new.received_at,
+          amount: payload.new.amount,
+          currency: payload.new.currency,
+          senderName: payload.new.sender_name,
+          senderEmail: payload.new.sender_email,
+          memo: payload.new.memo,
+          rawSubject: payload.new.raw_subject,
+          rawText: payload.new.raw_text,
+          reconciled: payload.new.reconciled,
+          createdAt: payload.new.created_at,
+        } as ETransfer;
+
+        // Only notify if this is a new transfer (not seen before)
+        if (!seenIdsRef.current.has(newTransfer.id)) {
+          seenIdsRef.current.add(newTransfer.id);
+
+          // Add to UI
+          setItems(prev => [newTransfer, ...prev]);
+
+          // Send browser notification
+          if ('Notification' in window) {
+            new Notification('💰 New E-Transfer Received', {
+              body: `${newTransfer.senderName || 'Unknown'}: ${newTransfer.currency || 'CAD'} ${newTransfer.amount?.toFixed(2) || '0.00'}`,
+              tag: 'etransfer-' + newTransfer.id,
+              requireInteraction: false,
+              icon: '💰',
+            });
+          }
+        }
+      })
+      .subscribe();
+
+    subscriptionRef.current = subscription;
+
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+      }
+    };
+  }, [canLoad, notificationsEnabled, settings.supabaseUrl, settings.supabaseKey]);
 
   useEffect(() => { fetchItems(); }, [settings.supabaseUrl, settings.supabaseKey]);
 
@@ -90,6 +161,10 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
             <div className="flex flex-wrap gap-2 mt-2">
               <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${canLoad ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
                 {canLoad ? 'Cloud connected' : 'Connect Supabase to sync'}
+              </span>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${notificationsEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-400/40 text-white'}`}>
+                <span className={`inline-block w-2 h-2 rounded-full ${notificationsEnabled ? 'bg-emerald-600' : 'bg-slate-300'}`}></span>
+                {notificationsEnabled ? 'Push notifications active' : 'Push notifications disabled'}
               </span>
               <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/20 text-white">Webhook: /functions/v1/etransfer-inbound</span>
             </div>
@@ -200,7 +275,10 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
         <ol className="list-decimal list-inside space-y-1 leading-relaxed">
           <li>Choose a provider (SendGrid, Mailgun, or Resend Inbound) and configure an inbound route/webhook to POST raw email data to your Supabase Function endpoint <code>/functions/v1/etransfer-inbound</code>.</li>
           <li>Set a secret token in the provider and the same value in Settings (E-Transfer Inbound Secret) so the function can validate requests.</li>
-          <li>Forward Interac e-Transfer notifications from your mailbox (<em>Settings → E-Transfer Notification Email</em>) to the provider’s inbound address.</li>
+          <li>Forward Interac e-Transfer notifications from your mailbox (<em>Settings → E-Transfer Notification Email</em>) to the provider's inbound address.</li>
+          <li className="mt-3 pt-3 border-t border-slate-300">
+            <strong>🔔 Push Notifications:</strong> Allow browser notifications when prompted to receive instant alerts when new e-transfers arrive. Your browser will send a desktop notification with the sender name and amount.
+          </li>
         </ol>
       </div>
     </div>

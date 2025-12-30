@@ -78,12 +78,17 @@ const mapMemberToDB = (m: Member) => ({
     class_number: m.classNumber,
     member_number: m.memberNumber,
     address: m.address,
+    city: m.city || null,
+    province: m.province || null,
     email: m.email,
     profession: m.profession,
     phone: m.phone,
     dob_month: typeof m.dobMonth === 'number' ? m.dobMonth : null,
     dob_day: typeof m.dobDay === 'number' ? m.dobDay : null,
     date_of_birth: m.dateOfBirth || null,
+    day_born: m.dayBorn || null,
+    dev_fund_pledge: m.devFundPledge || false,
+    dev_fund_pledge_amount: typeof m.devFundPledgeAmount === 'number' ? m.devFundPledgeAmount : null,
     active: typeof m.active === 'boolean' ? m.active : true,
     created_at: m.createdAt || new Date().toISOString() // Ensure never empty
 });
@@ -94,12 +99,17 @@ const mapMemberFromDB = (m: any): Member => ({
     classNumber: m.class_number,
     memberNumber: m.member_number,
     address: m.address,
+    city: m.city || undefined,
+    province: m.province || undefined,
     email: m.email,
     profession: m.profession,
     phone: m.phone,
     dobMonth: typeof m.dob_month === 'number' ? m.dob_month : undefined,
     dobDay: typeof m.dob_day === 'number' ? m.dob_day : undefined,
     dateOfBirth: m.date_of_birth || undefined,
+    dayBorn: m.day_born || undefined,
+    devFundPledge: m.dev_fund_pledge || false,
+    devFundPledgeAmount: typeof m.dev_fund_pledge_amount === 'number' ? m.dev_fund_pledge_amount : undefined,
     active: typeof m.active === 'boolean' ? m.active : true,
     createdAt: m.created_at
 });
@@ -538,19 +548,75 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
     return { success: true };
 };
 
+export const loadEntriesFromSupabase = async (url: string, key: string): Promise<Entry[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('entries').select('*').order('date', { ascending: false });
+    if (error) {
+        console.warn('Failed to load entries:', error.message);
+        return [];
+    }
+    return (data || []).map(mapEntryFromDB);
+};
+
+export const loadMembersFromSupabase = async (url: string, key: string): Promise<Member[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('members').select('*').order('name', { ascending: true });
+    if (error) {
+        console.warn('Failed to load members:', error.message);
+        return [];
+    }
+    return (data || []).map(mapMemberFromDB);
+};
+
 export const saveMemberToSupabase = async (url: string, key: string, member: Member) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
+    
+    const memberData = mapMemberToDB(member);
+    const isNewMember = !member.id || member.id.includes('temp');
+    
     // Explicitly upsert on primary key 'id' and return updated row for verification
     const { data, error } = await supabase
         .from('members')
-        .upsert([mapMemberToDB(member)], { onConflict: 'id' })
+        .upsert([memberData], { onConflict: 'id' })
         .select('*')
         .eq('id', member.id)
         .limit(1);
-    if (error) throw new Error(`Save member failed: ${error.message}`);
-    // Optionally, we could validate that returned data matches, but returning success is sufficient
-    return { success: true, row: data && data[0] } as { success: true; row?: any };
+    
+    if (error) {
+        throw new Error(`Save member failed: ${error.message}`);
+    }
+    
+    const savedMember = data && data[0] ? mapMemberFromDB(data[0]) : member;
+    
+    // If this is a new member and they're active, create a levy record for current year
+    if (isNewMember && member.active !== false) {
+        try {
+            const currentYear = new Date().getUTCFullYear();
+            const levyAmount = await loadAnnualLevyAmount(url, key);
+            
+            if (levyAmount > 0) {
+                const newLevy: MemberLevy = {
+                    id: `${savedMember.id}-${currentYear}`,
+                    memberID: savedMember.id,
+                    year: currentYear,
+                    baseAmount: levyAmount,
+                    carryOver: 0,
+                    remaining: levyAmount,
+                    classNumber: savedMember.classNumber,
+                };
+                await upsertMemberLevies(url, key, [newLevy]);
+            }
+        } catch (levyError) {
+            console.warn('Failed to create levy for new member:', levyError);
+            // Don't fail the member save if levy creation fails
+        }
+    }
+    
+    // Return the updated member from database
+    return { success: true, member: savedMember } as { success: true; member: Member };
 };
 
 export const saveMonthLockToSupabase = async (url: string, key: string, lock: MonthLock) => {
@@ -1120,4 +1186,65 @@ export const saveAssetMaintenanceToSupabase = async (url: string, key: string, m
         .upsert([mapMaintenanceToDB(maintenance)]);
     if (error) throw new Error(`Save asset maintenance failed: ${error.message}`);
     return { success: true };
+};
+
+// --- Utilities ---
+
+export const loadUtilityValue = async (url: string, key: string, utilityKey: string): Promise<string | null> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return null;
+    const { data, error } = await supabase
+        .from('utilities')
+        .select('value')
+        .eq('key', utilityKey)
+        .single();
+    if (error) {
+        console.warn(`Load utility ${utilityKey} failed:`, error.message);
+        return null;
+    }
+    return data?.value || null;
+};
+
+export const saveUtilityValue = async (
+    url: string,
+    key: string,
+    utilityKey: string,
+    value: string,
+    description?: string,
+    updatedBy?: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('utilities')
+        .upsert([{
+            key: utilityKey,
+            value,
+            description: description || null,
+            updated_by: updatedBy || null,
+            updated_at: new Date().toISOString(),
+        }]);
+    if (error) throw new Error(`Save utility ${utilityKey} failed: ${error.message}`);
+    return { success: true };
+};
+
+export const loadAnnualLevyAmount = async (url: string, key: string): Promise<number> => {
+    const value = await loadUtilityValue(url, key, 'annual_levy_amount');
+    return value ? parseFloat(value) || 0 : 0;
+};
+
+export const saveAnnualLevyAmount = async (
+    url: string,
+    key: string,
+    amount: number,
+    updatedBy?: string
+) => {
+    return saveUtilityValue(
+        url,
+        key,
+        'annual_levy_amount',
+        amount.toString(),
+        'Annual harvest levy amount per member',
+        updatedBy
+    );
 };

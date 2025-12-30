@@ -1,5 +1,5 @@
 
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "kofi-and-ama" | "development-fund" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "day-born" | "development-fund" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {
@@ -66,12 +66,15 @@ export interface Member {
     classNumber?: string; // e.g. "1"
     memberNumber?: string; // e.g. "128"
     address?: string;
+    city?: string;
+    province?: string;
     email?: string;
     profession?: string; // e.g. "Retired" or free-text
     phone?: string;
     dobMonth?: number; // 1-12
     dobDay?: number;   // 1-31
     dateOfBirth?: string; // ISO date YYYY-MM-DD
+    dayBorn?: string; // Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
     active?: boolean;
     createdAt?: string;
     devFundPledge?: boolean; // Has pledged to development fund
@@ -91,7 +94,6 @@ export interface Settings {
     orgEmail?: string;
     charityNumber?: string;
     signatureImage?: string; // Base64 or URL for authorized signature
-    annualLevyAmount?: number; // Annual Harvest Levy applied per member each year
     // E-Transfer settings
     etransferNotificationEmail?: string; // mailbox that receives Interac notifications
     etransferInboundSecret?: string; // webhook secret to validate inbound provider

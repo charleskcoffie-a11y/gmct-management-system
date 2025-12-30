@@ -1,11 +1,11 @@
 
 // components/Utilities.tsx
-import React, { useState, useMemo } from 'react';
-import type { Entry, Member, Settings, WeeklyHistoryRecord, DevelopmentFundEntry } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import type { Entry, Member, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, User } from '../types';
 import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeMember } from '../utils';
 import { DownloadIcon, UploadIcon } from './icons';
 import BackupSettings from './BackupSettings';
-import { generateMemberLeviesForYear, loadMemberLeviesForYear } from '../services/supabase';
+import { generateMemberLeviesForYear, loadMemberLeviesForYear, loadAnnualLevyAmount, saveAnnualLevyAmount } from '../services/supabase';
 
 interface UtilitiesProps {
     entries: Entry[];
@@ -13,17 +13,28 @@ interface UtilitiesProps {
     history: WeeklyHistoryRecord[];
     developmentFund: DevelopmentFundEntry[];
     settings: Settings;
+    currentUser?: User | null;
     setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
     setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
     setSettings: React.Dispatch<React.SetStateAction<Settings>>;
     setDevelopmentFund: React.Dispatch<React.SetStateAction<DevelopmentFundEntry[]>>;
 }
 
-const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, developmentFund, settings, setEntries, setMembers, setSettings, setDevelopmentFund }) => {
+const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, developmentFund, settings, currentUser, setEntries, setMembers, setSettings, setDevelopmentFund }) => {
     const today = new Date().toISOString().slice(0, 10);
     const [showBackupSettings, setShowBackupSettings] = useState(false);
-    const [levyAmount, setLevyAmount] = useState<number>(settings.annualLevyAmount || 0);
+    const [levyAmount, setLevyAmount] = useState<number>(0);
+    const [levyYear, setLevyYear] = useState<number>(new Date().getUTCFullYear());
     const [outstandingLevies, setOutstandingLevies] = useState<Array<{ memberID: string; year: number; baseAmount: number; carryOver: number; remaining: number; classNumber?: string }>>([]);
+
+    // Load levy amount from database on mount
+    useEffect(() => {
+        if (settings.supabaseUrl && settings.supabaseKey) {
+            loadAnnualLevyAmount(settings.supabaseUrl, settings.supabaseKey)
+                .then(amount => setLevyAmount(amount))
+                .catch(err => console.error('Failed to load annual levy amount:', err));
+        }
+    }, [settings.supabaseUrl, settings.supabaseKey]);
 
     // --- Helpers for Filtering ---
     const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -98,16 +109,25 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
     }
 
     // --- Annual Harvest Levy ---
-    const currentYear = new Date().getUTCFullYear();
     const activeMembersCount = useMemo(() => members.filter(m => m.active !== false).length, [members]);
+    const isAdmin = currentUser?.role === 'admin';
 
-    const handleSaveLevyAmount = () => {
+    const handleSaveLevyAmount = async () => {
         if (levyAmount < 0) {
             alert('Levy amount must be zero or greater.');
             return;
         }
-        setSettings(prev => ({ ...prev, annualLevyAmount: levyAmount }));
-        alert('Annual levy amount saved.');
+        if (!settings.supabaseUrl || !settings.supabaseKey) {
+            alert('Supabase is not configured. Please add URL/Key in Settings.');
+            return;
+        }
+        try {
+            await saveAnnualLevyAmount(settings.supabaseUrl, settings.supabaseKey, levyAmount);
+            alert('Annual levy amount saved to database.');
+        } catch (e: any) {
+            console.error(e);
+            alert(`Failed to save levy amount: ${e.message || 'Unknown error'}`);
+        }
     };
 
     const handleGenerateLevies = async () => {
@@ -120,8 +140,8 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
             return;
         }
         try {
-            const res = await generateMemberLeviesForYear(settings.supabaseUrl, settings.supabaseKey, currentYear, levyAmount);
-            alert(`Member levies generated for ${currentYear}. Created: ${res.created}, Updated: ${res.updated}.`);
+            const res = await generateMemberLeviesForYear(settings.supabaseUrl, settings.supabaseKey, levyYear, levyAmount);
+            alert(`Member levies generated for ${levyYear}. Created: ${res.created}, Updated: ${res.updated}.`);
         } catch (e: any) {
             console.error(e);
             alert(`Failed to generate levies: ${e.message || 'Unknown error'}`);
@@ -134,7 +154,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
             return;
         }
         try {
-            const levies = await loadMemberLeviesForYear(settings.supabaseUrl, settings.supabaseKey, currentYear);
+            const levies = await loadMemberLeviesForYear(settings.supabaseUrl, settings.supabaseKey, levyYear);
             const outstanding = levies.filter(l => (l.remaining || 0) > 0);
             // Map to minimal shape for display
             setOutstandingLevies(outstanding.map(l => ({
@@ -417,14 +437,23 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                                 <p className="text-xs text-slate-500 mt-2">Active members: {activeMembersCount}</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Target Year</label>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                    Target Year {!isAdmin && <span className="text-xs text-slate-500">(Admin only)</span>}
+                                </label>
                                 <input
-                                    type="text"
-                                    value={currentYear}
-                                    disabled
-                                    className="w-full rounded-lg border-2 border-slate-300 bg-slate-100 px-3 py-2"
+                                    type="number"
+                                    min={2000}
+                                    max={2100}
+                                    value={levyYear}
+                                    onChange={e => setLevyYear(parseInt(e.target.value) || new Date().getUTCFullYear())}
+                                    disabled={!isAdmin}
+                                    className={`w-full rounded-lg border-2 px-3 py-2 ${
+                                        isAdmin 
+                                            ? 'border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-500' 
+                                            : 'border-slate-300 bg-slate-100 cursor-not-allowed'
+                                    }`}
                                 />
-                                <p className="text-xs text-slate-500 mt-2">Levy starts on Jan 1 {currentYear}.</p>
+                                <p className="text-xs text-slate-500 mt-2">Levy starts on Jan 1 {levyYear}.</p>
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-4 pt-2">
@@ -438,7 +467,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                                 onClick={handleGenerateLevies}
                                 className="flex-1 min-w-[180px] bg-gradient-to-br from-slate-700 to-zinc-700 hover:from-slate-800 hover:to-zinc-800 text-white font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all shadow-md border-2 border-slate-500"
                             >
-                                ⚙️ Generate Levies for {currentYear}
+                                ⚙️ Generate Levies for {levyYear}
                             </button>
                         </div>
                         <div className="pt-3 border-t-2 border-slate-100">
@@ -455,7 +484,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                         </h3>
                     </div>
                     <div className="p-6 space-y-4">
-                        <p className="text-sm text-slate-600 font-medium">View members who still owe their annual levy for {currentYear}. Paid amounts are computed from base + carryover minus current remaining.</p>
+                        <p className="text-sm text-slate-600 font-medium">View members who still owe their annual levy for {levyYear}. Paid amounts are computed from base + carryover minus current remaining.</p>
                         <div className="flex flex-wrap gap-4">
                             <button
                                 onClick={handleLoadOutstandingLevies}
@@ -479,7 +508,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ entries, members, history, develo
                                                 Remaining: l.remaining,
                                             };
                                         });
-                                        generateAndDownloadCsv(rows, `Outstanding_Levy_${currentYear}.csv`);
+                                        generateAndDownloadCsv(rows, `Outstanding_Levy_${levyYear}.csv`);
                                     }}
                                     className="flex-1 min-w-[160px] bg-white hover:bg-sky-50 text-sky-700 font-bold py-3 px-4 rounded-lg flex justify-center items-center gap-2 transition-all border-2 border-sky-300"
                                 >

@@ -138,9 +138,12 @@ export function sanitizeMember(raw: any): Member {
         classNumber: sanitizeString(findVal(['classNumber', 'class', 'class #', 'classNo'])),
         memberNumber: sanitizeString(findVal(['memberNumber', 'member #', 'number', 'memberId', 'memberNo'])),
         address: sanitizeString(findVal(['address', 'member address', 'home address', 'street', 'mailing address'])),
+        city: sanitizeString(findVal(['city', 'town'])),
+        province: sanitizeString(findVal(['province', 'state', 'region'])),
         email: sanitizeString(findVal(['email', 'e-mail'])),
         profession: sanitizeString(findVal(['profession', 'occupation'])),
         phone: sanitizeString(findVal(['phone', 'phoneNumber', 'telephone', 'mobile'])),
+        dayBorn: sanitizeString(findVal(['dayBorn', 'day_born', 'dayOfWeekBorn'])),
         active: typeof findVal(['active', 'isActive', 'status']) === 'boolean'
             ? (findVal(['active', 'isActive', 'status']) as boolean)
             : true,
@@ -292,8 +295,8 @@ export function sanitizeEntryType(type: any): EntryType {
         'harvestlevy': 'harvest-levy',
         'harvest-levy': 'harvest-levy',
         'pledges': 'pledge',
-        'kofi-ama': 'kofi-and-ama',
-        'kofiandama': 'kofi-and-ama',
+        'kofi-ama': 'day-born',
+        'kofiandama': 'day-born',
     };
 
     const validTypes: EntryType[] = [
@@ -302,7 +305,7 @@ export function sanitizeEntryType(type: any): EntryType {
         'thanksgiving-offering',
         'pledge',
         'harvest-levy',
-        'kofi-and-ama',
+        'day-born',
         'development-fund',
         'other'
     ];
