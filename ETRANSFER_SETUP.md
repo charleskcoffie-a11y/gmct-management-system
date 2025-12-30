@@ -44,7 +44,7 @@ Pick ONE of these providers to forward emails:
 
 ### Option A: SendGrid (Recommended)
 1. Go to https://sendgrid.com and sign up (free tier available)
-2. Create an API key: **Settings → API Keys → Create API Key**
+2. Create an API key: **Settings → API Keys → Create API Key** 
 3. Copy the API key - you'll need it for the webhook secret
 4. Go to **Mail Settings → Inbound Parse**
 5. Add a new inbound parse webhook:

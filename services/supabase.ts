@@ -93,26 +93,33 @@ const mapMemberToDB = (m: Member) => ({
     created_at: m.createdAt || new Date().toISOString() // Ensure never empty
 });
 
-const mapMemberFromDB = (m: any): Member => ({
-    id: m.id,
-    name: m.name,
-    classNumber: m.class_number,
-    memberNumber: m.member_number,
-    address: m.address,
-    city: m.city || undefined,
-    province: m.province || undefined,
-    email: m.email,
-    profession: m.profession,
-    phone: m.phone,
-    dobMonth: typeof m.dob_month === 'number' ? m.dob_month : undefined,
-    dobDay: typeof m.dob_day === 'number' ? m.dob_day : undefined,
-    dateOfBirth: m.date_of_birth || undefined,
-    dayBorn: m.day_born || undefined,
-    devFundPledge: m.dev_fund_pledge || false,
-    devFundPledgeAmount: typeof m.dev_fund_pledge_amount === 'number' ? m.dev_fund_pledge_amount : undefined,
-    active: typeof m.active === 'boolean' ? m.active : true,
-    createdAt: m.created_at
-});
+const mapMemberFromDB = (m: any): Member => {
+    const parseNum = (val: any) => {
+        const n = typeof val === 'number' ? val : parseInt(val, 10);
+        return Number.isFinite(n) ? n : undefined;
+    };
+
+    return {
+        id: m.id,
+        name: m.name,
+        classNumber: m.class_number,
+        memberNumber: m.member_number,
+        address: m.address,
+        city: m.city || undefined,
+        province: m.province || undefined,
+        email: m.email,
+        profession: m.profession,
+        phone: m.phone,
+        dobMonth: parseNum(m.dob_month),
+        dobDay: parseNum(m.dob_day),
+        dateOfBirth: m.date_of_birth || undefined,
+        dayBorn: m.day_born || undefined,
+        devFundPledge: m.dev_fund_pledge || false,
+        devFundPledgeAmount: typeof m.dev_fund_pledge_amount === 'number' ? m.dev_fund_pledge_amount : undefined,
+        active: typeof m.active === 'boolean' ? m.active : true,
+        createdAt: m.created_at
+    };
+};
 
 const mapEntryToDB = (e: Entry) => ({
     id: e.id,

@@ -46,6 +46,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(today);
   const [emailTo, setEmailTo] = useState('');
+  const [specificDay, setSpecificDay] = useState('');
 
   const entryTypes = useMemo(() => Array.from(new Set(combinedEntries.map(e => e.type))), [combinedEntries]);
   const classNumbers = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
@@ -53,6 +54,18 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
 
   const [selectedTypes, setSelectedTypes] = useState<Set<EntryType | 'all'>>(new Set(['all']));
   const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set(['all']));
+  const [selectedDayBorns, setSelectedDayBorns] = useState<Set<string>>(new Set(['all']));
+  const [selectedWeekdays, setSelectedWeekdays] = useState<Set<string>>(new Set(['all']));
+  const dayBornOptions = useMemo(() => ['all', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
+  const weekdayOptions = useMemo(() => ['all', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
+  const weekdayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+
+  // Keep weekday filter in sync when Day Born returns to "All"
+  useEffect(() => {
+    if (selectedDayBorns.has('all') && !selectedWeekdays.has('all')) {
+      setSelectedWeekdays(new Set(['all']));
+    }
+  }, [selectedDayBorns, selectedWeekdays]);
 
   useEffect(() => {
     if (!targetSection) return;
@@ -97,6 +110,40 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
     setSelectedClasses(newSelection);
   };
 
+  const handleDayBornChange = (day: string) => {
+    const newSelection = new Set(selectedDayBorns);
+    if (day === 'all') {
+      newSelection.clear();
+      newSelection.add('all');
+    } else {
+      newSelection.delete('all');
+      const normalized = day.toLowerCase();
+      if (newSelection.has(normalized)) newSelection.delete(normalized); else newSelection.add(normalized);
+      if (newSelection.size === 0 || newSelection.size === dayBornOptions.length - 1) {
+        newSelection.clear();
+        newSelection.add('all');
+      }
+    }
+    setSelectedDayBorns(newSelection);
+  };
+
+  const handleWeekdayChange = (day: string) => {
+    const newSelection = new Set(selectedWeekdays);
+    if (day === 'all') {
+      newSelection.clear();
+      newSelection.add('all');
+    } else {
+      newSelection.delete('all');
+      const normalized = day.toLowerCase();
+      if (newSelection.has(normalized)) newSelection.delete(normalized); else newSelection.add(normalized);
+      if (newSelection.size === 0 || newSelection.size === weekdayOptions.length - 1) {
+        newSelection.clear();
+        newSelection.add('all');
+      }
+    }
+    setSelectedWeekdays(newSelection);
+  };
+
   const generateAndDownloadCsv = (data: any[], filename: string) => {
     if (data.length === 0) {
       alert('No data to export.');
@@ -115,9 +162,18 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
     return combinedEntries.filter(entry => {
       if (startDate && entry.date < startDate) return false;
       if (endDate && entry.date > endDate) return false;
+      if (specificDay && entry.date !== specificDay) return false;
+      const entryWeekday = (() => {
+        const d = new Date(entry.date + 'T00:00:00');
+        if (isNaN(d.getTime())) return undefined;
+        return weekdayNames[d.getDay()];
+      })();
+      if (!selectedWeekdays.has('all') && (!entryWeekday || !selectedWeekdays.has(entryWeekday))) return false;
       if (!selectedTypes.has('all') && !selectedTypes.has(entry.type)) return false;
       const member = membersById.get(entry.memberID);
       if (!selectedClasses.has('all') && (!member || !member.classNumber || !selectedClasses.has(member.classNumber))) return false;
+      const memberDayBorn = member?.dayBorn ? member.dayBorn.toLowerCase() : undefined;
+      if (!selectedDayBorns.has('all') && (!memberDayBorn || !selectedDayBorns.has(memberDayBorn))) return false;
       return true;
     });
   };
@@ -246,52 +302,109 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
     }
   };
 
-  // Upcoming Birthdays (Next 4 Weeks starting next Sunday)
-  const nextSunday = (base: Date) => {
-    const d = new Date(base);
-    const day = d.getDay(); // 0=Sun
-    if (day === 0) return d;
-    d.setDate(d.getDate() + (7 - day));
-    return d;
-  };
+  // Upcoming Birthdays (Current month start through end of next month; local time to avoid label drift)
+  const startWindow = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }, []);
 
-  const startSunday = useMemo(() => nextSunday(new Date()), []);
   const endDateObj = useMemo(() => {
-    const e = new Date(startSunday);
-    e.setDate(e.getDate() + 27); // 4 weeks window
-    return e;
-  }, [startSunday]);
+    const start = startWindow;
+    // Last day of next month (local)
+    return new Date(start.getFullYear(), start.getMonth() + 2, 0);
+  }, [startWindow]);
 
   const upcomingBirthdays = useMemo(() => {
-    const list: { id: string; name: string; month: number; day: number; dateStr: string; week: number; classNumber?: string; email?: string; phone?: string }[] = [];
+    const list: {
+      id: string;
+      name: string;
+      month: number;
+      day: number;
+      dateStr: string;
+      classNumber?: string;
+      email?: string;
+      phone?: string;
+      weekStartMs: number;
+    }[] = [];
+
     members.forEach(m => {
       if (!m.dobMonth || !m.dobDay) return;
-      const currentYear = startSunday.getFullYear();
-      let bday = new Date(Date.UTC(currentYear, m.dobMonth - 1, m.dobDay));
-      const startUTC = Date.UTC(startSunday.getFullYear(), startSunday.getMonth(), startSunday.getDate());
-      const endUTC = Date.UTC(endDateObj.getFullYear(), endDateObj.getMonth(), endDateObj.getDate());
-      let bdayUTC = Date.UTC(bday.getUTCFullYear(), bday.getUTCMonth(), bday.getUTCDate());
-      if (bdayUTC < startUTC) {
-        bday = new Date(Date.UTC(currentYear + 1, m.dobMonth - 1, m.dobDay));
-        bdayUTC = Date.UTC(bday.getUTCFullYear(), bday.getUTCMonth(), bday.getUTCDate());
+      const currentYear = startWindow.getFullYear();
+      let bday = new Date(currentYear, m.dobMonth - 1, m.dobDay);
+      const startMs = startWindow.getTime();
+      const endMs = endDateObj.getTime();
+      let bdayMs = bday.getTime();
+
+      // If the birthday already passed in this window, roll forward a year so it stays in range.
+      if (bdayMs < startMs) {
+        bday = new Date(currentYear + 1, m.dobMonth - 1, m.dobDay);
+        bdayMs = bday.getTime();
       }
-      if (bdayUTC >= startUTC && bdayUTC <= endUTC) {
-        const week = Math.floor((bdayUTC - startUTC) / (7 * 24 * 60 * 60 * 1000));
+
+      if (bdayMs >= startMs && bdayMs <= endMs) {
+        const weekStart = new Date(bdayMs);
+        weekStart.setHours(0, 0, 0, 0);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday anchor
+
         list.push({
           id: m.id,
           name: m.name,
           month: m.dobMonth,
           day: m.dobDay,
-          dateStr: new Date(bdayUTC).toISOString().slice(0, 10),
-          week: Math.min(Math.max(week, 0), 3),
+          dateStr: new Date(bdayMs).toISOString().slice(0, 10),
           classNumber: m.classNumber,
           email: m.email,
           phone: m.phone,
+          weekStartMs: weekStart.getTime(),
         });
       }
     });
+
     return list.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
-  }, [members, startSunday, endDateObj]);
+  }, [members, startWindow, endDateObj]);
+
+  const birthdaysByWeek = useMemo(() => {
+    const grouped = new Map<number, { weekStartMs: number; birthdays: typeof upcomingBirthdays }>();
+
+    upcomingBirthdays.forEach(b => {
+      if (!grouped.has(b.weekStartMs)) {
+        grouped.set(b.weekStartMs, { weekStartMs: b.weekStartMs, birthdays: [] });
+      }
+      grouped.get(b.weekStartMs)!.birthdays.push(b);
+    });
+
+    return Array.from(grouped.values())
+      .map(group => ({
+        ...group,
+        birthdays: group.birthdays.sort((a, b) => a.dateStr.localeCompare(b.dateStr)),
+      }))
+      .sort((a, b) => a.weekStartMs - b.weekStartMs);
+  }, [upcomingBirthdays]);
+
+  const membersWithDobCount = useMemo(() => members.filter(m => m.dobMonth && m.dobDay).length, [members]);
+
+  const dobPreview = useMemo(() => {
+    return members
+      .filter(m => m.dobMonth && m.dobDay)
+      .map(m => ({
+        id: m.id,
+        name: m.name,
+        dobMonth: m.dobMonth as number,
+        dobDay: m.dobDay as number,
+      }))
+      .sort((a, b) => (a.dobMonth === b.dobMonth ? a.dobDay - b.dobDay : a.dobMonth - b.dobMonth))
+      .slice(0, 10);
+  }, [members]);
+
+  useEffect(() => {
+    console.debug('[Birthdays] window', {
+      start: startWindow.toISOString(),
+      end: endDateObj.toISOString(),
+      eligibleMembers: membersWithDobCount,
+      upcomingCount: upcomingBirthdays.length,
+      upcomingBirthdays,
+    });
+  }, [startWindow, endDateObj, membersWithDobCount, upcomingBirthdays]);
 
   return (
     <div className="space-y-6">
@@ -336,7 +449,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
 
           <div id="financial-report-section" className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1">Start Date</label>
                   <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border-2 border-indigo-200 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" />
@@ -344,6 +457,10 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1">End Date</label>
                   <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border-2 border-indigo-200 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Specific Day (optional)</label>
+                  <input type="date" value={specificDay} onChange={e => setSpecificDay(e.target.value)} className="w-full border-2 border-indigo-200 rounded-lg py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1">Email To</label>
@@ -357,7 +474,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm font-bold text-slate-700">Entry Types</div>
                   <div className="flex flex-wrap gap-2">
@@ -385,6 +502,39 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
                       </button>
                     ))}
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-sm font-bold text-slate-700">Day Born</div>
+                  <div className="flex flex-wrap gap-2">
+                    {dayBornOptions.map(day => (
+                      <button
+                        key={day}
+                        onClick={() => handleDayBornChange(day)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedDayBorns.has(day) ? 'bg-cyan-600 text-white border-cyan-600 shadow-md' : 'border-cyan-200 text-cyan-700 bg-cyan-50 hover:bg-cyan-100'}`}
+                      >
+                        {day === 'all' ? 'All' : day.charAt(0).toUpperCase() + day.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-sm font-bold text-slate-700">Entry Day of Week</div>
+                  <div className="flex flex-wrap gap-2">
+                    {weekdayOptions.map(day => {
+                      const disabled = selectedDayBorns.has('all');
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => !disabled && handleWeekdayChange(day)}
+                          className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${selectedWeekdays.has(day) ? 'bg-cyan-600 text-white border-cyan-600 shadow-md' : 'border-cyan-200 text-cyan-700 bg-cyan-50 hover:bg-cyan-100'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          aria-disabled={disabled}
+                        >
+                          {day === 'all' ? 'All' : day.charAt(0).toUpperCase() + day.slice(1)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-slate-500">Enable by selecting a specific Day Born above.</p>
                 </div>
               </div>
 
@@ -449,37 +599,66 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
       {activeSection === 'birthdays' && (
         <div id="upcoming-birthdays-section" className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white">
-            <h3 className="text-lg font-bold">🎉 Upcoming Birthdays (Next 4 Weeks)</h3>
-            <p className="text-sm opacity-90">Starting Sunday {startSunday.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</p>
+            <h3 className="text-lg font-bold">🎉 Upcoming Birthdays (Current + Next Month)</h3>
+            <p className="text-sm opacity-90">
+              Range: {startWindow.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} (1st of this month) – {endDateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+            </p>
+            <p className="text-xs opacity-80">Members with DOB: {membersWithDobCount} · Showing: {upcomingBirthdays.length}</p>
           </div>
-          <div className="p-6">
+          <div className="p-6 space-y-6">
+            <div className="bg-white/70 border border-blue-100 rounded-lg p-3 text-xs text-slate-700">
+              <div className="font-semibold text-slate-800">Debug: DOB Preview (first 10)</div>
+              {dobPreview.length === 0 ? (
+                <div>No members with dobMonth/dobDay found.</div>
+              ) : (
+                <ol className="list-decimal list-inside">
+                  {dobPreview.map(d => (
+                    <li key={d.id}>{d.name} — {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.dobMonth - 1]} {d.dobDay}</li>
+                  ))}
+                </ol>
+              )}
+            </div>
             {upcomingBirthdays.length === 0 ? (
-              <div className="text-center text-slate-500 p-8">No upcoming birthdays in the next four weeks.</div>
+              <div className="text-center text-slate-500 p-8">No upcoming birthdays in the current or next month.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-slate-700">
-                  <thead className="bg-gradient-to-r from-blue-100 to-indigo-100 text-slate-700 text-sm uppercase font-bold">
-                    <tr>
-                      <th className="px-6 py-3">Member</th>
-                      <th className="px-6 py-3">Class</th>
-                      <th className="px-6 py-3">Birthday</th>
-                      <th className="px-6 py-3">Week</th>
-                      <th className="px-6 py-3">Contact</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {upcomingBirthdays.map(b => (
-                      <tr key={b.id} className="hover:bg-blue-50 transition-colors">
-                        <td className="px-6 py-3 font-semibold">{b.name}</td>
-                        <td className="px-6 py-3">{b.classNumber || '-'}</td>
-                        <td className="px-6 py-3">{new Date(b.dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</td>
-                        <td className="px-6 py-3"><span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">Week {b.week + 1}</span></td>
-                        <td className="px-6 py-3 text-sm text-slate-600">{b.email || b.phone || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              birthdaysByWeek.map(week => {
+                const sundayLabel = new Date(week.weekStartMs).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+                const saturday = new Date(week.weekStartMs);
+                saturday.setDate(saturday.getDate() + 6);
+                const saturdayLabel = saturday.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+
+                return (
+                  <div key={week.weekStartMs} className="bg-white border-2 border-blue-100 rounded-xl shadow-sm overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-100 to-indigo-100 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                      <div className="font-bold text-slate-800">Week of Sunday {sundayLabel}</div>
+                      <div className="text-xs text-slate-600">Covers Sunday–Saturday: {sundayLabel} – {saturdayLabel}</div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-slate-700">
+                        <thead className="text-slate-700 text-sm uppercase font-bold bg-white">
+                          <tr>
+                            <th className="px-6 py-3">Member</th>
+                            <th className="px-6 py-3">Class</th>
+                            <th className="px-6 py-3">Birthday</th>
+                            <th className="px-6 py-3">Contact</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {week.birthdays.map(b => (
+                            <tr key={b.id} className="hover:bg-blue-50 transition-colors">
+                              <td className="px-6 py-3 font-semibold">{b.name}</td>
+                              <td className="px-6 py-3">{b.classNumber || '-'}</td>
+                              <td className="px-6 py-3">{new Date(b.dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</td>
+                              <td className="px-6 py-3 text-sm text-slate-600">{b.email || b.phone || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

@@ -97,8 +97,9 @@ const App: React.FC = () => {
     const [searchFilter, setSearchFilter] = useState('');
     const [classFilter, setClassFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
-    const [startDateFilter, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
-    const [endDateFilter, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
+    const [dayBornFilter, setDayBornFilter] = useState<'all' | 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'>('all');
+    const [startDateFilter, setStartDateFilter] = useState('');
+    const [endDateFilter, setEndDateFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
@@ -175,6 +176,13 @@ const App: React.FC = () => {
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
 
+    // Keep Day Born filter aligned with type selection
+    useEffect(() => {
+        if (typeFilter !== 'day-born' && dayBornFilter !== 'all') {
+            setDayBornFilter('all');
+        }
+    }, [typeFilter, dayBornFilter]);
+
     const filteredAndSortedEntries = useMemo(() => {
         const filtered = entries.filter(entry => {
             // Soft Delete check
@@ -189,6 +197,8 @@ const App: React.FC = () => {
             const entryClass = entry.classNumber || member?.classNumber;
             
             if (classFilter !== 'all' && entryClass !== classFilter) return false;
+            const memberDayBorn = member?.dayBorn ? member.dayBorn.toLowerCase() : undefined;
+            if (typeFilter === 'day-born' && dayBornFilter !== 'all' && memberDayBorn !== dayBornFilter) return false;
             return true;
         });
 
@@ -210,7 +220,7 @@ const App: React.FC = () => {
             return 0;
         });
         return sortableEntries;
-    }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter, showDeleted]);
+    }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter, showDeleted, dayBornFilter]);
 
     // Group entries by date
     const entriesByDate = useMemo(() => {
@@ -618,6 +628,24 @@ const App: React.FC = () => {
                                     <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 End Date</label>
                                     <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
                                 </div>
+                            </div>
+                            <div className="lg:col-span-1">
+                                <label className="block text-sm font-bold uppercase text-blue-700 mb-1 flex items-center gap-2">🧬 Day Born <span className="text-[11px] font-semibold text-blue-500">(active when Type is Day Born)</span></label>
+                                <select
+                                    value={dayBornFilter}
+                                    onChange={e => setDayBornFilter(e.target.value as any)}
+                                    disabled={typeFilter !== 'day-born'}
+                                    className={`block w-full border-2 rounded-lg shadow-sm py-3 font-medium focus:ring-blue-400 focus:border-blue-400 ${typeFilter !== 'day-born' ? 'border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed' : 'border-blue-300'}`}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="sunday">Sunday</option>
+                                    <option value="monday">Monday</option>
+                                    <option value="tuesday">Tuesday</option>
+                                    <option value="wednesday">Wednesday</option>
+                                    <option value="thursday">Thursday</option>
+                                    <option value="friday">Friday</option>
+                                    <option value="saturday">Saturday</option>
+                                </select>
                             </div>
                         </div>
 

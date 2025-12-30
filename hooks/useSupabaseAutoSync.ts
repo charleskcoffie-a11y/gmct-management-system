@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Settings, Entry, Member, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry, MonthLock } from '../types';
 import { uploadDataToSupabase, downloadDataFromSupabase } from '../services/supabase';
-import { mergeUnique } from '../utils';
 
 // Helper to check if Supabase is configured
 const isConfigured = (settings: Settings) => {
@@ -64,25 +63,22 @@ export function useSupabaseAutoSync(
                 // Fetch Cloud Data
                 const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
 
-                // Merge Logic: Combine Cloud + Local
-                // We trust Cloud data for collisions, but keep Local data if it's new (offline created)
-                const mergedEntries = mergeUnique(data.entries, cloudData.entries);
-                const mergedMembers = mergeUnique(data.members, cloudData.members);
-                const mergedHistory = mergeUnique(data.history, cloudData.history);
-                const mergedUsers = mergeUnique(data.users, cloudData.users, 'username');
-                const mergedLocks = mergeUnique(data.monthLocks || [], cloudData.monthLocks || [], 'month');
-                
-                // For settings, prefer cloud settings if they exist (to sync class codes etc)
-                const mergedSettings = cloudData.settings || settings;
+                // Trust cloud data as source of truth (multi-user); ignore local cache to avoid confusion
+                const cloudEntries = cloudData.entries || [];
+                const cloudMembers = cloudData.members || [];
+                const cloudHistory = cloudData.history || [];
+                const cloudUsers = cloudData.users || [];
+                const cloudLocks = cloudData.monthLocks || [];
+                const cloudSettings = cloudData.settings || settings;
 
-                // Update UI with merged data
-                setters.setEntries(mergedEntries);
-                setters.setMembers(mergedMembers);
-                setters.setHistory(mergedHistory);
-                setters.setUsers(mergedUsers);
-                setters.setMonthLocks?.(mergedLocks);
+                // Update UI with cloud data only
+                setters.setEntries(cloudEntries);
+                setters.setMembers(cloudMembers);
+                setters.setHistory(cloudHistory);
+                setters.setUsers(cloudUsers);
+                setters.setMonthLocks?.(cloudLocks);
                 if (cloudData.settings && setters.setSettings) {
-                    setters.setSettings(mergedSettings);
+                    setters.setSettings(cloudSettings);
                 }
 
 

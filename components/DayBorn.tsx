@@ -1,6 +1,7 @@
 // components/DayBorn.tsx
 import React, { useState, useMemo } from 'react';
 import type { Member, Entry, Settings, User, SyncStatus, MonthLock } from '../types';
+import { saveEntryToSupabase } from '../services/supabase';
 import EntryModal from './EntryModal';
 import BulkDayBornModal from './BulkDayBornModal';
 import { v4 as uuidv4 } from 'uuid';
@@ -60,16 +61,32 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
         setIsModalOpen(true);
     };
 
-    const handleSaveEntry = async (entry: Entry) => {
-        const newEntries = [...entries];
-        const index = newEntries.findIndex(e => e.id === entry.id);
-        if (index > -1) {
-            newEntries[index] = entry;
-        } else {
-            newEntries.push(entry);
+    const canCloudSave = Boolean(settings.supabaseUrl && settings.supabaseKey);
+
+    const requireCloud = () => {
+        if (!canCloudSave) {
+            showToast('❌ Supabase is not configured. Cannot save Day Born entries locally.', 'error', 4000);
+            return false;
         }
-        
+        return true;
+    };
+
+    const persistEntry = async (entry: Entry) => {
+        if (!canCloudSave) throw new Error('Supabase not configured');
+        await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+    };
+
+    const handleSaveEntry = async (entry: Entry) => {
+        if (!requireCloud()) return;
         try {
+            await persistEntry(entry);
+            const newEntries = [...entries];
+            const index = newEntries.findIndex(e => e.id === entry.id);
+            if (index > -1) {
+                newEntries[index] = entry;
+            } else {
+                newEntries.push(entry);
+            }
             setEntries(newEntries);
             setIsModalOpen(false);
             showToast(`✅ Entry saved successfully!`, 'success', 3000);
@@ -79,10 +96,10 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
     };
 
     const handleSaveAndNew = async (entry: Entry) => {
-        const newEntries = [...entries];
-        newEntries.push(entry);
-        
+        if (!requireCloud()) return;
         try {
+            await persistEntry(entry);
+            const newEntries = [...entries, entry];
             setEntries(newEntries);
             showToast(`✅ Entry saved! Ready for next entry.`, 'success', 2000);
             // Reset for new entry
@@ -103,19 +120,32 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
         }
     };
 
-    const handleDeleteEntry = (id: string) => {
+    const handleDeleteEntry = async (id: string) => {
+        if (!requireCloud()) return;
         const updatedEntries = entries.map(e => 
             e.id === id ? { ...e, deleted: true, updatedBy: currentUser?.username } : e
         );
-        setEntries(updatedEntries);
-        showToast(`✅ Entry deleted`, 'success', 2000);
+        const deletedEntry = updatedEntries.find(e => e.id === id);
+        try {
+            if (deletedEntry) await persistEntry(deletedEntry);
+            setEntries(updatedEntries);
+            showToast(`✅ Entry deleted`, 'success', 2000);
+        } catch (err: any) {
+            showToast(`❌ Failed to delete entry in cloud: ${err.message || err}`, 'error', 5000);
+        }
     };
 
-    const handleBulkSave = (newEntries: Entry[]) => {
-        const updatedEntries = [...entries, ...newEntries];
-        setEntries(updatedEntries);
-        setIsBulkModalOpen(false);
-        showToast(`✅ ${newEntries.length} entries created successfully!`, 'success', 3000);
+    const handleBulkSave = async (newEntries: Entry[]) => {
+        if (!requireCloud()) return;
+        try {
+            await Promise.all(newEntries.map(e => persistEntry(e)));
+            const updatedEntries = [...entries, ...newEntries];
+            setEntries(updatedEntries);
+            setIsBulkModalOpen(false);
+            showToast(`✅ ${newEntries.length} entries created successfully!`, 'success', 3000);
+        } catch (err: any) {
+            showToast(`❌ Bulk save failed in cloud: ${err.message || err}`, 'error', 5000);
+        }
     };
 
     return (
