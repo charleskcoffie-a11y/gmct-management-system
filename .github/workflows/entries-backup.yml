@@ -1,0 +1,75 @@
+name: Entries Backup (Weekly)
+
+on:
+  schedule:
+    - cron: "0 23 * * 0" # Sundays at 23:00 UTC (6 PM EST)
+  workflow_dispatch: {}
+
+env:
+  # Set in repo secrets
+  SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+  EMAIL_TO: ${{ secrets.EMAIL_TO }}
+  EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+
+jobs:
+  backup-and-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Fail if secrets are missing
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then echo "SUPABASE_DB_URL is required" && exit 1; fi
+          if [ -z "$SENDGRID_API_KEY" ]; then echo "SENDGRID_API_KEY is required" && exit 1; fi
+          if [ -z "$EMAIL_TO" ]; then echo "EMAIL_TO is required" && exit 1; fi
+          if [ -z "$EMAIL_FROM" ]; then echo "EMAIL_FROM is required" && exit 1; fi
+
+      - name: Dump entries table (SQL)
+        run: |
+          pg_dump --data-only --column-inserts --table=public.entries --dbname="$SUPABASE_DB_URL" -f entries.sql
+
+      - name: Export entries table (CSV)
+        run: |
+          psql "$SUPABASE_DB_URL" -c "\copy (select * from public.entries order by date desc) to 'entries.csv' csv header"
+
+      - name: Email backups via SendGrid
+        env:
+          NOW: ${{ steps.date.outputs.now || '' }}
+        run: |
+          DATE_TAG=$(date -u +"%Y-%m-%d")
+          SQL_B64=$(base64 -w0 entries.sql)
+          CSV_B64=$(base64 -w0 entries.csv)
+          cat > payload.json <<'EOF'
+          {
+            "personalizations": [{ "to": [{ "email": "EMAIL_TO_REPLACE" }] }],
+            "from": { "email": "EMAIL_FROM_REPLACE" },
+            "subject": "Entries backup - DATE_REPLACE",
+            "content": [{ "type": "text/plain", "value": "Entries backup attached (SQL + CSV)." }],
+            "attachments": [
+              { "content": "SQL_B64_REPLACE", "type": "application/sql", "filename": "entries-DATE_REPLACE.sql", "disposition": "attachment" },
+              { "content": "CSV_B64_REPLACE", "type": "text/csv", "filename": "entries-DATE_REPLACE.csv", "disposition": "attachment" }
+            ]
+          }
+          EOF
+          sed -i "s/EMAIL_TO_REPLACE/$EMAIL_TO/g" payload.json
+          sed -i "s/EMAIL_FROM_REPLACE/$EMAIL_FROM/g" payload.json
+          sed -i "s/DATE_REPLACE/$DATE_TAG/g" payload.json
+          sed -i "s/SQL_B64_REPLACE/$SQL_B64/g" payload.json
+          sed -i "s/CSV_B64_REPLACE/$CSV_B64/g" payload.json
+
+          curl -s -o /tmp/sg-response.txt -w "%{http_code}" \
+            --request POST \
+            --url https://api.sendgrid.com/v3/mail/send \
+            --header "Authorization: Bearer $SENDGRID_API_KEY" \
+            --header "Content-Type: application/json" \
+            --data @payload.json | tee /tmp/sg-status.txt
+
+          STATUS=$(cat /tmp/sg-status.txt)
+          if [ "$STATUS" != "202" ]; then
+            echo "SendGrid API failed with status $STATUS" && cat /tmp/sg-response.txt && exit 1
+          fi
