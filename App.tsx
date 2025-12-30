@@ -159,6 +159,43 @@ const App: React.FC = () => {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [syncStatus.state]);
 
+    // --- Idle Auto Logout (15 minutes default) ---
+    useEffect(() => {
+        if (!currentUser) return; // No logout needed if not logged in
+
+        const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+        let timeoutId: NodeJS.Timeout | null = null;
+        let activityListenerCount = 0;
+
+        const resetIdleTimer = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                handleLogout();
+                alert('Your session has expired due to inactivity. Please log back in.');
+            }, IDLE_TIMEOUT);
+        };
+
+        const handleActivity = () => {
+            resetIdleTimer();
+        };
+
+        // Track user activity: click, keypress, and mouse move
+        const events = ['click', 'keypress', 'mousemove', 'scroll', 'touchstart'];
+        events.forEach(event => {
+            window.addEventListener(event, handleActivity, true);
+        });
+
+        // Initialize the timer
+        resetIdleTimer();
+
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            events.forEach(event => {
+                window.removeEventListener(event, handleActivity, true);
+            });
+        };
+    }, [currentUser]);
+
     // --- Load Harvest Pledges from Supabase on startup ---
     useEffect(() => {
         if (!settings.supabaseUrl || !settings.supabaseKey) return;

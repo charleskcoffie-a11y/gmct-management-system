@@ -84,41 +84,81 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error }) => {
                                 </div>
                             </form>
                             <p className="mt-4 text-sm text-indigo-100/70">Default Admin: <span className="font-semibold">Admin</span> / <span className="font-semibold">GMCT</span></p>
+                            <div className="mt-6 pt-4 border-t border-white/10 space-y-3">
+                                <div>
+                                    <p className="text-xs font-semibold text-indigo-100 mb-2">Security Tips</p>
+                                    <ul className="text-xs text-indigo-100/70 space-y-1">
+                                        <li>• Never share your password with anyone</li>
+                                        <li>• Use a strong, unique password</li>
+                                        <li>• Always log out when finished</li>
+                                        <li>• Keep your browser updated</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-indigo-100 mb-1">Session Info</p>
+                                    <p className="text-xs text-indigo-100/70">Sessions automatically expire after 15 minutes of inactivity. You will be logged out and prompted to sign back in.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     {/* Insights Card */}
                     <div className="backdrop-blur-md bg-white/5 border border-white/10 shadow-2xl rounded-2xl overflow-hidden flex flex-col">
                         <div className="px-8 pt-8 pb-4">
-                            <h2 className="text-xl font-extrabold tracking-tight">What’s inside</h2>
-                            <p className="text-indigo-100/80 text-sm">A quick look at key areas and roles.</p>
+                            <h2 className="text-xl font-extrabold tracking-tight">Features</h2>
+                            <p className="text-indigo-100/80 text-sm">Complete list of capabilities.</p>
                         </div>
-                        <div className="px-8 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="rounded-xl p-4 bg-gradient-to-br from-indigo-500/20 to-fuchsia-500/10 border border-white/10">
-                                <p className="text-sm font-bold">Financial Records</p>
-                                <p className="text-xs text-indigo-100/80">Record tithes, offerings, pledges, and track totals.</p>
-                            </div>
-                            <div className="rounded-xl p-4 bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 border border-white/10">
-                                <p className="text-sm font-bold">Development Fund</p>
-                                <p className="text-xs text-indigo-100/80">Member contributions, quick add, CSV export.</p>
-                            </div>
-                            <div className="rounded-xl p-4 bg-gradient-to-br from-amber-500/20 to-rose-500/10 border border-white/10">
-                                <p className="text-sm font-bold">No Name</p>
-                                <p className="text-xs text-indigo-100/80">Anonymous donations with sortable history.</p>
-                            </div>
-                            <div className="rounded-xl p-4 bg-gradient-to-br from-sky-500/20 to-indigo-500/10 border border-white/10">
-                                <p className="text-sm font-bold">Insights & Reports</p>
-                                <p className="text-xs text-indigo-100/80">Trends, totals, and scoped summaries.</p>
+                        <div className="px-8 pb-6 space-y-2 overflow-y-auto max-h-96">
+                            <div className="text-sm text-indigo-100/90 space-y-2">
+                                <p className="font-semibold text-indigo-100">Financial Management</p>
+                                <ul className="text-xs text-indigo-100/80 space-y-1 ml-3">
+                                    <li>• Record tithes, offerings, and donations</li>
+                                    <li>• Track pledges and pledge payments</li>
+                                    <li>• Manage e-transfers and fund tracking</li>
+                                    <li>• Anonymous donations (No Name)</li>
+                                    <li>• Development fund contributions</li>
+                                    <li>• Harvest pledges and payments</li>
+                                    <li>• Tax receipts generation</li>
+                                </ul>
+
+                                <p className="font-semibold text-indigo-100 pt-2">Member Management</p>
+                                <ul className="text-xs text-indigo-100/80 space-y-1 ml-3">
+                                    <li>• Full member profiles with contact info</li>
+                                    <li>• Member email and phone directory</li>
+                                    <li>• Date of birth tracking</li>
+                                    <li>• Profession and occupation records</li>
+                                    <li>• Member status (active/inactive)</li>
+                                    <li>• Upcoming birthdays view</li>
+                                </ul>
+
+                                <p className="font-semibold text-indigo-100 pt-2">Attendance & Insights</p>
+                                <ul className="text-xs text-indigo-100/80 space-y-1 ml-3">
+                                    <li>• Weekly attendance tracking</li>
+                                    <li>• Class and service attendance</li>
+                                    <li>• Attendance reports and history</li>
+                                    <li>• Financial insights and trends</li>
+                                    <li>• Scoped summaries by role</li>
+                                </ul>
+
+                                <p className="font-semibold text-indigo-100 pt-2">Data & Administration</p>
+                                <ul className="text-xs text-indigo-100/80 space-y-1 ml-3">
+                                    <li>• CSV export and bulk operations</li>
+                                    <li>• Automated weekly backups</li>
+                                    <li>• Role-based access control</li>
+                                    <li>• User management and permissions</li>
+                                    <li>• Requisitions and approvals</li>
+                                </ul>
                             </div>
                         </div>
-                        <div className="px-8 pb-8 space-y-3">
-                            <div className="flex flex-wrap gap-2">
-                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 border border-white/10">Admin</span>
-                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 border border-white/10">Finance Chair</span>
-                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 border border-white/10">Finance Team</span>
-                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 border border-white/10">Pastor</span>
-                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 border border-white/10">Statistician</span>
-                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 border border-white/10">Data Entry</span>
+                        <div className="px-8 pb-8 space-y-3 border-t border-white/10 pt-4">
+                            <div>
+                                <p className="text-sm font-semibold text-indigo-100 mb-2">Need Help?</p>
+                                <ul className="text-xs text-indigo-100/80 space-y-1 ml-3">
+                                    <li>• Press <span className="font-mono bg-white/10 px-1 rounded">?</span> for keyboard shortcuts</li>
+                                    <li>• Email: <a href="mailto:charleskcoffie@gmail.com" className="text-indigo-300 hover:text-indigo-200 underline">charleskcoffie@gmail.com</a></li>
+                                    <li>• Contact your Admin for access issues</li>
+                                    <li>• Use the Help icon in the dashboard menu</li>
+                                </ul>
                             </div>
                             <p className="text-[11px] text-indigo-100/70">Access is role-based. Contact an Admin if you need help with your role.</p>
                             <div className="text-[11px] text-indigo-100/70">By signing in, you agree to handle member data responsibly.</div>
