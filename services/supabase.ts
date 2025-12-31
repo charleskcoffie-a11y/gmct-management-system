@@ -7,6 +7,12 @@ let supabaseInstance: SupabaseClient | null = null;
 let currentUrl = '';
 let currentKey = '';
 
+// Wrap async work with a short timeout so UI is not blocked by slow networks
+const withTimeout = async <T>(label: string, promise: Promise<T>, ms = 8000): Promise<T> => {
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} request timed out after ${ms}ms`)), ms));
+    return Promise.race([promise, timeout]);
+};
+
 export const getSupabaseClient = (url: string, key: string): SupabaseClient | null => {
     if (!url || !key) return null;
     
@@ -323,46 +329,48 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const { data: membersDB, error: memErr } = await supabase.from('members').select('*');
-    if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
-    const members = membersDB?.map(mapMemberFromDB) || [];
+    const [members, entries, users, history, monthLocks, settings] = await Promise.all([
+        withTimeout('members fetch', (async () => {
+            const { data, error } = await supabase.from('members').select('*');
+            if (error) throw new Error(`Fetch Members failed: ${error.message}`);
+            return data?.map(mapMemberFromDB) || [];
+        })()),
+        withTimeout('entries fetch', (async () => {
+            const { data, error } = await supabase.from('entries').select('*');
+            if (error) throw new Error(`Fetch Entries failed: ${error.message}`);
+            return data?.map(mapEntryFromDB) || [];
+        })()),
+        withTimeout('users fetch', (async () => {
+            const { data, error } = await supabase.from('app_users').select('*');
+            if (error) throw new Error(`Fetch Users failed: ${error.message}`);
+            return data?.map(mapUserFromDB) || [];
+        })()),
+        withTimeout('history fetch', (async () => {
+            const { data, error } = await supabase.from('weekly_history').select('*');
+            if (error) throw new Error(`Fetch History failed: ${error.message}`);
+            return data?.map(mapHistoryFromDB) || [];
+        })()),
+        withTimeout('month locks fetch', (async () => {
+            try {
+                const { data } = await supabase.from('month_locks').select('*');
+                return data ? data.map(mapLockFromDB) : [];
+            } catch (e) {
+                console.log("Month locks table may not exist yet.");
+                return [] as MonthLock[];
+            }
+        })()),
+        withTimeout('settings fetch', (async () => {
+            try {
+                const { data } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
+                return data ? mapSettingsFromDB(data) : undefined;
+            } catch (e) {
+                console.log("Settings table may not exist yet.");
+                return undefined as Settings | undefined;
+            }
+        })())
+    ]);
 
-    const { data: entriesDB, error: entErr } = await supabase.from('entries').select('*');
-    if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
-    const entries = entriesDB?.map(mapEntryFromDB) || [];
-
-    const { data: usersDB, error: userErr } = await supabase.from('app_users').select('*');
-    if (userErr) throw new Error(`Fetch Users failed: ${userErr.message}`);
-    const users = usersDB?.map(mapUserFromDB) || [];
-
-    const { data: historyDB, error: histErr } = await supabase.from('weekly_history').select('*');
-    if (histErr) throw new Error(`Fetch History failed: ${histErr.message}`);
-    const history = historyDB?.map(mapHistoryFromDB) || [];
-    
-    let monthLocks: MonthLock[] = [];
-    try {
-        const { data: locksDB } = await supabase.from('month_locks').select('*');
-        if (locksDB) monthLocks = locksDB.map(mapLockFromDB);
-    } catch (e) {
-        console.log("Month locks table may not exist yet.");
-    }
-
-    let settings: Settings | undefined;
-    try {
-        const { data: settingsDB } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
-        if (settingsDB) settings = mapSettingsFromDB(settingsDB);
-    } catch (e) {
-        console.log("Settings table may not exist yet.");
-    }
-
-    return {
-        members,
-        entries,
-        users,
-        history,
-        monthLocks,
-        settings
-    };
+    return { members, entries, users, history, monthLocks, settings };
 };
 
 // --- E-Transfers ---

@@ -76,6 +76,7 @@ export function useSupabaseAutoSync(
                 const cloudMembers = cloudData.members || [];
                 const cloudHistory = cloudData.history || [];
                 const cloudUsers = cloudData.users || [];
+                const cloudLocks = cloudData.monthLocks || [];
                 // Update UI with cloud data only
                 setters.setEntries(cloudEntries);
                 setters.setMembers(cloudMembers);
