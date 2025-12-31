@@ -512,6 +512,9 @@ const App: React.FC = () => {
         if (activeTab === 'users' && currentUser.role !== 'admin') {
              return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
         }
+        if (activeTab === 'settings' && currentUser.role !== 'admin') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin can access Settings.</div>;
+        }
         if (activeTab === 'tax-receipts' && !(currentUser.role === 'admin' || currentUser.role === 'finance-chair')) {
             return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin and Finance Chair can issue receipts.</div>;
         }
@@ -1085,6 +1088,7 @@ const App: React.FC = () => {
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team'] },
+                { id: 'settings', label: 'Settings', roles: ['admin'] },
             ]
         },
         {
