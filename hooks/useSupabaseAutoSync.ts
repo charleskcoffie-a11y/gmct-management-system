@@ -60,6 +60,7 @@ export function useSupabaseAutoSync(
 
             setStatus({ state: 'syncing' });
             try {
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
                 const cloudSettings = cloudData.settings
                     ? {
                         ...cloudData.settings,
@@ -69,34 +70,19 @@ export function useSupabaseAutoSync(
                         etransferInboundSecret: settings.etransferInboundSecret,
                     }
                     : settings;
-                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
 
                 // Trust cloud data as source of truth (multi-user); ignore local cache to avoid confusion
                 const cloudEntries = cloudData.entries || [];
                 const cloudMembers = cloudData.members || [];
                 const cloudHistory = cloudData.history || [];
                 const cloudUsers = cloudData.users || [];
-                if (setters.setSettings) setters.setSettings(cloudSettings);
                 // Update UI with cloud data only
                 setters.setEntries(cloudEntries);
                 setters.setMembers(cloudMembers);
                 setters.setHistory(cloudHistory);
                 setters.setUsers(cloudUsers);
                 setters.setMonthLocks?.(cloudLocks);
-                if (cloudData.settings && setters.setSettings) {
-                    setters.setSettings(cloudSettings);
-                }
-                if (setters.setSettings) {
-                    const cloudSettings = cloudData.settings
-                        ? {
-                            ...cloudData.settings,
-                            supabaseUrl: settings.supabaseUrl,
-                            supabaseKey: settings.supabaseKey,
-                            etransferInboundSecret: settings.etransferInboundSecret,
-                        }
-                        : settings;
-                    setters.setSettings(cloudSettings);
-                }
+                if (setters.setSettings) setters.setSettings(cloudSettings);
                 setStatus({ state: 'synced', lastSynced: new Date() });
             } catch (e: any) {
                 console.error("Initial Sync Failed:", e);
@@ -112,7 +98,6 @@ export function useSupabaseAutoSync(
 
     // 1.5 Periodic Pull for Multi-User Updates (every 30 seconds)
     useEffect(() => {
-                if (setters.setSettings) setters.setSettings(cloudData.settings);
         const interval = setInterval(async () => {
             try {
                 const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
@@ -122,8 +107,16 @@ export function useSupabaseAutoSync(
                 setters.setHistory(cloudData.history);
                 setters.setUsers(cloudData.users);
                 setters.setMonthLocks?.(cloudData.monthLocks || []);
-                if (cloudData.settings && setters.setSettings) {
-                    setters.setSettings(cloudData.settings);
+                if (setters.setSettings) {
+                    const cloudSettings = cloudData.settings
+                        ? {
+                            ...cloudData.settings,
+                            supabaseUrl: settings.supabaseUrl,
+                            supabaseKey: settings.supabaseKey,
+                            etransferInboundSecret: settings.etransferInboundSecret,
+                        }
+                        : settings;
+                    setters.setSettings(cloudSettings);
                 }
                 setStatus({ state: 'synced', lastSynced: new Date() });
             } catch (e: any) {
