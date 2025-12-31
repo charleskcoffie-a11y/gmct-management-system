@@ -13,7 +13,7 @@ import PasswordChangeModal from './components/PasswordChangeModal';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
-import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
@@ -71,6 +71,7 @@ const App: React.FC = () => {
     const [entries, setEntries] = useState<Entry[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+    const [classLeaders, setClassLeaders] = useState<ClassLeader[]>([]);
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
 
     const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
@@ -120,9 +121,9 @@ const App: React.FC = () => {
 
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, history: weeklyHistory, users, monthLocks
+        entries, members, history: weeklyHistory, users, monthLocks, classLeaders
     }, {
-        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings, setClassLeaders
     });
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);

@@ -112,6 +112,22 @@ export interface User {
     assignedClass?: string; // Alias for classLed (more semantic)
 }
 
+export interface ClassLeader {
+    id?: string;
+    username: string;
+    password: string;
+    classNumber: string;
+    accessCode: string;
+    fullName?: string;
+    phone?: string;
+    email?: string;
+    active: boolean;
+    createdBy?: string;
+    updatedBy?: string;
+    lastUpdated?: string;
+    createdAt?: string;
+}
+
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
 
 export interface MemberAttendance {
