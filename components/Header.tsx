@@ -12,9 +12,10 @@ interface HeaderProps {
     onLogout: () => void;
     syncStatus?: SyncStatus;
     settings: Settings;
+    onPasswordChange?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, settings }) => {
+const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, settings, onPasswordChange }) => {
     
     // Debug: Log logo status
     React.useEffect(() => {
@@ -99,6 +100,18 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, sett
                 <div className="flex items-center gap-4">
                     {currentUser && (
                         <>
+                            {currentUser.role === 'class-leader' && onPasswordChange && (
+                                <button 
+                                    onClick={onPasswordChange}
+                                    className="bg-indigo-600/80 hover:bg-indigo-600 text-white px-4 py-3 rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg flex items-center gap-2 text-base"
+                                    title="Change your password"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                    </svg>
+                                    Change Password
+                                </button>
+                            )}
                             <button 
                                 onClick={() => {
                                     const event = new KeyboardEvent('keydown', {

@@ -8,6 +8,7 @@ import ConfirmationModal from './components/ConfirmationModal';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import Login from './components/Login';
 import { ToastProvider } from './components/ToastProvider';
+import PasswordChangeModal from './components/PasswordChangeModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
@@ -112,6 +113,9 @@ const App: React.FC = () => {
     // Navigation collapse state
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
+    // Password change modal state
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
     // --- Live Sync Hook ---
@@ -148,6 +152,29 @@ const App: React.FC = () => {
             }
         }).catch(err => console.error('Failed to load data from database:', err));
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+
+    // --- Seed ClassLeader user to database if it doesn't exist ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+        if (users.length === 0) return; // Wait for users to load
+        
+        const hasClassLeader = users.some(u => u.username.toLowerCase() === 'classleader');
+        if (!hasClassLeader) {
+            const classLeaderUser: User = {
+                username: 'ClassLeader',
+                password: '',
+                role: 'class-leader'
+            };
+            import('./services/supabase').then(({ saveUserToSupabase }) => {
+                saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, classLeaderUser)
+                    .then(() => {
+                        setUsers(prev => [...prev, classLeaderUser]);
+                        console.log('ClassLeader user seeded to database');
+                    })
+                    .catch(err => console.warn('Failed to seed ClassLeader:', err));
+            });
+        }
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, users]);
     
     // --- Safe Close Protection ---
     useEffect(() => {
@@ -1178,7 +1205,7 @@ const App: React.FC = () => {
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
             <div className="w-full px-4 sm:px-6 lg:px-8">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
+                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings} onPasswordChange={() => setIsPasswordModalOpen(true)}/>
                 {syncStatus.state !== 'synced' && (
                     <div className="no-print mt-2 mb-4 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-sm flex items-center gap-2"
                         style={{
@@ -1279,6 +1306,15 @@ const App: React.FC = () => {
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />
+                {isPasswordModalOpen && currentUser && (
+                    <PasswordChangeModal 
+                        currentUser={currentUser}
+                        users={users}
+                        setUsers={setUsers}
+                        settings={settings}
+                        onClose={() => setIsPasswordModalOpen(false)}
+                    />
+                )}
                 <KeyboardShortcuts onNavigate={handleNavigate} />
             </div>
         </div>
