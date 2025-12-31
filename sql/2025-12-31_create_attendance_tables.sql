@@ -52,7 +52,6 @@ comment on table attendance is 'Stores weekly class attendance summaries';
 comment on column attendance.class_number is 'The class number (1-14 or more)';
 comment on column attendance.attendance_date is 'Date of the attendance (ISO format YYYY-MM-DD)';
 comment on column attendance.class_leader_id is 'Reference to the class leader who recorded attendance';
-comment on column attendance.status is 'Attendance status - present, absent, sick, travel, or catechumen';
 
 comment on table member_attendance is 'Individual member attendance details for each class date';
 comment on column member_attendance.status is 'Member status: present, absent, sick, travel, catechumen';
