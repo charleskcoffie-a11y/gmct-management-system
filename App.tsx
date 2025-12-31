@@ -12,7 +12,7 @@ import { ToastProvider } from './components/ToastProvider';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
@@ -45,6 +45,8 @@ const DayBorn = lazy(() => import('./components/DayBorn'));
 // Initial Data
 const INITIAL_USERS: User[] = [
     { username: 'Admin', password: 'GMCT', role: 'admin' },
+    // Shared class-leader account (uses class access codes as password)
+    { username: 'ClassLeader', role: 'class-leader' },
 ];
 const INITIAL_SETTINGS: Settings = {
     currency: DEFAULT_CURRENCY,
@@ -301,44 +303,69 @@ const App: React.FC = () => {
 
     // --- Handlers ---
     const handleLogin = (username: string, password: string) => {
+        const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
         const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (!foundUser) {
+        const classLeaderFallback = username.trim().toLowerCase() === 'classleader'
+            ? ({ username: 'ClassLeader', role: 'class-leader' as UserRole })
+            : null;
+        const user = foundUser || classLeaderFallback;
+
+        if (!user) {
             setLoginError('Invalid username or password.');
             return;
         }
 
         // Special handling for class leaders: validate access codes from Settings
-        if (foundUser.role === 'class-leader') {
+        if (user.role === 'class-leader') {
             const raw = (password || '').trim();
-            let assignedClass = foundUser.assignedClass || foundUser.classLed;
+            const classAccessCodes = settings.classAccessCodes || {};
 
-            // If exact password matches stored user password, accept as-is (admin override)
-            if (foundUser.password && password === foundUser.password) {
-                // keep assignedClass as stored (if any)
-            } else {
-                // Check if password matches any class access code
-                const classAccessCodes = settings.classAccessCodes || {};
-                let matchedClass: string | null = null;
+            const resolveClassFromPassword = (): string | null => {
+                const lower = normalize(raw);
 
+                // 1) Match admin-configured access codes (case-insensitive)
                 for (const [classNum, code] of Object.entries(classAccessCodes)) {
-                    if (code && raw === code) {
+                    if (normalize(code) === lower) {
                         const clsNum = parseInt(classNum, 10);
                         if (clsNum >= 1 && clsNum <= settings.maxClasses) {
-                            matchedClass = String(clsNum);
-                            break;
+                            return String(clsNum);
                         }
                     }
                 }
 
+                // 2) Accept patterns like "class1", "class 3", "class-7"
+                const classMatch = lower.match(/class\s*-?\s*(\d{1,2})/);
+                if (classMatch) {
+                    const clsNum = parseInt(classMatch[1], 10);
+                    if (clsNum >= 1 && clsNum <= settings.maxClasses) return String(clsNum);
+                }
+
+                // 3) Accept direct numeric passwords (e.g., "1", "07")
+                const numMatch = lower.match(/^(\d{1,2})$/);
+                if (numMatch) {
+                    const clsNum = parseInt(numMatch[1], 10);
+                    if (clsNum >= 1 && clsNum <= settings.maxClasses) return String(clsNum);
+                }
+
+                return null;
+            };
+
+            let assignedClass = user.assignedClass || user.classLed;
+
+            // Admin override: exact password match on stored user password keeps assigned class
+            if (!(user as User).password || (user as User).password !== password) {
+                const matchedClass = resolveClassFromPassword();
                 if (matchedClass) {
                     assignedClass = matchedClass;
-                } else {
-                    setLoginError('Invalid class access code. Contact admin for your class code.');
-                    return;
                 }
             }
 
-            const sessionUser = { ...foundUser, assignedClass } as typeof foundUser;
+            if (!assignedClass) {
+                setLoginError('Invalid class access code. Contact admin for your class code.');
+                return;
+            }
+
+            const sessionUser = { ...user, assignedClass, role: 'class-leader' as UserRole } as User;
             setCurrentUser(sessionUser);
             setLoginError(null);
             setActiveTab('attendance');
@@ -505,6 +532,10 @@ const App: React.FC = () => {
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "development-fund", "other"];
 
     const renderTabContent = () => {
+        // Class leaders are restricted to attendance only
+        if (currentUser.role === 'class-leader' && activeTab !== 'attendance') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Class Leaders can only take attendance for their class.</div>;
+        }
         // Double check access before rendering restrictive tabs
         if (activeTab === 'utilities' && currentUser.role !== 'admin') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;

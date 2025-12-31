@@ -99,6 +99,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
         if (r === 'data-entry') return 'bg-sky-100 text-sky-800 border border-sky-200';
         if (r === 'pastor') return 'bg-amber-100 text-amber-800 border border-amber-200';
         if (r === 'statistician') return 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-200';
+        if (r === 'class-leader') return 'bg-cyan-100 text-cyan-800 border border-cyan-200';
         return 'bg-slate-100 text-slate-700 border border-slate-200';
     };
 

@@ -66,6 +66,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
         { value: 'data-entry', label: 'Data Entry', desc: 'Entry Only (15min edit limit)' },
         { value: 'pastor', label: 'Pastor', desc: 'Read-Only Dashboards' },
         { value: 'statistician', label: 'Statistician', desc: 'Weekly History Only' },
+        { value: 'class-leader', label: 'Class Leader', desc: 'Attendance for assigned class (access code login)' },
     ];
     const allowedRoles = ROLES.map(r => r.value);
 
@@ -140,7 +141,24 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, members, onSave, onC
                                 {ROLES.find(r => r.value === formData.role)?.desc}
                             </p>
                         </div>
-                        {/* classLed legacy input removed since class-leader role is deprecated */}
+
+                        {formData.role === 'class-leader' && (
+                            <div>
+                                <label htmlFor="classLed" className="block font-medium text-gray-700">Assigned Class (optional)</label>
+                                <input
+                                    id="classLed"
+                                    name="classLed"
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    placeholder="e.g., 1"
+                                    value={formData.classLed || ''}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                                <p className="text-xs text-slate-500 mt-1 italic">Leave blank to require the class access code at login.</p>
+                            </div>
+                        )}
                     </div>
                     <div className="p-4 bg-gray-50 rounded-b-lg flex justify-end gap-2">
                         <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
