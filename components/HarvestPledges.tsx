@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Entry, Member, Settings } from '../types';
 import { formatCurrency } from '../utils';
-import type { HarvestPledge } from '../services/supabase';
+import { saveHarvestPledgeToSupabase, type HarvestPledge } from '../services/supabase';
 
 interface HarvestPledgesProps {
   members: Member[];
@@ -69,8 +69,6 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
       alert('Supabase not configured');
       return;
     }
-
-    const { saveHarvestPledgeToSupabase } = await import('../services/supabase');
 
     const newPledges: HarvestPledge[] = bulkEntries
       .filter(e => e.memberID && e.amount && parseFloat(e.amount) > 0)

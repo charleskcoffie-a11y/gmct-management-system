@@ -10,5 +10,14 @@ export default defineConfig(() => ({
   build: {
     // Increase chunk warning limit to reflect app size
     chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          recharts: ['recharts'],
+          supabase: ['@supabase/supabase-js'],
+        },
+      },
+    },
   },
 }));

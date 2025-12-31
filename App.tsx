@@ -1,34 +1,12 @@
 
 // App.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import Members from './components/Members';
-import Insights from './components/Insights';
-import SettingsTab from './components/Settings';
-import Login from './components/Login';
-import UsersTab from './components/Users';
-import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
-import WeeklyHistory from './components/WeeklyHistory';
-import UpcomingBirthdays from './components/UpcomingBirthdays';
-import ETransfers from './components/ETransfers';
-import Requisitions from './components/Requisitions';
-import MyApprovals from './components/MyApprovals';
-import Reports from './components/Reports';
 import ConfirmationModal from './components/ConfirmationModal';
-import DevelopmentFund from './components/DevelopmentFund';
-import NoName from './components/NoName';
-import FinancialControl from './components/FinancialControl';
-import HarvestPledges from './components/HarvestPledges';
-import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
-import TaxReceipts from './components/TaxReceipts';
-import WesleyHall from './components/WesleyHall';
-import ClassAttendance from './components/ClassAttendance';
-import Assets from './components/Assets';
-import DayBorn from './components/DayBorn';
+import Login from './components/Login';
 import { ToastProvider } from './components/ToastProvider';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -39,6 +17,30 @@ import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } fro
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
+
+// Lazy-load heavier pages to keep the initial bundle smaller
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Members = lazy(() => import('./components/Members'));
+const Insights = lazy(() => import('./components/Insights'));
+const SettingsTab = lazy(() => import('./components/Settings'));
+const UsersTab = lazy(() => import('./components/Users'));
+const Utilities = lazy(() => import('./components/Utilities'));
+const WeeklyHistory = lazy(() => import('./components/WeeklyHistory'));
+const UpcomingBirthdays = lazy(() => import('./components/UpcomingBirthdays'));
+const ETransfers = lazy(() => import('./components/ETransfers'));
+const Requisitions = lazy(() => import('./components/Requisitions'));
+const MyApprovals = lazy(() => import('./components/MyApprovals'));
+const Reports = lazy(() => import('./components/Reports'));
+const DevelopmentFund = lazy(() => import('./components/DevelopmentFund'));
+const NoName = lazy(() => import('./components/NoName'));
+const FinancialControl = lazy(() => import('./components/FinancialControl'));
+const HarvestPledges = lazy(() => import('./components/HarvestPledges'));
+const Harvest = lazy(() => import('./components/Harvest'));
+const TaxReceipts = lazy(() => import('./components/TaxReceipts'));
+const WesleyHall = lazy(() => import('./components/WesleyHall'));
+const ClassAttendance = lazy(() => import('./components/ClassAttendance'));
+const Assets = lazy(() => import('./components/Assets'));
+const DayBorn = lazy(() => import('./components/DayBorn'));
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -1228,7 +1230,11 @@ const App: React.FC = () => {
                             </div>
                         </nav>
                     </aside>
-                    <section className="lg:col-span-4">{renderTabContent()}</section>
+                    <section className="lg:col-span-4">
+                        <Suspense fallback={<div className="p-10 text-center text-slate-500">Loading page...</div>}>
+                            {renderTabContent()}
+                        </Suspense>
+                    </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />

@@ -227,7 +227,6 @@ const mapSettingsToDB = (s: Settings) => ({
     max_classes: s.maxClasses,
     enforce_directory: s.enforceDirectory,
     supabase_url: s.supabaseUrl,
-    supabase_key: s.supabaseKey,
     logo_url: s.logoUrl,
     org_name: s.orgName,
     org_address: s.orgAddress,
@@ -237,7 +236,6 @@ const mapSettingsToDB = (s: Settings) => ({
     signature_image: s.signatureImage,
     annual_levy_amount: s.annualLevyAmount,
     etransfer_notification_email: s.etransferNotificationEmail,
-    etransfer_inbound_secret: s.etransferInboundSecret,
     etransfer_provider: s.etransferProvider,
     class_access_codes: s.classAccessCodes ? JSON.stringify(s.classAccessCodes) : null,
 });
@@ -247,7 +245,7 @@ const mapSettingsFromDB = (s: any): Settings => ({
     maxClasses: s.max_classes || 14,
     enforceDirectory: s.enforce_directory !== false,
     supabaseUrl: s.supabase_url || '',
-    supabaseKey: s.supabase_key || '',
+    supabaseKey: '', // never pull keys from database
     logoUrl: s.logo_url,
     orgName: s.org_name,
     orgAddress: s.org_address,
@@ -257,7 +255,7 @@ const mapSettingsFromDB = (s: any): Settings => ({
     signatureImage: s.signature_image,
     annualLevyAmount: s.annual_levy_amount,
     etransferNotificationEmail: s.etransfer_notification_email,
-    etransferInboundSecret: s.etransfer_inbound_secret,
+    etransferInboundSecret: undefined, // never pull secrets from database
     etransferProvider: s.etransfer_provider,
     classAccessCodes: s.class_access_codes ? JSON.parse(s.class_access_codes) : undefined,
 });
