@@ -292,7 +292,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                         {dateFilteredEntries.length === 0 ? (
                             <div className="flex-1 flex items-center justify-center py-12">
                                 <p className="text-gray-500 text-center">
-                                    {isDateFiltered ? 'No entries for the selected date range' : `No entries yet for ${selectedDay}`}
+                                    {isDateFiltered ? 'No entries for the selected date' : `No entries yet for ${selectedDay}`}
                                 </p>
                             </div>
                         ) : (
