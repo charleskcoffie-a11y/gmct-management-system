@@ -378,7 +378,7 @@ const App: React.FC = () => {
                 return null;
             };
 
-            let assignedClass = user.assignedClass || user.classLed;
+            let assignedClass = (user as User).assignedClass || (user as User).classLed;
 
             // Admin override: exact password match on stored user password keeps assigned class
             if (!(user as User).password || (user as User).password !== password) {
@@ -401,7 +401,7 @@ const App: React.FC = () => {
         }
 
         // All other roles: require exact password match
-        if (foundUser.password !== password) {
+        if (!foundUser || foundUser.password !== password) {
             setLoginError('Invalid username or password.');
             return;
         }

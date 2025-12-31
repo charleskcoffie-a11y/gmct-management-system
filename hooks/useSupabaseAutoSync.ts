@@ -104,6 +104,7 @@ export function useSupabaseAutoSync(
     // 1.5 Periodic Pull for Multi-User Updates (every 30 seconds)
     useEffect(() => {
         const interval = setInterval(async () => {
+            if (!setters) return;
             try {
                 const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
                 // For multi-user, always trust the database as source of truth
