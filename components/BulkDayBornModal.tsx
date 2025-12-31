@@ -46,14 +46,6 @@ const BulkDayBornModal: React.FC<BulkDayBornModalProps> = ({
     setSelectedIds(next);
   };
 
-  const toggleAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(new Set(filteredMembers.map(m => m.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
-
   const handleSave = () => {
     const amt = parseFloat(amount);
     if (!date || isNaN(amt) || amt <= 0 || selectedIds.size === 0) {
@@ -81,10 +73,6 @@ const BulkDayBornModal: React.FC<BulkDayBornModalProps> = ({
     onSave(entries);
     onClose();
   };
-
-  const allSelected =
-    filteredMembers.length > 0 &&
-    filteredMembers.every(m => selectedIds.has(m.id));
 
   return (
     <div
@@ -199,21 +187,6 @@ const BulkDayBornModal: React.FC<BulkDayBornModalProps> = ({
           {/* Members List */}
           <div className="overflow-y-auto flex-1">
             <div className="p-4 space-y-2">
-              {/* Select All */}
-              <div className="sticky top-0 bg-white pb-2 border-b-2 border-purple-100">
-                <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-purple-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={e => toggleAll(e.target.checked)}
-                    className="w-4 h-4 text-purple-600 rounded"
-                  />
-                  <span className="font-bold text-slate-700">
-                    {allSelected ? 'Deselect All' : 'Select All'} ({filteredMembers.length})
-                  </span>
-                </label>
-              </div>
-
               {/* Member Items */}
               {filteredMembers.length === 0 ? (
                 <div className="p-8 text-center text-slate-500">

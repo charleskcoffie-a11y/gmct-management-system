@@ -25,6 +25,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
+    const [filterDate, setFilterDate] = useState<string>('');
 
     // Filter members by selected day of the week
     const filteredMembers = useMemo(() => {
@@ -39,6 +40,14 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
             !e.deleted
         ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [entries, filteredMembers]);
+
+    const dateFilteredEntries = useMemo(() => {
+        if (!filterDate) return dayBornEntries;
+        const target = new Date(filterDate).toISOString().split('T')[0];
+        return dayBornEntries.filter(entry => entry.date === target);
+    }, [dayBornEntries, filterDate]);
+
+    const isDateFiltered = Boolean(filterDate);
 
     const handleAddEntry = () => {
         const newEntry: Entry = {
@@ -219,7 +228,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                 {/* Members List and Recent Entries */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Members List */}
-                    <div className="flex flex-col bg-white rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden">
+                    <div className="flex flex-col bg-white rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden max-h-[70vh]">
                         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6">
                             <h3 className="text-xl font-bold text-white">👥 Members ({filteredMembers.length})</h3>
                         </div>
@@ -248,18 +257,48 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                     </div>
 
                     {/* Recent Entries */}
-                    <div className="flex flex-col bg-white rounded-xl shadow-lg border-2 border-green-200 overflow-hidden">
+                    <div className="flex flex-col bg-white rounded-xl shadow-lg border-2 border-green-200 overflow-hidden max-h-[70vh]">
                         <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6">
-                            <h3 className="text-xl font-bold text-white">💰 Recent Entries ({dayBornEntries.length})</h3>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <h3 className="text-xl font-bold text-white">💰 Recent Entries ({dateFilteredEntries.length})</h3>
+                                {isDateFiltered && (
+                                    <span className="text-xs bg-white/20 text-white px-2 py-1 rounded-full">
+                                        Filtered{dateFilteredEntries.length !== dayBornEntries.length ? ` of ${dayBornEntries.length}` : ''}
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        {dayBornEntries.length === 0 ? (
+                        <div className="p-4 border-b border-green-100 bg-green-50/50">
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="flex flex-col">
+                                    <label className="text-xs font-semibold text-gray-700">Filter date</label>
+                                    <input
+                                        type="date"
+                                        value={filterDate}
+                                        onChange={e => setFilterDate(e.target.value)}
+                                        className="border border-green-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                                    />
+                                </div>
+                                {isDateFiltered && (
+                                    <button
+                                        onClick={() => setFilterDate('')}
+                                        className="ml-auto px-4 py-2 text-sm font-semibold text-green-700 bg-white border border-green-200 rounded-md hover:bg-green-50"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        {dateFilteredEntries.length === 0 ? (
                             <div className="flex-1 flex items-center justify-center py-12">
-                                <p className="text-gray-500 text-center">No entries yet for {selectedDay}</p>
+                                <p className="text-gray-500 text-center">
+                                    {isDateFiltered ? 'No entries for the selected date range' : `No entries yet for ${selectedDay}`}
+                                </p>
                             </div>
                         ) : (
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
                                 <div className="p-4 space-y-2">
-                                    {dayBornEntries.map(entry => (
+                                    {dateFilteredEntries.map(entry => (
                                         <div
                                             key={entry.id}
                                             onClick={() => handleEditEntry(entry)}
