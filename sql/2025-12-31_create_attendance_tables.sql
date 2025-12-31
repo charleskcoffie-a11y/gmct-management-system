@@ -76,52 +76,52 @@ alter table member_attendance enable row level security;
 alter table visitor_attendance enable row level security;
 
 -- Create policies to allow authenticated users to read/write attendance
-create policy "Allow authenticated users to read attendance"
+create policy if not exists "Allow authenticated users to read attendance"
   on attendance for select
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to insert attendance"
+create policy if not exists "Allow authenticated users to insert attendance"
   on attendance for insert
   with check (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to update attendance"
+create policy if not exists "Allow authenticated users to update attendance"
   on attendance for update
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to delete attendance"
+create policy if not exists "Allow authenticated users to delete attendance"
   on attendance for delete
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
 -- Member attendance policies
-create policy "Allow authenticated users to read member_attendance"
+create policy if not exists "Allow authenticated users to read member_attendance"
   on member_attendance for select
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to insert member_attendance"
+create policy if not exists "Allow authenticated users to insert member_attendance"
   on member_attendance for insert
   with check (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to update member_attendance"
+create policy if not exists "Allow authenticated users to update member_attendance"
   on member_attendance for update
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to delete member_attendance"
+create policy if not exists "Allow authenticated users to delete member_attendance"
   on member_attendance for delete
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
 -- Visitor attendance policies
-create policy "Allow authenticated users to read visitor_attendance"
+create policy if not exists "Allow authenticated users to read visitor_attendance"
   on visitor_attendance for select
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to insert visitor_attendance"
+create policy if not exists "Allow authenticated users to insert visitor_attendance"
   on visitor_attendance for insert
   with check (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to update visitor_attendance"
+create policy if not exists "Allow authenticated users to update visitor_attendance"
   on visitor_attendance for update
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
-create policy "Allow authenticated users to delete visitor_attendance"
+create policy if not exists "Allow authenticated users to delete visitor_attendance"
   on visitor_attendance for delete
   using (auth.role() = 'authenticated' or auth.role() = 'anon');

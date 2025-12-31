@@ -34,21 +34,21 @@ create index if not exists idx_class_leaders_class_number on class_leaders(class
 alter table class_leaders enable row level security;
 
 -- Create policy to allow authenticated users to read class leaders
-create policy "Allow authenticated users to read class leaders"
+create policy if not exists "Allow authenticated users to read class leaders"
   on class_leaders for select
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
 -- Create policy to allow authenticated users to insert class leaders
-create policy "Allow authenticated users to insert class leaders"
+create policy if not exists "Allow authenticated users to insert class leaders"
   on class_leaders for insert
   with check (auth.role() = 'authenticated' or auth.role() = 'anon');
 
 -- Create policy to allow authenticated users to update class leaders
-create policy "Allow authenticated users to update class leaders"
+create policy if not exists "Allow authenticated users to update class leaders"
   on class_leaders for update
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
 
 -- Create policy to allow authenticated users to delete class leaders
-create policy "Allow authenticated users to delete class leaders"
+create policy if not exists "Allow authenticated users to delete class leaders"
   on class_leaders for delete
   using (auth.role() = 'authenticated' or auth.role() = 'anon');
