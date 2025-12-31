@@ -515,6 +515,12 @@ const App: React.FC = () => {
         if (activeTab === 'tax-receipts' && !(currentUser.role === 'admin' || currentUser.role === 'finance-chair')) {
             return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin and Finance Chair can issue receipts.</div>;
         }
+        if (activeTab === 'requisitions' && currentUser.role === 'data-entry') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Requisitions are not available for Data Entry role.</div>;
+        }
+        if (activeTab === 'wesley-hall' && currentUser.role === 'data-entry') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Wesley Hall is not available for Data Entry role.</div>;
+        }
 
         const canWrite = syncStatus.state === 'synced';
 
@@ -1074,10 +1080,10 @@ const App: React.FC = () => {
                 { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
                 { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
-                { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-                { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team'] },
             ]
         },
