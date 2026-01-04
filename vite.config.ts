@@ -1,8 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Default to '/' for local dev/preview. Use VITE_BASE or auto-detect GitHub Actions for GH Pages path.
-const base = process.env.VITE_BASE ?? (process.env.GITHUB_ACTIONS === "true" ? "/gmct-management-system/" : "/");
+// Default to '/' for local dev/preview and custom domain. Use VITE_BASE to override if needed.
+const base = process.env.VITE_BASE ?? "/";
 
 export default defineConfig(() => ({
   base,
