@@ -19,7 +19,7 @@ interface EntryModalProps {
     selectedDay?: string;
 }
 
-const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "other"];
+const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "covenant", "other"];
 
 const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members, settings, currentUser, monthLocks = [], onSave, onSaveAndNew, onClose, onDelete, lockedType = false, selectedDay }) => {
     const [formData, setFormData] = useState<Entry>(entry || sanitizeEntry({}));
