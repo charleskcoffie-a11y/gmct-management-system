@@ -548,8 +548,8 @@ Can only enter new contributions and edit their own recent entries (15 minutes).
 **Pastor (Leadership Read-Only)**
 Can view giving summaries, trends, class totals, and Development Fund progress. Cannot edit financial records or change system settings. Individual giving view is optional based on church policy.
 
-**Statistician (Analytics & Reports)**
-Can view comprehensive analytics, reports, and trends. Cannot edit financial records or access system settings.
+**Statistician (Weekly History Only)**
+Can access only the Weekly History feature for analytics and reporting. After login, the user is redirected directly to Weekly History. Cannot edit financial records or access system settings.
 
 **Class Leader (Attendance Management)**
 Can view Member Directory (read-only) and mark attendance for their assigned class only. Cannot access any financial data, financial reports, or settings. Attendance is completely isolated from financial records.
