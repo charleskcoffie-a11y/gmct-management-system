@@ -119,6 +119,13 @@ const App: React.FC = () => {
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
+    // Restrict statistician accounts to Weekly History only
+    useEffect(() => {
+        if (currentUser?.role === 'statistician' && activeTab !== 'weekly-history') {
+            setActiveTab('weekly-history');
+        }
+    }, [currentUser?.role, activeTab]);
+
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
         entries, members, history: weeklyHistory, users, monthLocks, classLeaders
@@ -413,7 +420,7 @@ const App: React.FC = () => {
         else if (foundUser.role === 'finance-team') setActiveTab('records');
         else if (foundUser.role === 'data-entry') setActiveTab('records');
         else if (foundUser.role === 'pastor') setActiveTab('insights');
-        else if (foundUser.role === 'statistician') setActiveTab('history');
+        else if (foundUser.role === 'statistician') setActiveTab('weekly-history');
         else setActiveTab('home');
     };
 
@@ -1154,9 +1161,9 @@ const App: React.FC = () => {
             id: 'members',
             label: 'Members & Attendance',
             icon: '👥',
-            roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor', 'class-leader'],
+            roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'class-leader'],
             items: [
-                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
+                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'attendance', label: 'Class Attendance', roles: ['admin', 'pastor', 'class-leader'] },
             ]
         },
@@ -1166,10 +1173,10 @@ const App: React.FC = () => {
             icon: '📊',
             roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'],
             items: [
-                { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'history', targetSection: 'financial-report-section' },
+                { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'history', targetSection: 'financial-report-section' },
                 { id: 'reports-weekly', label: 'Weekly History', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'weekly-history' },
-                { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'upcoming-birthdays' },
-                { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'e-transfers' },
+                { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'upcoming-birthdays' },
+                { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'e-transfers' },
             ]
         },
         {
