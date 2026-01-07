@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { WeeklyHistoryRecord, VisitorRecord, ServiceDonation } from '../types';
 import { sanitizeWeeklyHistoryRecord, formatCurrency } from '../utils';
 import HistoryArchiveModal from './HistoryArchiveModal';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
@@ -23,6 +24,7 @@ const initialFormState = (): WeeklyHistoryRecord => ({
     attendance: { men: 0, women: 0, junior: 0, children: 0, visitors: 0, catechumens: 0 },
     visitorsList: [],
     donationsList: [],
+    noDonation: false,
     newMembersDetails: '',
     newMembersContact: '',
     events: '',
@@ -53,13 +55,20 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
     const [newDonor, setNewDonor] = useState({ donor: '', amount: 0, description: '' });
     const [newVisitor, setNewVisitor] = useState({ name: '', from: '', position: '', reason: '' });
 
+    // Always start with a clean slate on load
+    useEffect(() => {
+        setSelectedRecordId(null);
+        setFormData(initialFormState());
+    }, []);
+
     useEffect(() => {
         if (selectedRecordId) {
             const record = history.find(h => h.id === selectedRecordId);
             if (record) setFormData(record);
-        } else {
-            setFormData(initialFormState());
         }
+        // Note: We don't reset to initialFormState here when selectedRecordId is null
+        // because that would clear the form while the user is typing.
+        // The form is explicitly reset when the New button is clicked.
     }, [selectedRecordId, history]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -125,6 +134,15 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
         alert('Record saved!');
         setSelectedRecordId(sanitized.id);
         setEditingArchiveId(null);
+        setFormData(sanitized);
+    };
+
+    const handleSaveAndReset = () => {
+        handleSubmit();
+        setSelectedRecordId(null);
+        setFormData(initialFormState());
+        setActiveModal(null);
+        setIsFullEditorOpen(false);
     };
 
     const handleEditArchiveRecord = (record: WeeklyHistoryRecord) => {
@@ -144,7 +162,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
             { name: 'Service Details', filled: !!formData.dateOfService && !!formData.officiant },
             { name: 'Attendance', filled: totalAttendance > 0 },
             { name: 'Visitors', filled: formData.visitorsList.length > 0 },
-            { name: 'Donations', filled: formData.donationsList.length > 0 },
+            { name: 'Donations', filled: formData.donationsList.length > 0 || formData.noDonation },
             { name: 'Worship', filled: !!formData.sermonTopic || !!formData.events },
         ];
         const completed = sections.filter(s => s.filled).length;
@@ -152,6 +170,34 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
     }, [formData, totalAttendance]);
 
     const canSave = completionStatus.completed === completionStatus.total;
+
+    const archiveCount = history.length;
+
+    const monthlyAttendance = useMemo(() => {
+        const aggregates: Record<string, any> = {};
+        history.forEach(h => {
+            const monthKey = (h.dateOfService || '').slice(0, 7) || 'Unknown';
+            if (!aggregates[monthKey]) {
+                aggregates[monthKey] = {
+                    month: monthKey,
+                    men: 0,
+                    women: 0,
+                    junior: 0,
+                    children: 0,
+                    visitors: 0,
+                    catechumens: 0,
+                };
+            }
+            const att = h.attendance || {} as any;
+            aggregates[monthKey].men += att.men || 0;
+            aggregates[monthKey].women += att.women || 0;
+            aggregates[monthKey].junior += att.junior || 0;
+            aggregates[monthKey].children += att.children || 0;
+            aggregates[monthKey].visitors += att.visitors || 0;
+            aggregates[monthKey].catechumens += att.catechumens || 0;
+        });
+        return Object.values(aggregates).sort((a: any, b: any) => (a.month > b.month ? 1 : -1));
+    }, [history]);
 
     const filteredHistory = useMemo(() => {
         const now = new Date();
@@ -184,10 +230,41 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                 <>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <button onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded text-sm">📚 Archives</button>
-                <button onClick={() => { setSelectedRecordId(null); setIsFullEditorOpen(true); }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded text-sm">✏️ New</button>
+                <button onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded text-sm flex items-center justify-between gap-2">
+                    <span>📚 Archives</span>
+                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-xs font-bold">{archiveCount}</span>
+                </button>
+                <button onClick={() => { setSelectedRecordId(null); setFormData(initialFormState()); setIsFullEditorOpen(true); }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded text-sm">✏️ New</button>
+                <button onClick={() => { setSelectedRecordId(null); setFormData(initialFormState()); setActiveModal(null); setIsFullEditorOpen(false); }} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-3 rounded text-sm">🔄 Reset</button>
                 <button onClick={() => window.print()} disabled={!selectedRecordId} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🖨️ Print</button>
                 <button onClick={() => { if (selectedRecordId) { if (window.confirm('Delete?')) { setHistory(history.filter(h => h.id !== selectedRecordId)); setSelectedRecordId(null); } } }} disabled={!selectedRecordId} className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🗑️ Delete</button>
+            </div>
+
+            <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-gray-800">Monthly Attendance by Category</h3>
+                    <span className="text-xs text-gray-500">Totals per month</span>
+                </div>
+                {monthlyAttendance.length === 0 ? (
+                    <div className="text-sm text-gray-500">No attendance data yet.</div>
+                ) : (
+                    <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={monthlyAttendance} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                                <XAxis dataKey="month" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={50} />
+                                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                                <Tooltip />
+                                <Legend wrapperStyle={{ fontSize: 12 }} />
+                                <Bar dataKey="men" stackId="a" fill="#2563eb" name="Men" />
+                                <Bar dataKey="women" stackId="a" fill="#ec4899" name="Women" />
+                                <Bar dataKey="junior" stackId="a" fill="#f59e0b" name="Junior" />
+                                <Bar dataKey="children" stackId="a" fill="#10b981" name="Children" />
+                                <Bar dataKey="visitors" stackId="a" fill="#8b5cf6" name="Visitors" />
+                                <Bar dataKey="catechumens" stackId="a" fill="#ef4444" name="Catechumens" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
             </div>
 
             {/* Completion Progress Indicator */}
@@ -202,6 +279,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                             className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
                             style={{ width: `${(completionStatus.completed / completionStatus.total) * 100}%` }}
                         ></div>
+                    </div>
+                    <div className="mb-3">
+                        {completionStatus.sections.some(s => !s.filled) && (
+                            <div className="text-sm font-semibold text-red-700 mb-2">
+                                ⚠️ Missing: {completionStatus.sections.filter(s => !s.filled).map(s => s.name).join(', ')}
+                            </div>
+                        )}
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {completionStatus.sections.map(section => (
@@ -274,6 +358,10 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist</label>
                                 <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="Optional" className="w-full border-2 rounded p-2"/>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Prepared By</label>
+                                <input type="text" name="preparedBy" value={formData.preparedBy} onChange={handleChange} placeholder="Person preparing this report" className="w-full border-2 rounded p-2" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-2">Service Types *</label>
@@ -466,6 +554,25 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                             </div>
                         </div>
 
+                        {/* No Donation Checkbox */}
+                        <div className="mb-4 p-3 bg-rose-50 border-2 border-rose-200 rounded-lg">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.noDonation || false}
+                                    onChange={(e) => {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            noDonation: e.target.checked,
+                                            donationsList: e.target.checked ? [] : prev.donationsList
+                                        }));
+                                    }}
+                                    className="w-4 h-4 cursor-pointer"
+                                />
+                                <span className="text-sm font-bold text-rose-900">No donations received this week</span>
+                            </label>
+                        </div>
+
                         {/* List of Donations */}
                         <div className="mb-4 space-y-2 max-h-48 overflow-y-auto">
                             {formData.donationsList.length > 0 ? (
@@ -485,7 +592,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center py-4 text-gray-500">No donations recorded yet</div>
+                                <div className="text-center py-4 text-gray-500">{formData.noDonation ? '✓ No donations recorded' : 'No donations recorded yet'}</div>
                             )}
                         </div>
 
@@ -561,14 +668,42 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                 </button>
                                 <button
                                     onClick={() => { handleSubmit(); setIsFullEditorOpen(false); }}
-                                    className="bg-white text-amber-700 font-extrabold py-2 px-4 rounded-lg shadow"
+                                    className={`font-extrabold py-2 px-4 rounded-lg shadow ${canSave ? 'bg-white text-amber-700' : 'bg-amber-300 text-amber-800 opacity-75 cursor-not-allowed'}`}
+                                    disabled={!canSave}
                                 >
                                     Save
+                                </button>
+                                <button
+                                    onClick={handleSaveAndReset}
+                                    className={`font-extrabold py-2 px-4 rounded-lg shadow ${canSave ? 'bg-amber-100 text-amber-900' : 'bg-amber-200 text-amber-700 opacity-75 cursor-not-allowed'}`}
+                                    disabled={!canSave}
+                                >
+                                    Save & New
                                 </button>
                             </div>
                         </div>
 
                         <div className="p-6 space-y-6">
+                            {/* Completion Status Bar - Sticky */}
+                            <div className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-orange-50 border-b-2 border-amber-200 p-4 -m-6 mb-6 px-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="font-bold text-sm text-amber-900">Completion Status: {completionStatus.completed}/{completionStatus.total}</h4>
+                                    <span className={`text-sm font-bold ${canSave ? 'text-green-600' : 'text-red-600'}`}>
+                                        {canSave ? '✓ Ready to Save' : '⚠️ Incomplete'}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-amber-200 rounded-full h-2 mb-3">
+                                    <div 
+                                        className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all duration-300"
+                                        style={{ width: `${(completionStatus.completed / completionStatus.total) * 100}%` }}
+                                    ></div>
+                                </div>
+                                {completionStatus.sections.some(s => !s.filled) && (
+                                    <div className="text-sm font-semibold text-red-700">
+                                        Missing: {completionStatus.sections.filter(s => !s.filled).map(s => s.name).join(', ')}
+                                    </div>
+                                )}
+                            </div>
                             {/* Service Details */}
                             <section className="border-2 border-blue-200 rounded-xl p-4 bg-blue-50">
                                 <div className="flex items-center gap-2 mb-3">
@@ -587,6 +722,10 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist</label>
                                         <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="Optional" className="w-full border-2 rounded p-2" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">Prepared By</label>
+                                        <input type="text" name="preparedBy" value={formData.preparedBy} onChange={handleChange} placeholder="Person preparing this report" className="w-full border-2 rounded p-2" />
                                     </div>
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-gray-700 mb-2">Service Types *</label>
@@ -669,6 +808,23 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     <input type="text" value={newDonor.description} onChange={(e) => setNewDonor(prev => ({ ...prev, description: e.target.value }))} placeholder="Description/Purpose (optional)" className="w-full border-2 rounded p-2 text-sm" />
                                 </div>
                                 <button onClick={handleAddDonation} className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded text-sm">➕ Add Donation</button>
+                                <div className="mt-3 p-3 bg-white border-2 border-rose-200 rounded-lg">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.noDonation || false}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    noDonation: e.target.checked,
+                                                    donationsList: e.target.checked ? [] : prev.donationsList
+                                                }));
+                                            }}
+                                            className="w-4 h-4 cursor-pointer"
+                                        />
+                                        <span className="text-sm font-bold text-rose-900">No donations received this week</span>
+                                    </label>
+                                </div>
                                 <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
                                     {formData.donationsList.length > 0 ? (
                                         formData.donationsList.map((d, i) => (
@@ -682,7 +838,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                             </div>
                                         ))
                                     ) : (
-                                        <div className="text-center py-2 text-gray-500">No donations recorded yet</div>
+                                        <div className="text-center py-2 text-gray-500">{formData.noDonation ? '✓ No donations recorded' : 'No donations recorded yet'}</div>
                                     )}
                                 </div>
                             </section>

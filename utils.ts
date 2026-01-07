@@ -262,6 +262,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
             amount: isNaN(parseFloat(d.amount)) ? 0 : parseFloat(d.amount),
             description: sanitizeString(d.description)
         })) : [],
+        noDonation: typeof raw.noDonation === 'boolean' ? raw.noDonation : false,
         newMembersDetails: sanitizeString(raw.newMembersDetails),
         newMembersContact: sanitizeString(raw.newMembersContact),
         events: sanitizeString(raw.events),

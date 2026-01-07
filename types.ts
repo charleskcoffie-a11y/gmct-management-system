@@ -178,6 +178,7 @@ export interface WeeklyHistoryRecord {
     // New Structured Data
     visitorsList: VisitorRecord[];
     donationsList: ServiceDonation[];
+    noDonation?: boolean;
 
     newMembersDetails: string;
     newMembersContact: string;
