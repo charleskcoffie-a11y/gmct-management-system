@@ -695,6 +695,13 @@ export const saveUserToSupabase = async (url: string, key: string, user: User, o
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
+    // Hard guard: never allow editing or recreating the default Admin user
+    const isOriginalAdmin = !!originalUsername && originalUsername.toLowerCase() === 'admin';
+    const isTargetAdmin = user.username.toLowerCase() === 'admin';
+    if (isOriginalAdmin || (!originalUsername && isTargetAdmin)) {
+        throw new Error('Admin user cannot be edited or recreated');
+    }
+
     const { error } = await supabase.from('app_users').upsert([mapUserToDB(user)]);
     if (error) throw new Error(`Save user failed: ${error.message}`);
 
@@ -708,6 +715,11 @@ export const saveUserToSupabase = async (url: string, key: string, user: User, o
 export const deleteUserFromSupabase = async (url: string, key: string, username: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    // Hard guard: never allow deleting Admin user
+    if (username.toLowerCase() === 'admin') {
+        throw new Error('Admin user cannot be deleted');
+    }
 
     const { error } = await supabase.from('app_users').delete().eq('username', username);
     if (error) throw new Error(`Delete user failed: ${error.message}`);
