@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
-import type { Settings, Entry, Member, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry, MonthLock } from '../types';
+import type { Settings, Entry, Member, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry, MonthLock, ClassLeader } from '../types';
 import { uploadDataToSupabase, downloadDataFromSupabase } from '../services/supabase';
 
 // Helper to check if Supabase is configured
@@ -16,6 +16,7 @@ export function useSupabaseAutoSync(
         history: WeeklyHistoryRecord[];
         users: User[];
         monthLocks?: MonthLock[];
+        classLeaders?: ClassLeader[];
     },
     // Setters are required to update local state after a pull
     setters?: {
@@ -26,6 +27,7 @@ export function useSupabaseAutoSync(
         setUsers: (d: User[]) => void;
         setMonthLocks?: (d: MonthLock[]) => void;
         setSettings?: (d: Settings) => void;
+        setClassLeaders?: (d: ClassLeader[]) => void;
     }
 ): SyncStatus {
     // Initialize state based on whether credentials exist
@@ -76,12 +78,15 @@ export function useSupabaseAutoSync(
                 const cloudMembers = cloudData.members || [];
                 const cloudHistory = cloudData.history || [];
                 const cloudUsers = cloudData.users || [];
+                const cloudLocks = cloudData.monthLocks || [];
+                const cloudClassLeaders = cloudData.classLeaders || [];
                 // Update UI with cloud data only
                 setters.setEntries(cloudEntries);
                 setters.setMembers(cloudMembers);
                 setters.setHistory(cloudHistory);
                 setters.setUsers(cloudUsers);
                 setters.setMonthLocks?.(cloudLocks);
+                setters.setClassLeaders?.(cloudClassLeaders);
                 if (setters.setSettings) setters.setSettings(cloudSettings);
                 setStatus({ state: 'synced', lastSynced: new Date() });
             } catch (e: any) {
@@ -99,6 +104,7 @@ export function useSupabaseAutoSync(
     // 1.5 Periodic Pull for Multi-User Updates (every 30 seconds)
     useEffect(() => {
         const interval = setInterval(async () => {
+            if (!setters) return;
             try {
                 const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
                 // For multi-user, always trust the database as source of truth
@@ -107,6 +113,7 @@ export function useSupabaseAutoSync(
                 setters.setHistory(cloudData.history);
                 setters.setUsers(cloudData.users);
                 setters.setMonthLocks?.(cloudData.monthLocks || []);
+                setters.setClassLeaders?.(cloudData.classLeaders || []);
                 if (setters.setSettings) {
                     const cloudSettings = cloudData.settings
                         ? {

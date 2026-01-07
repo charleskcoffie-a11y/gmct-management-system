@@ -534,6 +534,8 @@ create index if not exists idx_asset_maintenance_asset on public.asset_maintenan
 **Admin (Full Authority)**
 Admin has full control over financial data and all system settings. Admin can approve corrections, lock/unlock periods, access audit logs, edit/delete any record, manage all user accounts, and export any report. The Admin has complete visibility and management authority.
 
+Note: For safety, the application locks the default Admin account from edits, renaming, and deletion. Create additional admin-like users with the `finance-chair` role when you need elevated financial authority without system settings control.
+
 **Finance Chair (Full Financial Authority)**
 Oversees all financial operations. Approves corrections, manages period locking, views audit trails, and exports detailed reports. Cannot change system settings or user roles.
 

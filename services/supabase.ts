@@ -1,11 +1,17 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, ClassLeader } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
 let currentUrl = '';
 let currentKey = '';
+
+// Wrap async work with a short timeout so UI is not blocked by slow networks
+const withTimeout = async <T>(label: string, promise: Promise<T>, ms = 8000): Promise<T> => {
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} request timed out after ${ms}ms`)), ms));
+    return Promise.race([promise, timeout]);
+};
 
 export const getSupabaseClient = (url: string, key: string): SupabaseClient | null => {
     if (!url || !key) return null;
@@ -193,6 +199,37 @@ const mapUserFromDB = (u: any): User => ({
     classLed: u.class_led
 });
 
+const mapClassLeaderToDB = (cl: ClassLeader) => ({
+    id: cl.id,
+    username: cl.username,
+    password: cl.password,
+    class_number: cl.classNumber,
+    access_code: cl.accessCode,
+    full_name: cl.fullName || null,
+    phone: cl.phone || null,
+    email: cl.email || null,
+    active: cl.active,
+    created_by: cl.createdBy || null,
+    updated_by: cl.updatedBy || null,
+    last_updated: cl.lastUpdated || null,
+});
+
+const mapClassLeaderFromDB = (cl: any): ClassLeader => ({
+    id: cl.id,
+    username: cl.username,
+    password: cl.password,
+    classNumber: cl.class_number,
+    accessCode: cl.access_code,
+    fullName: cl.full_name || undefined,
+    phone: cl.phone || undefined,
+    email: cl.email || undefined,
+    active: cl.active ?? true,
+    createdBy: cl.created_by || undefined,
+    updatedBy: cl.updated_by || undefined,
+    lastUpdated: cl.last_updated || undefined,
+    createdAt: cl.created_at || undefined,
+});
+
 const mapHistoryToDB = (h: WeeklyHistoryRecord) => ({
     id: h.id,
     date_of_service: h.dateOfService,
@@ -323,46 +360,57 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const { data: membersDB, error: memErr } = await supabase.from('members').select('*');
-    if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
-    const members = membersDB?.map(mapMemberFromDB) || [];
+    const [members, entries, users, history, monthLocks, settings, classLeaders] = await Promise.all([
+        withTimeout('members fetch', (async () => {
+            const { data, error } = await supabase.from('members').select('*');
+            if (error) throw new Error(`Fetch Members failed: ${error.message}`);
+            return data?.map(mapMemberFromDB) || [];
+        })()),
+        withTimeout('entries fetch', (async () => {
+            const { data, error } = await supabase.from('entries').select('*');
+            if (error) throw new Error(`Fetch Entries failed: ${error.message}`);
+            return data?.map(mapEntryFromDB) || [];
+        })()),
+        withTimeout('users fetch', (async () => {
+            const { data, error } = await supabase.from('app_users').select('*');
+            if (error) throw new Error(`Fetch Users failed: ${error.message}`);
+            return data?.map(mapUserFromDB) || [];
+        })()),
+        withTimeout('history fetch', (async () => {
+            const { data, error } = await supabase.from('weekly_history').select('*');
+            if (error) throw new Error(`Fetch History failed: ${error.message}`);
+            return data?.map(mapHistoryFromDB) || [];
+        })()),
+        withTimeout('month locks fetch', (async () => {
+            try {
+                const { data } = await supabase.from('month_locks').select('*');
+                return data ? data.map(mapLockFromDB) : [];
+            } catch (e) {
+                console.log("Month locks table may not exist yet.");
+                return [] as MonthLock[];
+            }
+        })()),
+        withTimeout('settings fetch', (async () => {
+            try {
+                const { data } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
+                return data ? mapSettingsFromDB(data) : undefined;
+            } catch (e) {
+                console.log("Settings table may not exist yet.");
+                return undefined as Settings | undefined;
+            }
+        })()),
+        withTimeout('class_leaders fetch', (async () => {
+            try {
+                const { data } = await supabase.from('class_leaders').select('*').eq('active', true);
+                return data ? data.map(mapClassLeaderFromDB) : [];
+            } catch (e) {
+                console.log("Class leaders table may not exist yet.");
+                return [] as ClassLeader[];
+            }
+        })())
+    ]);
 
-    const { data: entriesDB, error: entErr } = await supabase.from('entries').select('*');
-    if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
-    const entries = entriesDB?.map(mapEntryFromDB) || [];
-
-    const { data: usersDB, error: userErr } = await supabase.from('app_users').select('*');
-    if (userErr) throw new Error(`Fetch Users failed: ${userErr.message}`);
-    const users = usersDB?.map(mapUserFromDB) || [];
-
-    const { data: historyDB, error: histErr } = await supabase.from('weekly_history').select('*');
-    if (histErr) throw new Error(`Fetch History failed: ${histErr.message}`);
-    const history = historyDB?.map(mapHistoryFromDB) || [];
-    
-    let monthLocks: MonthLock[] = [];
-    try {
-        const { data: locksDB } = await supabase.from('month_locks').select('*');
-        if (locksDB) monthLocks = locksDB.map(mapLockFromDB);
-    } catch (e) {
-        console.log("Month locks table may not exist yet.");
-    }
-
-    let settings: Settings | undefined;
-    try {
-        const { data: settingsDB } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
-        if (settingsDB) settings = mapSettingsFromDB(settingsDB);
-    } catch (e) {
-        console.log("Settings table may not exist yet.");
-    }
-
-    return {
-        members,
-        entries,
-        users,
-        history,
-        monthLocks,
-        settings
-    };
+    return { members, entries, users, history, monthLocks, settings, classLeaders };
 };
 
 // --- E-Transfers ---
@@ -647,6 +695,13 @@ export const saveUserToSupabase = async (url: string, key: string, user: User, o
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
+    // Hard guard: never allow editing or recreating the default Admin user
+    const isOriginalAdmin = !!originalUsername && originalUsername.toLowerCase() === 'admin';
+    const isTargetAdmin = user.username.toLowerCase() === 'admin';
+    if (isOriginalAdmin || (!originalUsername && isTargetAdmin)) {
+        throw new Error('Admin user cannot be edited or recreated');
+    }
+
     const { error } = await supabase.from('app_users').upsert([mapUserToDB(user)]);
     if (error) throw new Error(`Save user failed: ${error.message}`);
 
@@ -661,8 +716,42 @@ export const deleteUserFromSupabase = async (url: string, key: string, username:
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
+    // Hard guard: never allow deleting Admin user
+    if (username.toLowerCase() === 'admin') {
+        throw new Error('Admin user cannot be deleted');
+    }
+
     const { error } = await supabase.from('app_users').delete().eq('username', username);
     if (error) throw new Error(`Delete user failed: ${error.message}`);
+    return { success: true };
+};
+
+// --- Class Leader CRUD ---
+export const saveClassLeaderToSupabase = async (url: string, key: string, classLeader: ClassLeader) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const dbData = mapClassLeaderToDB(classLeader);
+    
+    if (classLeader.id) {
+        // Update existing
+        const { error } = await supabase.from('class_leaders').update(dbData).eq('id', classLeader.id);
+        if (error) throw new Error(`Update class leader failed: ${error.message}`);
+    } else {
+        // Insert new
+        const { error } = await supabase.from('class_leaders').insert([dbData]);
+        if (error) throw new Error(`Insert class leader failed: ${error.message}`);
+    }
+    
+    return { success: true };
+};
+
+export const deleteClassLeaderFromSupabase = async (url: string, key: string, id: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('class_leaders').delete().eq('id', id);
+    if (error) throw new Error(`Delete class leader failed: ${error.message}`);
     return { success: true };
 };
 

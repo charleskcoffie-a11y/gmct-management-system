@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChurchIcon } from './icons';
-import type { User } from '../types';
+import type { User, UserRole } from '../types';
 
 interface LoginProps {
     users: User[];
@@ -11,6 +11,11 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ users, onLogin, error }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+
+    // Ensure ClassLeader option is always available even if not yet in Supabase
+    const userOptions: User[] = users.some(u => u.username.toLowerCase() === 'classleader')
+        ? users
+        : [...users, { username: 'ClassLeader', role: 'class-leader' as UserRole }];
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,7 +52,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error }) => {
                                             className="appearance-none block w-full px-3 py-2 rounded-lg bg-slate-950/40 border border-white/10 text-slate-100 placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
                                         >
                                             <option value="" disabled>Select user</option>
-                                            {users.map(user => (
+                                            {userOptions.map(user => (
                                                 <option key={user.username} value={user.username}>{user.username}</option>
                                             ))}
                                         </select>

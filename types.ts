@@ -1,5 +1,5 @@
 
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "day-born" | "development-fund" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "day-born" | "development-fund" | "covenant" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {
@@ -110,6 +110,22 @@ export interface User {
     role: UserRole;
     classLed?: string; // For class-leader role: which class they manage
     assignedClass?: string; // Alias for classLed (more semantic)
+}
+
+export interface ClassLeader {
+    id?: string;
+    username: string;
+    password: string;
+    classNumber: string;
+    accessCode: string;
+    fullName?: string;
+    phone?: string;
+    email?: string;
+    active: boolean;
+    createdBy?: string;
+    updatedBy?: string;
+    lastUpdated?: string;
+    createdAt?: string;
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';

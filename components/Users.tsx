@@ -22,6 +22,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             return;
         }
+        // Disallow any edits or creation targeting the default Admin user
+        const isOriginalAdmin = !!originalUsername && originalUsername.toLowerCase() === 'admin';
+        const isTargetAdmin = user.username.toLowerCase() === 'admin';
+        if (isOriginalAdmin || (!originalUsername && isTargetAdmin)) {
+            alert('The default Admin user cannot be edited or recreated.');
+            return;
+        }
         const newUsers = [...users];
         const matchUsername = (originalUsername || user.username).toLowerCase();
         const index = newUsers.findIndex(u => u.username.toLowerCase() === matchUsername);
@@ -99,6 +106,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
         if (r === 'data-entry') return 'bg-sky-100 text-sky-800 border border-sky-200';
         if (r === 'pastor') return 'bg-amber-100 text-amber-800 border border-amber-200';
         if (r === 'statistician') return 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-200';
+        if (r === 'class-leader') return 'bg-cyan-100 text-cyan-800 border border-cyan-200';
         return 'bg-slate-100 text-slate-700 border border-slate-200';
     };
 
@@ -108,6 +116,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
                 <div>
                     <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 px-6 py-3 rounded-xl shadow-lg">👤 Manage Users</h2>
                     <p className="text-base text-slate-600 mt-3 font-medium">{totalUsers} user{totalUsers === 1 ? '' : 's'} • Roles: {roleSet.map(r => r.replace('-', ' ')).join(', ') || '—'}</p>
+                    <p className="text-sm text-slate-500 mt-1 italic">Note: The default Admin account is locked from edits, rename, and deletion.</p>
                 </div>
                 <button 
                     onClick={() => { if (syncStatus?.state === 'synced' && settings?.supabaseUrl && settings?.supabaseKey) { setSelectedUser(null); setIsModalOpen(true); } }} 
@@ -138,8 +147,29 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
                                 </td>
                                 <td className="px-6 py-4 text-slate-500">—</td>
                                 <td className="px-6 py-4 text-right">
-                                    <button onClick={() => { setSelectedUser(user); setIsModalOpen(true); }} className="font-bold text-indigo-600 hover:text-indigo-800 mr-4">Edit</button>
-                                    <button onClick={() => handleDelete(user.username)} className="font-bold text-rose-600 hover:text-rose-800">Delete</button>
+                                            <button
+                                                onClick={() => {
+                                                    if (user.username.toLowerCase() === 'admin') {
+                                                        alert('The default Admin user cannot be edited.');
+                                                        return;
+                                                    }
+                                                    setSelectedUser(user);
+                                                    setIsModalOpen(true);
+                                                }}
+                                                className={`font-bold mr-4 ${user.username.toLowerCase() === 'admin' ? 'text-slate-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-800'}`}
+                                                title={user.username.toLowerCase() === 'admin' ? 'Admin user is locked' : 'Edit user'}
+                                                disabled={user.username.toLowerCase() === 'admin'}
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(user.username)}
+                                                className={`font-bold ${user.username.toLowerCase() === 'admin' ? 'text-slate-400 cursor-not-allowed' : 'text-rose-600 hover:text-rose-800'}`}
+                                                title={user.username.toLowerCase() === 'admin' ? 'Admin user cannot be deleted' : 'Delete user'}
+                                                disabled={user.username.toLowerCase() === 'admin'}
+                                            >
+                                                Delete
+                                            </button>
                                 </td>
                             </tr>
                         ))}

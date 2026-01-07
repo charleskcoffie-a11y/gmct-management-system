@@ -8,11 +8,12 @@ import ConfirmationModal from './components/ConfirmationModal';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import Login from './components/Login';
 import { ToastProvider } from './components/ToastProvider';
+import PasswordChangeModal from './components/PasswordChangeModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
@@ -45,6 +46,8 @@ const DayBorn = lazy(() => import('./components/DayBorn'));
 // Initial Data
 const INITIAL_USERS: User[] = [
     { username: 'Admin', password: 'GMCT', role: 'admin' },
+    // Shared class-leader account (uses class access codes as password)
+    { username: 'ClassLeader', role: 'class-leader' },
 ];
 const INITIAL_SETTINGS: Settings = {
     currency: DEFAULT_CURRENCY,
@@ -68,6 +71,7 @@ const App: React.FC = () => {
     const [entries, setEntries] = useState<Entry[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+    const [classLeaders, setClassLeaders] = useState<ClassLeader[]>([]);
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
 
     const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
@@ -110,13 +114,16 @@ const App: React.FC = () => {
     // Navigation collapse state
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
+    // Password change modal state
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, history: weeklyHistory, users, monthLocks
+        entries, members, history: weeklyHistory, users, monthLocks, classLeaders
     }, {
-        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings, setClassLeaders
     });
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);
@@ -146,6 +153,29 @@ const App: React.FC = () => {
             }
         }).catch(err => console.error('Failed to load data from database:', err));
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+
+    // --- Seed ClassLeader user to database if it doesn't exist ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+        if (users.length === 0) return; // Wait for users to load
+        
+        const hasClassLeader = users.some(u => u.username.toLowerCase() === 'classleader');
+        if (!hasClassLeader) {
+            const classLeaderUser: User = {
+                username: 'ClassLeader',
+                password: '',
+                role: 'class-leader'
+            };
+            import('./services/supabase').then(({ saveUserToSupabase }) => {
+                saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, classLeaderUser)
+                    .then(() => {
+                        setUsers(prev => [...prev, classLeaderUser]);
+                        console.log('ClassLeader user seeded to database');
+                    })
+                    .catch(err => console.warn('Failed to seed ClassLeader:', err));
+            });
+        }
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, users]);
     
     // --- Safe Close Protection ---
     useEffect(() => {
@@ -301,44 +331,69 @@ const App: React.FC = () => {
 
     // --- Handlers ---
     const handleLogin = (username: string, password: string) => {
+        const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
         const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (!foundUser) {
+        const classLeaderFallback = username.trim().toLowerCase() === 'classleader'
+            ? ({ username: 'ClassLeader', role: 'class-leader' as UserRole })
+            : null;
+        const user = foundUser || classLeaderFallback;
+
+        if (!user) {
             setLoginError('Invalid username or password.');
             return;
         }
 
         // Special handling for class leaders: validate access codes from Settings
-        if (foundUser.role === 'class-leader') {
+        if (user.role === 'class-leader') {
             const raw = (password || '').trim();
-            let assignedClass = foundUser.assignedClass || foundUser.classLed;
+            const classAccessCodes = settings.classAccessCodes || {};
 
-            // If exact password matches stored user password, accept as-is (admin override)
-            if (foundUser.password && password === foundUser.password) {
-                // keep assignedClass as stored (if any)
-            } else {
-                // Check if password matches any class access code
-                const classAccessCodes = settings.classAccessCodes || {};
-                let matchedClass: string | null = null;
+            const resolveClassFromPassword = (): string | null => {
+                const lower = normalize(raw);
 
+                // 1) Match admin-configured access codes (case-insensitive)
                 for (const [classNum, code] of Object.entries(classAccessCodes)) {
-                    if (code && raw === code) {
+                    if (normalize(code) === lower) {
                         const clsNum = parseInt(classNum, 10);
                         if (clsNum >= 1 && clsNum <= settings.maxClasses) {
-                            matchedClass = String(clsNum);
-                            break;
+                            return String(clsNum);
                         }
                     }
                 }
 
+                // 2) Accept patterns like "class1", "class 3", "class-7"
+                const classMatch = lower.match(/class\s*-?\s*(\d{1,2})/);
+                if (classMatch) {
+                    const clsNum = parseInt(classMatch[1], 10);
+                    if (clsNum >= 1 && clsNum <= settings.maxClasses) return String(clsNum);
+                }
+
+                // 3) Accept direct numeric passwords (e.g., "1", "07")
+                const numMatch = lower.match(/^(\d{1,2})$/);
+                if (numMatch) {
+                    const clsNum = parseInt(numMatch[1], 10);
+                    if (clsNum >= 1 && clsNum <= settings.maxClasses) return String(clsNum);
+                }
+
+                return null;
+            };
+
+            let assignedClass = (user as User).assignedClass || (user as User).classLed;
+
+            // Admin override: exact password match on stored user password keeps assigned class
+            if (!(user as User).password || (user as User).password !== password) {
+                const matchedClass = resolveClassFromPassword();
                 if (matchedClass) {
                     assignedClass = matchedClass;
-                } else {
-                    setLoginError('Invalid class access code. Contact admin for your class code.');
-                    return;
                 }
             }
 
-            const sessionUser = { ...foundUser, assignedClass } as typeof foundUser;
+            if (!assignedClass) {
+                setLoginError('Invalid class access code. Contact admin for your class code.');
+                return;
+            }
+
+            const sessionUser = { ...user, assignedClass, role: 'class-leader' as UserRole } as User;
             setCurrentUser(sessionUser);
             setLoginError(null);
             setActiveTab('attendance');
@@ -346,7 +401,7 @@ const App: React.FC = () => {
         }
 
         // All other roles: require exact password match
-        if (foundUser.password !== password) {
+        if (!foundUser || foundUser.password !== password) {
             setLoginError('Invalid username or password.');
             return;
         }
@@ -505,12 +560,19 @@ const App: React.FC = () => {
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "development-fund", "other"];
 
     const renderTabContent = () => {
+        // Class leaders are restricted to attendance only
+        if (currentUser.role === 'class-leader' && activeTab !== 'attendance') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Class Leaders can only take attendance for their class.</div>;
+        }
         // Double check access before rendering restrictive tabs
         if (activeTab === 'utilities' && currentUser.role !== 'admin') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
         }
         if (activeTab === 'users' && currentUser.role !== 'admin') {
              return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
+        }
+        if (activeTab === 'settings' && currentUser.role !== 'admin') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin can access Settings.</div>;
         }
         if (activeTab === 'tax-receipts' && !(currentUser.role === 'admin' || currentUser.role === 'finance-chair')) {
             return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin and Finance Chair can issue receipts.</div>;
@@ -1085,6 +1147,7 @@ const App: React.FC = () => {
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team'] },
+                { id: 'settings', label: 'Settings', roles: ['admin'] },
             ]
         },
         {
@@ -1143,7 +1206,7 @@ const App: React.FC = () => {
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
             <div className="w-full px-4 sm:px-6 lg:px-8">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
+                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings} onPasswordChange={() => setIsPasswordModalOpen(true)}/>
                 {syncStatus.state !== 'synced' && (
                     <div className="no-print mt-2 mb-4 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-sm flex items-center gap-2"
                         style={{
@@ -1244,6 +1307,15 @@ const App: React.FC = () => {
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />
+                {isPasswordModalOpen && currentUser && (
+                    <PasswordChangeModal 
+                        currentUser={currentUser}
+                        users={users}
+                        setUsers={setUsers}
+                        settings={settings}
+                        onClose={() => setIsPasswordModalOpen(false)}
+                    />
+                )}
                 <KeyboardShortcuts onNavigate={handleNavigate} />
             </div>
         </div>
