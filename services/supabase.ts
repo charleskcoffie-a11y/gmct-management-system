@@ -726,6 +726,26 @@ export const deleteUserFromSupabase = async (url: string, key: string, username:
     return { success: true };
 };
 
+// --- Weekly History Operations ---
+export const saveWeeklyHistoryToSupabase = async (url: string, key: string, record: WeeklyHistoryRecord) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const dbData = mapHistoryToDB(record);
+    const { error } = await supabase.from('weekly_history').upsert([dbData]);
+    if (error) throw new Error(`Save weekly history failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, recordId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('weekly_history').delete().eq('id', recordId);
+    if (error) throw new Error(`Delete weekly history failed: ${error.message}`);
+    return { success: true };
+};
+
 // --- Class Leader CRUD ---
 export const saveClassLeaderToSupabase = async (url: string, key: string, classLeader: ClassLeader) => {
     const supabase = getSupabaseClient(url, key);

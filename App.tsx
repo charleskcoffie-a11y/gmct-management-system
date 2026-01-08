@@ -1069,7 +1069,7 @@ const App: React.FC = () => {
                         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
                             <h3 className="text-lg font-bold">📅 Weekly History</h3>
                         </div>
-                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />
+                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
                     </div>
                 );
             case 'upcoming-birthdays':

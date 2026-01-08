@@ -162,6 +162,7 @@ export interface WeeklyHistoryRecord {
     serviceTypes: string[]; 
     serviceTypeOther: string;
     sermonTopic: string;
+    memoryVerse: string;
     worshipHighlights: string;
     announcementsBy: string;
     
@@ -179,6 +180,7 @@ export interface WeeklyHistoryRecord {
     visitorsList: VisitorRecord[];
     donationsList: ServiceDonation[];
     noDonation?: boolean;
+    noVisitors?: boolean;
 
     newMembersDetails: string;
     newMembersContact: string;

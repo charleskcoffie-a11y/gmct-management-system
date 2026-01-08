@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { WeeklyHistoryRecord, VisitorRecord, ServiceDonation } from '../types';
+import type { WeeklyHistoryRecord, VisitorRecord, ServiceDonation, Settings } from '../types';
 import { sanitizeWeeklyHistoryRecord, formatCurrency } from '../utils';
+import { saveWeeklyHistoryToSupabase, deleteWeeklyHistoryFromSupabase, downloadDataFromSupabase } from '../services/supabase';
 import HistoryArchiveModal from './HistoryArchiveModal';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
     setHistory: React.Dispatch<React.SetStateAction<WeeklyHistoryRecord[]>>;
+    settings: Settings;
 }
 
 const initialFormState = (): WeeklyHistoryRecord => ({
@@ -19,12 +21,14 @@ const initialFormState = (): WeeklyHistoryRecord => ({
     serviceTypes: [],
     serviceTypeOther: '',
     sermonTopic: '',
+    memoryVerse: '',
     worshipHighlights: '',
     announcementsBy: '',
     attendance: { men: 0, women: 0, junior: 0, children: 0, visitors: 0, catechumens: 0 },
     visitorsList: [],
     donationsList: [],
     noDonation: false,
+    noVisitors: false,
     newMembersDetails: '',
     newMembersContact: '',
     events: '',
@@ -43,13 +47,14 @@ const serviceTypeOptions = [
     'Other'
 ];
 
-const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) => {
+const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, settings }) => {
     const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
     const [formData, setFormData] = useState<WeeklyHistoryRecord>(initialFormState());
     const [showArchive, setShowArchive] = useState(false);
     const [activeModal, setActiveModal] = useState<'details' | 'attendance' | 'visitors' | 'donations' | 'events' | null>(null);
     const [editingArchiveId, setEditingArchiveId] = useState<string | null>(null);
     const [isFullEditorOpen, setIsFullEditorOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     
     // Temporary state for new donor/visitor input
     const [newDonor, setNewDonor] = useState({ donor: '', amount: 0, description: '' });
@@ -64,12 +69,15 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
     useEffect(() => {
         if (selectedRecordId) {
             const record = history.find(h => h.id === selectedRecordId);
-            if (record) setFormData(record);
+            if (record) {
+                // Merge to ensure newly added fields (e.g., preparedBy) are present when editing older records
+                setFormData({ ...initialFormState(), ...record });
+            }
         }
         // Note: We don't reset to initialFormState here when selectedRecordId is null
         // because that would clear the form while the user is typing.
         // The form is explicitly reset when the New button is clicked.
-    }, [selectedRecordId, history]);
+    }, [selectedRecordId]); // Only reload when selectedRecordId changes, not when history changes
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -124,17 +132,41 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
         }));
     };
 
-    const handleSubmit = (e?: React.FormEvent) => {
+    const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        const sanitized = sanitizeWeeklyHistoryRecord(formData);
-        const newHistory = history.findIndex(h => h.id === sanitized.id) > -1 
-            ? history.map(h => h.id === sanitized.id ? sanitized : h)
-            : [...history, sanitized];
-        setHistory(newHistory);
-        alert('Record saved!');
-        setSelectedRecordId(sanitized.id);
-        setEditingArchiveId(null);
-        setFormData(sanitized);
+        if (isSaving) return;
+        
+        setIsSaving(true);
+        try {
+            const sanitized = sanitizeWeeklyHistoryRecord(formData);
+            
+            // Save to Supabase if configured
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await saveWeeklyHistoryToSupabase(settings.supabaseUrl, settings.supabaseKey, sanitized);
+                
+                // Fetch fresh data from Supabase to ensure we have the latest
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setHistory(cloudData.history);
+            } else {
+                // Fallback to local state if Supabase not configured
+                const newHistory = history.findIndex(h => h.id === sanitized.id) > -1 
+                    ? history.map(h => h.id === sanitized.id ? sanitized : h)
+                    : [...history, sanitized];
+                setHistory(newHistory);
+            }
+            
+            alert('Record saved!');
+            // Reset form for new entry
+            setSelectedRecordId(null);
+            setFormData(initialFormState());
+            setEditingArchiveId(null);
+            setActiveModal(null);
+            setIsFullEditorOpen(false);
+        } catch (error: any) {
+            alert(`Failed to save: ${error.message}`);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleSaveAndReset = () => {
@@ -147,8 +179,34 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
 
     const handleEditArchiveRecord = (record: WeeklyHistoryRecord) => {
         setSelectedRecordId(record.id);
-        setFormData(record);
+        // Merge to backfill new fields for legacy records
+        setFormData({ ...initialFormState(), ...record });
         setEditingArchiveId(record.id);
+        setIsFullEditorOpen(true);
+        setShowArchive(false);
+    };
+
+    const handleDeleteArchiveRecord = async (id: string) => {
+        try {
+            // Delete from Supabase if configured
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await deleteWeeklyHistoryFromSupabase(settings.supabaseUrl, settings.supabaseKey, id);
+                
+                // Fetch fresh data from Supabase to ensure we have the latest
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setHistory(cloudData.history);
+            } else {
+                // Fallback to local state if Supabase not configured
+                setHistory(history.filter(h => h.id !== id));
+            }
+            
+            if (selectedRecordId === id) {
+                setSelectedRecordId(null);
+                setFormData(initialFormState());
+            }
+        } catch (error: any) {
+            alert(`Failed to delete: ${error.message}`);
+        }
     };
 
     const totalAttendance = useMemo(() => {
@@ -161,7 +219,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
         const sections = [
             { name: 'Service Details', filled: !!formData.dateOfService && !!formData.officiant },
             { name: 'Attendance', filled: totalAttendance > 0 },
-            { name: 'Visitors', filled: formData.visitorsList.length > 0 },
+            { name: 'Visitors', filled: formData.visitorsList.length > 0 || formData.noVisitors },
             { name: 'Donations', filled: formData.donationsList.length > 0 || formData.noDonation },
             { name: 'Worship', filled: !!formData.sermonTopic || !!formData.events },
         ];
@@ -240,27 +298,97 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                 <button onClick={() => { if (selectedRecordId) { if (window.confirm('Delete?')) { setHistory(history.filter(h => h.id !== selectedRecordId)); setSelectedRecordId(null); } } }} disabled={!selectedRecordId} className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🗑️ Delete</button>
             </div>
 
-            <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-gray-800">Monthly Attendance by Category</h3>
-                    <span className="text-xs text-gray-500">Totals per month</span>
+            <div className="bg-gradient-to-br from-blue-50 via-white to-purple-50 border-2 border-blue-200 rounded-xl p-5 mb-6 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                            📊 Monthly Attendance Overview
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">Stacked totals per category</p>
+                    </div>
+                    <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full">
+                        {monthlyAttendance.length} months
+                    </span>
                 </div>
                 {monthlyAttendance.length === 0 ? (
-                    <div className="text-sm text-gray-500">No attendance data yet.</div>
+                    <div className="text-center py-12">
+                        <div className="text-4xl mb-2">📈</div>
+                        <div className="text-sm text-gray-500 font-medium">No attendance data yet</div>
+                        <div className="text-xs text-gray-400 mt-1">Create a record to see monthly trends</div>
+                    </div>
                 ) : (
-                    <div className="h-64">
+                    <div className="h-72 mt-2">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyAttendance} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                                <XAxis dataKey="month" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={50} />
-                                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                                <Tooltip />
-                                <Legend wrapperStyle={{ fontSize: 12 }} />
-                                <Bar dataKey="men" stackId="a" fill="#2563eb" name="Men" />
-                                <Bar dataKey="women" stackId="a" fill="#ec4899" name="Women" />
-                                <Bar dataKey="junior" stackId="a" fill="#f59e0b" name="Junior" />
-                                <Bar dataKey="children" stackId="a" fill="#10b981" name="Children" />
-                                <Bar dataKey="visitors" stackId="a" fill="#8b5cf6" name="Visitors" />
-                                <Bar dataKey="catechumens" stackId="a" fill="#ef4444" name="Catechumens" />
+                            <BarChart 
+                                data={monthlyAttendance} 
+                                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                                barSize={45}
+                            >
+                                <defs>
+                                    <linearGradient id="menGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#1e40af" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="womenGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#ec4899" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#be185d" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="juniorGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#d97706" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="childrenGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#059669" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="visitorsGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#6d28d9" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="catechumensGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#ef4444" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                </defs>
+                                <XAxis 
+                                    dataKey="month" 
+                                    tick={{ fontSize: 12, fill: '#4b5563', fontWeight: 600 }} 
+                                    angle={-45} 
+                                    textAnchor="end" 
+                                    height={70}
+                                    stroke="#9ca3af"
+                                />
+                                <YAxis 
+                                    tick={{ fontSize: 12, fill: '#4b5563', fontWeight: 600 }} 
+                                    allowDecimals={false}
+                                    stroke="#9ca3af"
+                                    label={{ value: 'Attendance', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6b7280', fontWeight: 600 } }}
+                                />
+                                <Tooltip 
+                                    contentStyle={{ 
+                                        backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+                                        border: '2px solid #e5e7eb', 
+                                        borderRadius: '12px',
+                                        boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                                        padding: '12px'
+                                    }}
+                                    labelStyle={{ fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}
+                                    itemStyle={{ fontSize: '13px', padding: '4px 0' }}
+                                />
+                                <Legend 
+                                    wrapperStyle={{ 
+                                        fontSize: 13, 
+                                        fontWeight: 600,
+                                        paddingTop: '15px'
+                                    }}
+                                    iconType="circle"
+                                />
+                                <Bar dataKey="men" stackId="a" fill="url(#menGradient)" name="Men" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="women" stackId="a" fill="url(#womenGradient)" name="Women" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="junior" stackId="a" fill="url(#juniorGradient)" name="Junior" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="children" stackId="a" fill="url(#childrenGradient)" name="Children" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="visitors" stackId="a" fill="url(#visitorsGradient)" name="Visitors" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="catechumens" stackId="a" fill="url(#catechumensGradient)" name="Catechumens" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -352,7 +480,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                 <input type="date" name="dateOfService" value={formData.dateOfService} onChange={handleChange} className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Officiant *</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Preacher *</label>
                                 <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} placeholder="e.g., Rev. John Doe" className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
                             <div>
@@ -501,7 +629,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center py-4 text-gray-500">No visitors recorded yet</div>
+                                <div className="text-center py-4 text-gray-500">{formData.noVisitors ? '✓ No visitors recorded' : 'No visitors recorded yet'}</div>
                             )}
                         </div>
                         
@@ -609,16 +737,29 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                     <div className="bg-white rounded-lg max-w-sm w-full p-6">
                         <h2 className="text-xl font-bold mb-4 text-gray-900">🙏 Worship & Events</h2>
                         <div className="space-y-3 mb-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
-                                <input 
-                                    type="text" 
-                                    name="sermonTopic" 
-                                    value={formData.sermonTopic} 
-                                    onChange={handleChange} 
-                                    placeholder="Main sermon topic"
-                                    className="w-full border-2 border-orange-300 rounded p-2"
-                                />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
+                                    <input 
+                                        type="text" 
+                                        name="sermonTopic" 
+                                        value={formData.sermonTopic} 
+                                        onChange={handleChange} 
+                                        placeholder="Main sermon topic"
+                                        className="w-full border-2 border-orange-300 rounded p-2"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Memory Verse</label>
+                                    <input 
+                                        type="text" 
+                                        name="memoryVerse" 
+                                        value={formData.memoryVerse} 
+                                        onChange={handleChange} 
+                                        placeholder="e.g., John 3:16"
+                                        className="w-full border-2 border-orange-300 rounded p-2"
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">Special Events / Announcements</label>
@@ -656,8 +797,8 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] overflow-y-auto">
                         <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white p-4 rounded-t-2xl flex items-center justify-between">
                             <div>
-                                <h3 className="text-xl font-extrabold">New Weekly History</h3>
-                                <p className="text-sm opacity-90">Fill all sections below, then save.</p>
+                                <h3 className="text-xl font-extrabold">{selectedRecordId ? 'Edit Weekly History' : 'New Weekly History'}</h3>
+                                <p className="text-sm opacity-90">{selectedRecordId ? 'Update the form below and save changes.' : 'Fill all sections below, then save.'}</p>
                             </div>
                             <div className="flex gap-2">
                                 <button
@@ -716,7 +857,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                         <input type="date" name="dateOfService" value={formData.dateOfService} onChange={handleChange} className="w-full border-2 border-blue-300 rounded p-2" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Officiant *</label>
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">Preacher *</label>
                                         <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} placeholder="e.g., Rev. John Doe" className="w-full border-2 border-blue-300 rounded p-2" />
                                     </div>
                                     <div>
@@ -777,6 +918,23 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     <input type="text" value={newVisitor.reason} onChange={(e) => setNewVisitor(prev => ({ ...prev, reason: e.target.value }))} placeholder="Reason for visit (optional)" className="w-full border-2 rounded p-2 text-sm" />
                                 </div>
                                 <button onClick={handleAddVisitor} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded text-sm">➕ Add Visitor</button>
+                                <div className="mt-3 p-3 bg-white border-2 border-purple-200 rounded-lg">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.noVisitors || false}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    noVisitors: e.target.checked,
+                                                    visitorsList: e.target.checked ? [] : prev.visitorsList
+                                                }));
+                                            }}
+                                            className="w-4 h-4 cursor-pointer"
+                                        />
+                                        <span className="text-sm font-bold text-purple-900">No visitors this week</span>
+                                    </label>
+                                </div>
                                 <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
                                     {formData.visitorsList.length > 0 ? (
                                         formData.visitorsList.map((v, i) => (
@@ -791,7 +949,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                             </div>
                                         ))
                                     ) : (
-                                        <div className="text-center py-2 text-gray-500">No visitors recorded yet</div>
+                                        <div className="text-center py-2 text-gray-500">{formData.noVisitors ? '✓ No visitors recorded' : 'No visitors recorded yet'}</div>
                                     )}
                                 </div>
                             </section>
@@ -850,9 +1008,15 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     <h4 className="text-orange-900 font-bold">Worship & Events</h4>
                                 </div>
                                 <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
-                                        <input type="text" name="sermonTopic" value={formData.sermonTopic} onChange={handleChange} placeholder="Main sermon topic" className="w-full border-2 border-orange-300 rounded p-2" />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
+                                            <input type="text" name="sermonTopic" value={formData.sermonTopic} onChange={handleChange} placeholder="Main sermon topic" className="w-full border-2 border-orange-300 rounded p-2" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Memory Verse</label>
+                                            <input type="text" name="memoryVerse" value={formData.memoryVerse} onChange={handleChange} placeholder="e.g., John 3:16" className="w-full border-2 border-orange-300 rounded p-2" />
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-700 mb-1">Special Events / Announcements</label>
@@ -891,6 +1055,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                 onClose={() => setShowArchive(false)} 
                 history={history}
                 onEditRecord={handleEditArchiveRecord}
+                onDeleteRecord={handleDeleteArchiveRecord}
             />
         </div>
     );
