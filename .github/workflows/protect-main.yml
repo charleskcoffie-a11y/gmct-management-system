@@ -1,0 +1,33 @@
+name: Protect Main (PR-only)
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Block Direct Pushes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify push came from a PR merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = context.sha;
+            const res = await github.request('GET /repos/{owner}/{repo}/commits/{ref}/pulls', {
+              owner,
+              repo,
+              ref: sha,
+              headers: { accept: 'application/vnd.github+json' }
+            });
+            const prs = res.data || [];
+            if (prs.length === 0) {
+              core.setFailed('Direct pushes to main are not allowed. Please open a Pull Request.');
+            } else {
+              core.notice(`Push associated with PR #${prs[0].number}.`);
+            }
