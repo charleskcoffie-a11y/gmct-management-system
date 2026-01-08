@@ -217,7 +217,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     // Calculate completion status - all required sections
     const completionStatus = useMemo(() => {
         const sections = [
-            { name: 'Service Details', filled: !!formData.dateOfService && !!formData.officiant },
+            { name: 'Service Details', filled: !!formData.dateOfService && !!formData.officiant && !!formData.liturgist },
             { name: 'Attendance', filled: totalAttendance > 0 },
             { name: 'Visitors', filled: formData.visitorsList.length > 0 || formData.noVisitors },
             { name: 'Donations', filled: formData.donationsList.length > 0 || formData.noDonation },
@@ -244,18 +244,91 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                     children: 0,
                     visitors: 0,
                     catechumens: 0,
+                    total: 0,
+                    count: 0,
                 };
             }
             const att = h.attendance || {} as any;
-            aggregates[monthKey].men += att.men || 0;
-            aggregates[monthKey].women += att.women || 0;
-            aggregates[monthKey].junior += att.junior || 0;
-            aggregates[monthKey].children += att.children || 0;
-            aggregates[monthKey].visitors += att.visitors || 0;
-            aggregates[monthKey].catechumens += att.catechumens || 0;
+            const men = att.men || 0;
+            const women = att.women || 0;
+            const junior = att.junior || 0;
+            const children = att.children || 0;
+            const visitors = att.visitors || 0;
+            const catechumens = att.catechumens || 0;
+            
+            aggregates[monthKey].men += men;
+            aggregates[monthKey].women += women;
+            aggregates[monthKey].junior += junior;
+            aggregates[monthKey].children += children;
+            aggregates[monthKey].visitors += visitors;
+            aggregates[monthKey].catechumens += catechumens;
+            aggregates[monthKey].total += men + women + junior + children + visitors + catechumens;
+            aggregates[monthKey].count += 1;
         });
         return Object.values(aggregates).sort((a: any, b: any) => (a.month > b.month ? 1 : -1));
     }, [history]);
+
+    // Analytics & Predictions
+    const analytics = useMemo(() => {
+        if (monthlyAttendance.length === 0) return null;
+        
+        const totalsByMonth = monthlyAttendance.map((m: any) => m.total);
+        const avgAttendance = totalsByMonth.reduce((sum, val) => sum + val, 0) / totalsByMonth.length;
+        
+        // Calculate trend (simple linear regression slope)
+        const n = totalsByMonth.length;
+        const xMean = (n - 1) / 2;
+        const yMean = avgAttendance;
+        let numerator = 0;
+        let denominator = 0;
+        
+        totalsByMonth.forEach((y, x) => {
+            numerator += (x - xMean) * (y - yMean);
+            denominator += Math.pow(x - xMean, 2);
+        });
+        
+        const slope = denominator !== 0 ? numerator / denominator : 0;
+        const trend = slope > 1 ? 'Growing' : slope < -1 ? 'Declining' : 'Stable';
+        const trendPercentage = ((slope / yMean) * 100).toFixed(1);
+        
+        // Predict next month
+        const prediction = Math.round(totalsByMonth[n - 1] + slope);
+        
+        // Category breakdown
+        const categoryTotals = {
+            men: monthlyAttendance.reduce((sum: number, m: any) => sum + m.men, 0),
+            women: monthlyAttendance.reduce((sum: number, m: any) => sum + m.women, 0),
+            junior: monthlyAttendance.reduce((sum: number, m: any) => sum + m.junior, 0),
+            children: monthlyAttendance.reduce((sum: number, m: any) => sum + m.children, 0),
+            visitors: monthlyAttendance.reduce((sum: number, m: any) => sum + m.visitors, 0),
+            catechumens: monthlyAttendance.reduce((sum: number, m: any) => sum + m.catechumens, 0),
+        };
+        
+        const total = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0);
+        const categoryPercentages = Object.entries(categoryTotals).map(([key, value]) => ({
+            category: key.charAt(0).toUpperCase() + key.slice(1),
+            percentage: ((value / total) * 100).toFixed(1),
+            count: value,
+        }));
+        
+        // Growth rate comparison
+        const recentMonths = totalsByMonth.slice(-3);
+        const olderMonths = totalsByMonth.slice(0, Math.min(3, totalsByMonth.length - 3));
+        const recentAvg = recentMonths.length > 0 ? recentMonths.reduce((sum, val) => sum + val, 0) / recentMonths.length : 0;
+        const olderAvg = olderMonths.length > 0 ? olderMonths.reduce((sum, val) => sum + val, 0) / olderMonths.length : recentAvg;
+        const growthRate = olderAvg > 0 ? (((recentAvg - olderAvg) / olderAvg) * 100).toFixed(1) : '0';
+        
+        return {
+            avgAttendance: Math.round(avgAttendance),
+            trend,
+            trendPercentage,
+            prediction,
+            categoryPercentages,
+            growthRate,
+            highestMonth: monthlyAttendance.reduce((max: any, m: any) => m.total > max.total ? m : max, monthlyAttendance[0]),
+            lowestMonth: monthlyAttendance.reduce((min: any, m: any) => m.total < min.total ? m : min, monthlyAttendance[0]),
+        };
+    }, [monthlyAttendance]);
 
     const filteredHistory = useMemo(() => {
         const now = new Date();
@@ -287,15 +360,31 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
             ) : (
                 <>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <button onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded text-sm flex items-center justify-between gap-2">
-                    <span>📚 Archives</span>
-                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-xs font-bold">{archiveCount}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <button 
+                    onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} 
+                    className="group bg-gradient-to-br from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-between gap-3"
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="text-3xl">📚</span>
+                        <span className="text-lg">Archives</span>
+                    </div>
+                    <span className="bg-white/30 group-hover:bg-white/40 rounded-full px-4 py-1 text-sm font-bold backdrop-blur-sm">{archiveCount}</span>
                 </button>
-                <button onClick={() => { setSelectedRecordId(null); setFormData(initialFormState()); setIsFullEditorOpen(true); }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded text-sm">✏️ New</button>
-                <button onClick={() => { setSelectedRecordId(null); setFormData(initialFormState()); setActiveModal(null); setIsFullEditorOpen(false); }} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-3 rounded text-sm">🔄 Reset</button>
-                <button onClick={() => window.print()} disabled={!selectedRecordId} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🖨️ Print</button>
-                <button onClick={() => { if (selectedRecordId) { if (window.confirm('Delete?')) { setHistory(history.filter(h => h.id !== selectedRecordId)); setSelectedRecordId(null); } } }} disabled={!selectedRecordId} className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🗑️ Delete</button>
+                <button 
+                    onClick={() => { const newForm = initialFormState(); setFormData(newForm); setSelectedRecordId(null); setIsFullEditorOpen(true); }} 
+                    className="bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-center gap-3"
+                >
+                    <span className="text-3xl">✏️</span>
+                    <span className="text-lg">New Entry</span>
+                </button>
+                <button 
+                    onClick={() => { const newForm = initialFormState(); setFormData(newForm); setSelectedRecordId(null); setActiveModal(null); setIsFullEditorOpen(false); }} 
+                    className="bg-gradient-to-br from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400 text-gray-800 font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-center gap-3"
+                >
+                    <span className="text-3xl">🔄</span>
+                    <span className="text-lg">Reset</span>
+                </button>
             </div>
 
             <div className="bg-gradient-to-br from-blue-50 via-white to-purple-50 border-2 border-blue-200 rounded-xl p-5 mb-6 shadow-lg">
@@ -395,80 +484,105 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                 )}
             </div>
 
-            {/* Completion Progress Indicator */}
-            {selectedRecordId && (
-                <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-bold text-sm text-gray-700">Form Completion</h3>
-                        <span className="text-2xl font-bold text-purple-600">{completionStatus.completed}/{completionStatus.total}</span>
+            {/* Analytics & Predictions Section */}
+            {analytics && (
+                <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-300 rounded-2xl p-6 mb-6 shadow-2xl">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
+                                <span className="text-3xl">📈</span>
+                                Analytics & Predictions
+                            </h3>
+                            <p className="text-sm text-gray-600 mt-2">AI-powered insights based on historical data</p>
+                        </div>
+                        <span className="text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold px-5 py-2 rounded-full shadow-lg">
+                            {monthlyAttendance.length} months analyzed
+                        </span>
                     </div>
-                    <div className="w-full bg-gray-300 rounded-full h-3 mb-3">
-                        <div 
-                            className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
-                            style={{ width: `${(completionStatus.completed / completionStatus.total) * 100}%` }}
-                        ></div>
-                    </div>
-                    <div className="mb-3">
-                        {completionStatus.sections.some(s => !s.filled) && (
-                            <div className="text-sm font-semibold text-red-700 mb-2">
-                                ⚠️ Missing: {completionStatus.sections.filter(s => !s.filled).map(s => s.name).join(', ')}
+
+                    {/* Key Metrics Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
+                        <div className="group bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">👥</span>
+                                <div className="text-xs font-semibold opacity-90">Average Attendance</div>
                             </div>
-                        )}
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {completionStatus.sections.map(section => (
-                            <div key={section.name} className={`text-xs p-2 rounded font-semibold ${section.filled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                {section.filled ? '✓' : '✗'} {section.name}
+                            <div className="text-4xl font-black mb-1">{analytics.avgAttendance}</div>
+                            <div className="text-xs opacity-80">per month</div>
+                        </div>
+                        
+                        <div className={`group rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white ${
+                            analytics.trend === 'Growing' ? 'bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : 
+                            analytics.trend === 'Declining' ? 'bg-gradient-to-br from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700' : 
+                            'bg-gradient-to-br from-gray-500 to-slate-600 hover:from-gray-600 hover:to-slate-700'
+                        }`}>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">{analytics.trend === 'Growing' ? '📈' : analytics.trend === 'Declining' ? '📉' : '➡️'}</span>
+                                <div className="text-xs font-semibold opacity-90">Trend</div>
                             </div>
-                        ))}
+                            <div className="text-4xl font-black mb-1">{analytics.trend}</div>
+                            <div className="text-xs opacity-80">{analytics.trendPercentage}% rate</div>
+                        </div>
+                        
+                        <div className="group bg-gradient-to-br from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">🔮</span>
+                                <div className="text-xs font-semibold opacity-90">Next Month</div>
+                            </div>
+                            <div className="text-4xl font-black mb-1">{analytics.prediction}</div>
+                            <div className="text-xs opacity-80">predicted</div>
+                        </div>
+                        
+                        <div className={`group rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white ${
+                            parseFloat(analytics.growthRate) > 0 ? 'bg-gradient-to-br from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700' : 
+                            parseFloat(analytics.growthRate) < 0 ? 'bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700' : 
+                            'bg-gradient-to-br from-gray-500 to-slate-600 hover:from-gray-600 hover:to-slate-700'
+                        }`}>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">{parseFloat(analytics.growthRate) > 0 ? '⬆️' : parseFloat(analytics.growthRate) < 0 ? '⬇️' : '➡️'}</span>
+                                <div className="text-xs font-semibold opacity-90">Recent Growth</div>
+                            </div>
+                            <div className="text-4xl font-black mb-1">{analytics.growthRate > 0 ? '+' : ''}{analytics.growthRate}%</div>
+                            <div className="text-xs opacity-80">last 3 months</div>
+                        </div>
+                    </div>
+
+                    {/* Category Breakdown */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border-2 border-white shadow-lg mb-5">
+                        <h4 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="text-xl">📊</span>
+                            Category Distribution
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {analytics.categoryPercentages.map((cat: any) => (
+                                <div key={cat.category} className="group bg-gradient-to-br from-gray-50 to-gray-100 hover:from-white hover:to-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all duration-300 hover:scale-105 shadow-sm hover:shadow-md">
+                                    <span className="text-sm font-bold text-gray-700 block mb-2">{cat.category}</span>
+                                    <div className="flex items-baseline gap-2">
+                                        <div className="text-2xl font-black text-indigo-600">{cat.percentage}%</div>
+                                        <div className="text-xs text-gray-500">{cat.count} total</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* High/Low Months */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg p-4 border border-green-300">
+                            <div className="text-xs text-green-700 font-semibold mb-1">🏆 Highest Month</div>
+                            <div className="text-xl font-bold text-green-800">{analytics.highestMonth.month}</div>
+                            <div className="text-sm text-green-700 mt-1">{analytics.highestMonth.total} attendees</div>
+                        </div>
+                        <div className="bg-gradient-to-br from-orange-100 to-amber-100 rounded-lg p-4 border border-orange-300">
+                            <div className="text-xs text-orange-700 font-semibold mb-1">📉 Lowest Month</div>
+                            <div className="text-xl font-bold text-orange-800">{analytics.lowestMonth.month}</div>
+                            <div className="text-sm text-orange-700 mt-1">{analytics.lowestMonth.total} attendees</div>
+                        </div>
                     </div>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <button type="button" onClick={() => setActiveModal('details')} className="bg-blue-50 border-2 border-blue-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">📋</div>
-                    <h3 className="font-bold text-sm text-blue-900">Service Details</h3>
-                    <p className="text-xs text-blue-600">{formData.dateOfService}</p>
-                </button>
 
-                <button type="button" onClick={() => setActiveModal('attendance')} className="bg-emerald-50 border-2 border-emerald-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">👥</div>
-                    <h3 className="font-bold text-sm text-emerald-900">Attendance</h3>
-                    <p className="text-lg font-bold text-emerald-700">{totalAttendance}</p>
-                </button>
-
-                <button type="button" onClick={() => setActiveModal('visitors')} className="bg-purple-50 border-2 border-purple-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">🤝</div>
-                    <h3 className="font-bold text-sm text-purple-900">Visitors</h3>
-                    <p className="text-lg font-bold text-purple-700">{formData.visitorsList.length}</p>
-                </button>
-
-                <button type="button" onClick={() => setActiveModal('donations')} className="bg-rose-50 border-2 border-rose-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">💝</div>
-                    <h3 className="font-bold text-sm text-rose-900">Donations</h3>
-                    <p className="text-lg font-bold text-rose-700">{formData.donationsList.length}</p>
-                </button>
-
-                <button type="button" onClick={() => setActiveModal('events')} className="bg-orange-50 border-2 border-orange-200 p-4 rounded-lg hover:shadow-lg sm:col-span-2 lg:col-span-1">
-                    <div className="text-2xl mb-1">🙏</div>
-                    <h3 className="font-bold text-sm text-orange-900">Worship</h3>
-                    <p className="text-xs text-orange-600 line-clamp-1">{formData.sermonTopic || 'Add topic'}</p>
-                </button>
-            </div>
-
-            <button 
-                type="button" 
-                onClick={handleSubmit} 
-                disabled={!canSave}
-                className={`w-full mt-6 font-bold py-3 rounded-lg shadow-lg transition-all ${
-                    canSave 
-                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer' 
-                        : 'bg-gray-400 text-gray-700 cursor-not-allowed'
-                }`}
-            >
-                {canSave ? '💾 Save Record - Complete!' : `⚠️ Complete ${completionStatus.total - completionStatus.completed} more sections`}
-            </button>
 
             {activeModal === 'details' && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -484,8 +598,8 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                                 <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} placeholder="e.g., Rev. John Doe" className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist</label>
-                                <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="Optional" className="w-full border-2 rounded p-2"/>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist *</label>
+                                <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="e.g., Bro. John Smith" className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">Prepared By</label>
@@ -861,8 +975,8 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                                         <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} placeholder="e.g., Rev. John Doe" className="w-full border-2 border-blue-300 rounded p-2" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist</label>
-                                        <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="Optional" className="w-full border-2 rounded p-2" />
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist *</label>
+                                        <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="e.g., Bro. John Smith" className="w-full border-2 border-blue-300 rounded p-2" />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-700 mb-1">Prepared By</label>
