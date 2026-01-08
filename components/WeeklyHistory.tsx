@@ -4,7 +4,7 @@ import type { WeeklyHistoryRecord, VisitorRecord, ServiceDonation, Settings } fr
 import { sanitizeWeeklyHistoryRecord, formatCurrency } from '../utils';
 import { saveWeeklyHistoryToSupabase, deleteWeeklyHistoryFromSupabase, downloadDataFromSupabase } from '../services/supabase';
 import HistoryArchiveModal from './HistoryArchiveModal';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, Line, ComposedChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
@@ -55,6 +55,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     const [editingArchiveId, setEditingArchiveId] = useState<string | null>(null);
     const [isFullEditorOpen, setIsFullEditorOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     
     // Temporary state for new donor/visitor input
     const [newDonor, setNewDonor] = useState({ donor: '', amount: 0, description: '' });
@@ -78,6 +79,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
         // because that would clear the form while the user is typing.
         // The form is explicitly reset when the New button is clicked.
     }, [selectedRecordId]); // Only reload when selectedRecordId changes, not when history changes
+
+    // Clear form when opening new entry
+    useEffect(() => {
+        if (isFullEditorOpen && !selectedRecordId) {
+            setFormData(initialFormState());
+        }
+    }, [isFullEditorOpen, selectedRecordId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -155,7 +163,9 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                 setHistory(newHistory);
             }
             
-            alert('Record saved!');
+            setShowSaveSuccess(true);
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => setShowSaveSuccess(false), 3000);
             // Reset form for new entry
             setSelectedRecordId(null);
             setFormData(initialFormState());
@@ -265,7 +275,40 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
             aggregates[monthKey].total += men + women + junior + children + visitors + catechumens;
             aggregates[monthKey].count += 1;
         });
-        return Object.values(aggregates).sort((a: any, b: any) => (a.month > b.month ? 1 : -1));
+        
+        const sorted = Object.values(aggregates).sort((a: any, b: any) => (a.month > b.month ? 1 : -1));
+        
+        // Calculate trend line (linear regression)
+        const totalsByMonth = sorted.map((m: any) => m.total);
+        const n = totalsByMonth.length;
+        if (n >= 2) {
+            const xMean = (n - 1) / 2;
+            const yMean = totalsByMonth.reduce((sum, val) => sum + val, 0) / n;
+            let numerator = 0;
+            let denominator = 0;
+            
+            totalsByMonth.forEach((y, x) => {
+                numerator += (x - xMean) * (y - yMean);
+                denominator += Math.pow(x - xMean, 2);
+            });
+            
+            const slope = denominator !== 0 ? numerator / denominator : 0;
+            const intercept = yMean - slope * xMean;
+            
+            // Add trend line value and moving average to each data point
+            sorted.forEach((item: any, index: number) => {
+                item.trendLine = Math.round(slope * index + intercept);
+                
+                // Calculate 3-month moving average
+                if (index < 2) {
+                    item.movingAvg = Math.round(totalsByMonth.slice(0, index + 1).reduce((sum, val) => sum + val, 0) / (index + 1));
+                } else {
+                    item.movingAvg = Math.round(totalsByMonth.slice(index - 2, index + 1).reduce((sum, val) => sum + val, 0) / 3);
+                }
+            });
+        }
+        
+        return sorted;
     }, [history]);
 
     // Analytics & Predictions
@@ -294,6 +337,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
         // Predict next month
         const prediction = Math.round(totalsByMonth[n - 1] + slope);
         
+        // Calculate volatility for confidence score
+        const squaredDiffs = totalsByMonth.map(val => Math.pow(val - yMean, 2));
+        const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / n;
+        const stdDev = Math.sqrt(variance);
+        const coefficientOfVariation = stdDev / yMean; // 0 = perfect confidence, 1+ = high volatility
+        const confidenceScore = Math.max(0, Math.min(95, 95 - (coefficientOfVariation * 50))); // 0-95%
+        
         // Category breakdown
         const categoryTotals = {
             men: monthlyAttendance.reduce((sum: number, m: any) => sum + m.men, 0),
@@ -311,6 +361,67 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
             count: value,
         }));
         
+        // Category-specific predictions using linear regression for each category
+        const categoryPredictions: any = {};
+        const categories = ['men', 'women', 'junior', 'children', 'visitors', 'catechumens'] as const;
+        
+        categories.forEach(category => {
+            const categoryValues = monthlyAttendance.map((m: any) => m[category]);
+            if (categoryValues.length >= 2) {
+                const catYMean = categoryValues.reduce((sum, val) => sum + val, 0) / categoryValues.length;
+                let catNumerator = 0;
+                let catDenominator = 0;
+                
+                categoryValues.forEach((y: number, x: number) => {
+                    catNumerator += (x - xMean) * (y - catYMean);
+                    catDenominator += Math.pow(x - xMean, 2);
+                });
+                
+                const catSlope = catDenominator !== 0 ? catNumerator / catDenominator : 0;
+                const catTrend = catSlope > 0.5 ? 'Growing' : catSlope < -0.5 ? 'Declining' : 'Stable';
+                const catPrediction = Math.round(categoryValues[categoryValues.length - 1] + catSlope);
+                
+                categoryPredictions[category] = {
+                    current: categoryValues[categoryValues.length - 1],
+                    prediction: catPrediction,
+                    trend: catTrend,
+                    change: catPrediction - categoryValues[categoryValues.length - 1],
+                };
+            }
+        });
+        
+        // Year-over-Year comparison
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+        const historyByYearMonth: any = {};
+        
+        history.forEach(record => {
+            const recordDate = new Date(record.dateOfService);
+            const year = recordDate.getFullYear();
+            const month = recordDate.getMonth();
+            const key = `${year}-${month}`;
+            
+            if (!historyByYearMonth[key]) {
+                historyByYearMonth[key] = { men: 0, women: 0, junior: 0, children: 0, visitors: 0, catechumens: 0, total: 0 };
+            }
+            
+            historyByYearMonth[key].men += record.attendance.men;
+            historyByYearMonth[key].women += record.attendance.women;
+            historyByYearMonth[key].junior += record.attendance.junior;
+            historyByYearMonth[key].children += record.attendance.children;
+            historyByYearMonth[key].visitors += record.attendance.visitors;
+            historyByYearMonth[key].catechumens += record.attendance.catechumens;
+            historyByYearMonth[key].total += record.attendance.men + record.attendance.women + record.attendance.junior + record.attendance.children + record.attendance.visitors + record.attendance.catechumens;
+        });
+        
+        const currentYearMonthKey = `${currentYear}-${currentMonth}`;
+        const lastYearMonthKey = `${currentYear - 1}-${currentMonth}`;
+        
+        const currentYearTotal = historyByYearMonth[currentYearMonthKey]?.total || 0;
+        const lastYearTotal = historyByYearMonth[lastYearMonthKey]?.total || 0;
+        const yearOverYearChange = lastYearTotal > 0 ? (((currentYearTotal - lastYearTotal) / lastYearTotal) * 100).toFixed(1) : 'N/A';
+        const yearOverYearDiff = currentYearTotal - lastYearTotal;
+        
         // Growth rate comparison
         const recentMonths = totalsByMonth.slice(-3);
         const olderMonths = totalsByMonth.slice(0, Math.min(3, totalsByMonth.length - 3));
@@ -323,12 +434,18 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
             trend,
             trendPercentage,
             prediction,
+            confidenceScore: Math.round(confidenceScore),
             categoryPercentages,
+            categoryPredictions,
             growthRate,
+            yearOverYearChange,
+            yearOverYearDiff,
+            currentYearTotal,
+            lastYearTotal,
             highestMonth: monthlyAttendance.reduce((max: any, m: any) => m.total > max.total ? m : max, monthlyAttendance[0]),
             lowestMonth: monthlyAttendance.reduce((min: any, m: any) => m.total < min.total ? m : min, monthlyAttendance[0]),
         };
-    }, [monthlyAttendance]);
+    }, [monthlyAttendance, history]);
 
     const filteredHistory = useMemo(() => {
         const now = new Date();
@@ -408,10 +525,9 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                 ) : (
                     <div className="h-72 mt-2">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart 
+                            <ComposedChart 
                                 data={monthlyAttendance} 
                                 margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                                barSize={45}
                             >
                                 <defs>
                                     <linearGradient id="menGradient" x1="0" y1="0" x2="0" y2="1">
@@ -439,6 +555,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                                         <stop offset="100%" stopColor="#dc2626" stopOpacity={0.8}/>
                                     </linearGradient>
                                 </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                                 <XAxis 
                                     dataKey="month" 
                                     tick={{ fontSize: 12, fill: '#4b5563', fontWeight: 600 }} 
@@ -463,6 +580,11 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                                     }}
                                     labelStyle={{ fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}
                                     itemStyle={{ fontSize: '13px', padding: '4px 0' }}
+                                    formatter={(value, name) => {
+                                        if (name === 'trendLine') return [Math.round(value as number), '📉 Trend Line'];
+                                        if (name === 'movingAvg') return [Math.round(value as number), '📊 3-Month Avg'];
+                                        return [value, name];
+                                    }}
                                 />
                                 <Legend 
                                     wrapperStyle={{ 
@@ -472,13 +594,15 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                                     }}
                                     iconType="circle"
                                 />
-                                <Bar dataKey="men" stackId="a" fill="url(#menGradient)" name="Men" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="men" stackId="a" fill="url(#menGradient)" name="Men" radius={[0, 0, 0, 0]} barSize={45} />
                                 <Bar dataKey="women" stackId="a" fill="url(#womenGradient)" name="Women" radius={[0, 0, 0, 0]} />
                                 <Bar dataKey="junior" stackId="a" fill="url(#juniorGradient)" name="Junior" radius={[0, 0, 0, 0]} />
                                 <Bar dataKey="children" stackId="a" fill="url(#childrenGradient)" name="Children" radius={[0, 0, 0, 0]} />
                                 <Bar dataKey="visitors" stackId="a" fill="url(#visitorsGradient)" name="Visitors" radius={[0, 0, 0, 0]} />
                                 <Bar dataKey="catechumens" stackId="a" fill="url(#catechumensGradient)" name="Catechumens" radius={[4, 4, 0, 0]} />
-                            </BarChart>
+                                <Line type="monotone" dataKey="trendLine" stroke="#ef4444" strokeWidth={3} dot={false} strokeDasharray="5 5" name="📉 Trend Line" isAnimationActive={false} />
+                                <Line type="monotone" dataKey="movingAvg" stroke="#3b82f6" strokeWidth={2.5} dot={false} name="📊 3-Month Avg" isAnimationActive={false} />
+                            </ComposedChart>
                         </ResponsiveContainer>
                     </div>
                 )}
@@ -530,7 +654,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                                 <div className="text-xs font-semibold opacity-90">Next Month</div>
                             </div>
                             <div className="text-4xl font-black mb-1">{analytics.prediction}</div>
-                            <div className="text-xs opacity-80">predicted</div>
+                            <div className="text-xs opacity-80">{analytics.confidenceScore}% confidence</div>
                         </div>
                         
                         <div className={`group rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white ${
@@ -563,6 +687,87 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* Category-Specific Predictions */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border-2 border-white shadow-lg mb-5">
+                        <h4 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="text-xl">🎯</span>
+                            Category Predictions
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {Object.entries(analytics.categoryPredictions).map(([category, data]: any) => (
+                                <div key={category} className={`rounded-xl p-4 border-2 transition-all duration-300 ${
+                                    data.trend === 'Growing' ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 hover:shadow-lg' :
+                                    data.trend === 'Declining' ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-300 hover:shadow-lg' :
+                                    'bg-gradient-to-br from-slate-50 to-gray-50 border-gray-300 hover:shadow-lg'
+                                }`}>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-sm font-bold text-gray-700">{category.charAt(0).toUpperCase() + category.slice(1)}</span>
+                                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                            data.trend === 'Growing' ? 'bg-green-200 text-green-800' :
+                                            data.trend === 'Declining' ? 'bg-orange-200 text-orange-800' :
+                                            'bg-gray-200 text-gray-800'
+                                        }`}>
+                                            {data.trend === 'Growing' ? '📈' : data.trend === 'Declining' ? '📉' : '➡️'} {data.trend}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-gray-600">Current:</span>
+                                            <span className="font-bold text-gray-800">{data.current}</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-gray-600">Predicted:</span>
+                                            <span className={`font-bold ${data.change > 0 ? 'text-green-700' : data.change < 0 ? 'text-orange-700' : 'text-gray-700'}`}>
+                                                {data.prediction} {data.change > 0 ? `(+${data.change})` : data.change < 0 ? `(${data.change})` : ''}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Year-over-Year Comparison */}
+                    <div className="bg-gradient-to-br from-cyan-100 to-blue-100 border-2 border-cyan-300 rounded-2xl p-5 shadow-lg mb-5">
+                        <h4 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="text-xl">📊</span>
+                            Year-over-Year Comparison
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-white/60 rounded-xl p-4 border border-white">
+                                <div className="text-xs font-semibold text-gray-600 mb-2">This Year (Current Month)</div>
+                                <div className="text-3xl font-black text-blue-700">{analytics.currentYearTotal}</div>
+                                <div className="text-xs text-gray-500 mt-1">Total attendance</div>
+                            </div>
+                            <div className="bg-white/60 rounded-xl p-4 border border-white">
+                                <div className="text-xs font-semibold text-gray-600 mb-2">Last Year (Same Month)</div>
+                                <div className="text-3xl font-black text-gray-600">{analytics.lastYearTotal}</div>
+                                <div className="text-xs text-gray-500 mt-1">Total attendance</div>
+                            </div>
+                            <div className={`rounded-xl p-4 border-2 ${
+                                analytics.yearOverYearDiff > 0 ? 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-400' :
+                                analytics.yearOverYearDiff < 0 ? 'bg-gradient-to-br from-orange-100 to-amber-100 border-orange-400' :
+                                'bg-gradient-to-br from-gray-100 to-slate-100 border-gray-400'
+                            }`}>
+                                <div className="text-xs font-semibold text-gray-700 mb-2">Year-over-Year Change</div>
+                                <div className={`text-3xl font-black ${
+                                    analytics.yearOverYearDiff > 0 ? 'text-green-700' :
+                                    analytics.yearOverYearDiff < 0 ? 'text-orange-700' :
+                                    'text-gray-700'
+                                }`}>
+                                    {analytics.yearOverYearChange}%
+                                </div>
+                                <div className={`text-xs font-bold mt-1 ${
+                                    analytics.yearOverYearDiff > 0 ? 'text-green-700' :
+                                    analytics.yearOverYearDiff < 0 ? 'text-orange-700' :
+                                    'text-gray-700'
+                                }`}>
+                                    {analytics.yearOverYearDiff > 0 ? '+' : ''}{analytics.yearOverYearDiff} attendees
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1171,6 +1376,57 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                 onEditRecord={handleEditArchiveRecord}
                 onDeleteRecord={handleDeleteArchiveRecord}
             />
+
+            {/* Save Success Dialog */}
+            {showSaveSuccess && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
+                    <div className="bg-gradient-to-br from-white via-green-50 to-emerald-50 rounded-3xl shadow-2xl p-8 max-w-sm mx-4 border-2 border-green-200 animate-in fade-in zoom-in-95 duration-300">
+                        <div className="flex flex-col items-center text-center">
+                            {/* Animated Checkmark Circle */}
+                            <div className="mb-6 relative">
+                                <div className="absolute inset-0 bg-gradient-to-r from-green-200 to-emerald-200 rounded-full animate-ping opacity-75"></div>
+                                <div className="absolute inset-0 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full animate-pulse"></div>
+                                <div className="relative bg-gradient-to-br from-green-100 to-emerald-100 rounded-full p-5 border-4 border-green-300">
+                                    <svg className="w-16 h-16 text-green-600 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            {/* Success Message */}
+                            <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">Record Saved!</h2>
+                            <p className="text-gray-700 font-medium mb-1">Weekly history successfully</p>
+                            <p className="text-gray-700 font-medium mb-6">saved to database</p>
+                            
+                            {/* Progress Bar */}
+                            <div className="w-full bg-gray-200 rounded-full h-2 mb-4 overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400 animate-pulse rounded-full" style={{
+                                    animation: 'slideProgress 3s ease-in-out'
+                                }}></div>
+                            </div>
+                            
+                            {/* Status Text */}
+                            <p className="text-sm text-gray-500 font-medium">Closing in a moment...</p>
+                            
+                            {/* Decorative Elements */}
+                            <div className="mt-4 flex gap-1 justify-center">
+                                <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{animationDelay: '0s'}}></div>
+                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                <div className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* CSS Animation for progress bar */}
+                    <style>{`
+                        @keyframes slideProgress {
+                            0% { width: 0%; }
+                            50% { width: 100%; }
+                            100% { width: 100%; }
+                        }
+                    `}</style>
+                </div>
+            )}
         </div>
     );
 };
