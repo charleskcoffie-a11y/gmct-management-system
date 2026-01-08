@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { WeeklyHistoryRecord, VisitorRecord, ServiceDonation } from '../types';
+import type { WeeklyHistoryRecord, VisitorRecord, ServiceDonation, Settings } from '../types';
 import { sanitizeWeeklyHistoryRecord, formatCurrency } from '../utils';
+import { saveWeeklyHistoryToSupabase, deleteWeeklyHistoryFromSupabase, downloadDataFromSupabase } from '../services/supabase';
 import HistoryArchiveModal from './HistoryArchiveModal';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, Line, ComposedChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
     setHistory: React.Dispatch<React.SetStateAction<WeeklyHistoryRecord[]>>;
+    settings: Settings;
 }
 
 const initialFormState = (): WeeklyHistoryRecord => ({
@@ -19,12 +21,14 @@ const initialFormState = (): WeeklyHistoryRecord => ({
     serviceTypes: [],
     serviceTypeOther: '',
     sermonTopic: '',
+    memoryVerse: '',
     worshipHighlights: '',
     announcementsBy: '',
     attendance: { men: 0, women: 0, junior: 0, children: 0, visitors: 0, catechumens: 0 },
     visitorsList: [],
     donationsList: [],
     noDonation: false,
+    noVisitors: false,
     newMembersDetails: '',
     newMembersContact: '',
     events: '',
@@ -43,13 +47,15 @@ const serviceTypeOptions = [
     'Other'
 ];
 
-const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) => {
+const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, settings }) => {
     const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
     const [formData, setFormData] = useState<WeeklyHistoryRecord>(initialFormState());
     const [showArchive, setShowArchive] = useState(false);
-    const [isFullEditorOpen, setIsFullEditorOpen] = useState(false);
     const [activeModal, setActiveModal] = useState<'details' | 'attendance' | 'visitors' | 'donations' | 'events' | null>(null);
     const [editingArchiveId, setEditingArchiveId] = useState<string | null>(null);
+    const [isFullEditorOpen, setIsFullEditorOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     
     // Temporary state for new donor/visitor input
     const [newDonor, setNewDonor] = useState({ donor: '', amount: 0, description: '' });
@@ -64,12 +70,22 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
     useEffect(() => {
         if (selectedRecordId) {
             const record = history.find(h => h.id === selectedRecordId);
-            if (record) setFormData(record);
+            if (record) {
+                // Merge to ensure newly added fields (e.g., preparedBy) are present when editing older records
+                setFormData({ ...initialFormState(), ...record });
+            }
         }
         // Note: We don't reset to initialFormState here when selectedRecordId is null
         // because that would clear the form while the user is typing.
         // The form is explicitly reset when the New button is clicked.
-    }, [selectedRecordId, history]);
+    }, [selectedRecordId]); // Only reload when selectedRecordId changes, not when history changes
+
+    // Clear form when opening new entry
+    useEffect(() => {
+        if (isFullEditorOpen && !selectedRecordId) {
+            setFormData(initialFormState());
+        }
+    }, [isFullEditorOpen, selectedRecordId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -124,17 +140,43 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
         }));
     };
 
-    const handleSubmit = (e?: React.FormEvent) => {
+    const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        const sanitized = sanitizeWeeklyHistoryRecord(formData);
-        const newHistory = history.findIndex(h => h.id === sanitized.id) > -1 
-            ? history.map(h => h.id === sanitized.id ? sanitized : h)
-            : [...history, sanitized];
-        setHistory(newHistory);
-        alert('Record saved!');
-        setSelectedRecordId(sanitized.id);
-        setEditingArchiveId(null);
-        setFormData(sanitized);
+        if (isSaving) return;
+        
+        setIsSaving(true);
+        try {
+            const sanitized = sanitizeWeeklyHistoryRecord(formData);
+            
+            // Save to Supabase if configured
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await saveWeeklyHistoryToSupabase(settings.supabaseUrl, settings.supabaseKey, sanitized);
+                
+                // Fetch fresh data from Supabase to ensure we have the latest
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setHistory(cloudData.history);
+            } else {
+                // Fallback to local state if Supabase not configured
+                const newHistory = history.findIndex(h => h.id === sanitized.id) > -1 
+                    ? history.map(h => h.id === sanitized.id ? sanitized : h)
+                    : [...history, sanitized];
+                setHistory(newHistory);
+            }
+            
+            setShowSaveSuccess(true);
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => setShowSaveSuccess(false), 3000);
+            // Reset form for new entry
+            setSelectedRecordId(null);
+            setFormData(initialFormState());
+            setEditingArchiveId(null);
+            setActiveModal(null);
+            setIsFullEditorOpen(false);
+        } catch (error: any) {
+            alert(`Failed to save: ${error.message}`);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleSaveAndReset = () => {
@@ -147,8 +189,34 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
 
     const handleEditArchiveRecord = (record: WeeklyHistoryRecord) => {
         setSelectedRecordId(record.id);
-        setFormData(record);
+        // Merge to backfill new fields for legacy records
+        setFormData({ ...initialFormState(), ...record });
         setEditingArchiveId(record.id);
+        setIsFullEditorOpen(true);
+        setShowArchive(false);
+    };
+
+    const handleDeleteArchiveRecord = async (id: string) => {
+        try {
+            // Delete from Supabase if configured
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await deleteWeeklyHistoryFromSupabase(settings.supabaseUrl, settings.supabaseKey, id);
+                
+                // Fetch fresh data from Supabase to ensure we have the latest
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setHistory(cloudData.history);
+            } else {
+                // Fallback to local state if Supabase not configured
+                setHistory(history.filter(h => h.id !== id));
+            }
+            
+            if (selectedRecordId === id) {
+                setSelectedRecordId(null);
+                setFormData(initialFormState());
+            }
+        } catch (error: any) {
+            alert(`Failed to delete: ${error.message}`);
+        }
     };
 
     const totalAttendance = useMemo(() => {
@@ -159,9 +227,9 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
     // Calculate completion status - all required sections
     const completionStatus = useMemo(() => {
         const sections = [
-            { name: 'Service Details', filled: !!formData.dateOfService && !!formData.officiant },
+            { name: 'Service Details', filled: !!formData.dateOfService && !!formData.officiant && !!formData.liturgist },
             { name: 'Attendance', filled: totalAttendance > 0 },
-            { name: 'Visitors', filled: formData.visitorsList.length > 0 },
+            { name: 'Visitors', filled: formData.visitorsList.length > 0 || formData.noVisitors },
             { name: 'Donations', filled: formData.donationsList.length > 0 || formData.noDonation },
             { name: 'Worship', filled: !!formData.sermonTopic || !!formData.events },
         ];
@@ -186,18 +254,198 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                     children: 0,
                     visitors: 0,
                     catechumens: 0,
+                    total: 0,
+                    count: 0,
                 };
             }
             const att = h.attendance || {} as any;
-            aggregates[monthKey].men += att.men || 0;
-            aggregates[monthKey].women += att.women || 0;
-            aggregates[monthKey].junior += att.junior || 0;
-            aggregates[monthKey].children += att.children || 0;
-            aggregates[monthKey].visitors += att.visitors || 0;
-            aggregates[monthKey].catechumens += att.catechumens || 0;
+            const men = att.men || 0;
+            const women = att.women || 0;
+            const junior = att.junior || 0;
+            const children = att.children || 0;
+            const visitors = att.visitors || 0;
+            const catechumens = att.catechumens || 0;
+            
+            aggregates[monthKey].men += men;
+            aggregates[monthKey].women += women;
+            aggregates[monthKey].junior += junior;
+            aggregates[monthKey].children += children;
+            aggregates[monthKey].visitors += visitors;
+            aggregates[monthKey].catechumens += catechumens;
+            aggregates[monthKey].total += men + women + junior + children + visitors + catechumens;
+            aggregates[monthKey].count += 1;
         });
-        return Object.values(aggregates).sort((a: any, b: any) => (a.month > b.month ? 1 : -1));
+        
+        const sorted = Object.values(aggregates).sort((a: any, b: any) => (a.month > b.month ? 1 : -1));
+        
+        // Calculate trend line (linear regression)
+        const totalsByMonth = sorted.map((m: any) => m.total);
+        const n = totalsByMonth.length;
+        if (n >= 2) {
+            const xMean = (n - 1) / 2;
+            const yMean = totalsByMonth.reduce((sum, val) => sum + val, 0) / n;
+            let numerator = 0;
+            let denominator = 0;
+            
+            totalsByMonth.forEach((y, x) => {
+                numerator += (x - xMean) * (y - yMean);
+                denominator += Math.pow(x - xMean, 2);
+            });
+            
+            const slope = denominator !== 0 ? numerator / denominator : 0;
+            const intercept = yMean - slope * xMean;
+            
+            // Add trend line value and moving average to each data point
+            sorted.forEach((item: any, index: number) => {
+                item.trendLine = Math.round(slope * index + intercept);
+                
+                // Calculate 3-month moving average
+                if (index < 2) {
+                    item.movingAvg = Math.round(totalsByMonth.slice(0, index + 1).reduce((sum, val) => sum + val, 0) / (index + 1));
+                } else {
+                    item.movingAvg = Math.round(totalsByMonth.slice(index - 2, index + 1).reduce((sum, val) => sum + val, 0) / 3);
+                }
+            });
+        }
+        
+        return sorted;
     }, [history]);
+
+    // Analytics & Predictions
+    const analytics = useMemo(() => {
+        if (monthlyAttendance.length === 0) return null;
+        
+        const totalsByMonth = monthlyAttendance.map((m: any) => m.total);
+        const avgAttendance = totalsByMonth.reduce((sum, val) => sum + val, 0) / totalsByMonth.length;
+        
+        // Calculate trend (simple linear regression slope)
+        const n = totalsByMonth.length;
+        const xMean = (n - 1) / 2;
+        const yMean = avgAttendance;
+        let numerator = 0;
+        let denominator = 0;
+        
+        totalsByMonth.forEach((y, x) => {
+            numerator += (x - xMean) * (y - yMean);
+            denominator += Math.pow(x - xMean, 2);
+        });
+        
+        const slope = denominator !== 0 ? numerator / denominator : 0;
+        const trend = slope > 1 ? 'Growing' : slope < -1 ? 'Declining' : 'Stable';
+        const trendPercentage = ((slope / yMean) * 100).toFixed(1);
+        
+        // Predict next month
+        const prediction = Math.round(totalsByMonth[n - 1] + slope);
+        
+        // Calculate volatility for confidence score
+        const squaredDiffs = totalsByMonth.map(val => Math.pow(val - yMean, 2));
+        const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / n;
+        const stdDev = Math.sqrt(variance);
+        const coefficientOfVariation = stdDev / yMean; // 0 = perfect confidence, 1+ = high volatility
+        const confidenceScore = Math.max(0, Math.min(95, 95 - (coefficientOfVariation * 50))); // 0-95%
+        
+        // Category breakdown
+        const categoryTotals = {
+            men: monthlyAttendance.reduce((sum: number, m: any) => sum + m.men, 0),
+            women: monthlyAttendance.reduce((sum: number, m: any) => sum + m.women, 0),
+            junior: monthlyAttendance.reduce((sum: number, m: any) => sum + m.junior, 0),
+            children: monthlyAttendance.reduce((sum: number, m: any) => sum + m.children, 0),
+            visitors: monthlyAttendance.reduce((sum: number, m: any) => sum + m.visitors, 0),
+            catechumens: monthlyAttendance.reduce((sum: number, m: any) => sum + m.catechumens, 0),
+        };
+        
+        const total = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0);
+        const categoryPercentages = Object.entries(categoryTotals).map(([key, value]) => ({
+            category: key.charAt(0).toUpperCase() + key.slice(1),
+            percentage: ((value / total) * 100).toFixed(1),
+            count: value,
+        }));
+        
+        // Category-specific predictions using linear regression for each category
+        const categoryPredictions: any = {};
+        const categories = ['men', 'women', 'junior', 'children', 'visitors', 'catechumens'] as const;
+        
+        categories.forEach(category => {
+            const categoryValues = monthlyAttendance.map((m: any) => m[category]);
+            if (categoryValues.length >= 2) {
+                const catYMean = categoryValues.reduce((sum, val) => sum + val, 0) / categoryValues.length;
+                let catNumerator = 0;
+                let catDenominator = 0;
+                
+                categoryValues.forEach((y: number, x: number) => {
+                    catNumerator += (x - xMean) * (y - catYMean);
+                    catDenominator += Math.pow(x - xMean, 2);
+                });
+                
+                const catSlope = catDenominator !== 0 ? catNumerator / catDenominator : 0;
+                const catTrend = catSlope > 0.5 ? 'Growing' : catSlope < -0.5 ? 'Declining' : 'Stable';
+                const catPrediction = Math.round(categoryValues[categoryValues.length - 1] + catSlope);
+                
+                categoryPredictions[category] = {
+                    current: categoryValues[categoryValues.length - 1],
+                    prediction: catPrediction,
+                    trend: catTrend,
+                    change: catPrediction - categoryValues[categoryValues.length - 1],
+                };
+            }
+        });
+        
+        // Year-over-Year comparison
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+        const historyByYearMonth: any = {};
+        
+        history.forEach(record => {
+            const recordDate = new Date(record.dateOfService);
+            const year = recordDate.getFullYear();
+            const month = recordDate.getMonth();
+            const key = `${year}-${month}`;
+            
+            if (!historyByYearMonth[key]) {
+                historyByYearMonth[key] = { men: 0, women: 0, junior: 0, children: 0, visitors: 0, catechumens: 0, total: 0 };
+            }
+            
+            historyByYearMonth[key].men += record.attendance.men;
+            historyByYearMonth[key].women += record.attendance.women;
+            historyByYearMonth[key].junior += record.attendance.junior;
+            historyByYearMonth[key].children += record.attendance.children;
+            historyByYearMonth[key].visitors += record.attendance.visitors;
+            historyByYearMonth[key].catechumens += record.attendance.catechumens;
+            historyByYearMonth[key].total += record.attendance.men + record.attendance.women + record.attendance.junior + record.attendance.children + record.attendance.visitors + record.attendance.catechumens;
+        });
+        
+        const currentYearMonthKey = `${currentYear}-${currentMonth}`;
+        const lastYearMonthKey = `${currentYear - 1}-${currentMonth}`;
+        
+        const currentYearTotal = historyByYearMonth[currentYearMonthKey]?.total || 0;
+        const lastYearTotal = historyByYearMonth[lastYearMonthKey]?.total || 0;
+        const yearOverYearChange = lastYearTotal > 0 ? (((currentYearTotal - lastYearTotal) / lastYearTotal) * 100).toFixed(1) : 'N/A';
+        const yearOverYearDiff = currentYearTotal - lastYearTotal;
+        
+        // Growth rate comparison
+        const recentMonths = totalsByMonth.slice(-3);
+        const olderMonths = totalsByMonth.slice(0, Math.min(3, totalsByMonth.length - 3));
+        const recentAvg = recentMonths.length > 0 ? recentMonths.reduce((sum, val) => sum + val, 0) / recentMonths.length : 0;
+        const olderAvg = olderMonths.length > 0 ? olderMonths.reduce((sum, val) => sum + val, 0) / olderMonths.length : recentAvg;
+        const growthRate = olderAvg > 0 ? (((recentAvg - olderAvg) / olderAvg) * 100).toFixed(1) : '0';
+        
+        return {
+            avgAttendance: Math.round(avgAttendance),
+            trend,
+            trendPercentage,
+            prediction,
+            confidenceScore: Math.round(confidenceScore),
+            categoryPercentages,
+            categoryPredictions,
+            growthRate,
+            yearOverYearChange,
+            yearOverYearDiff,
+            currentYearTotal,
+            lastYearTotal,
+            highestMonth: monthlyAttendance.reduce((max: any, m: any) => m.total > max.total ? m : max, monthlyAttendance[0]),
+            lowestMonth: monthlyAttendance.reduce((min: any, m: any) => m.total < min.total ? m : min, monthlyAttendance[0]),
+        };
+    }, [monthlyAttendance, history]);
 
     const filteredHistory = useMemo(() => {
         const now = new Date();
@@ -229,118 +477,317 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
             ) : (
                 <>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <button onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded text-sm flex items-center justify-between gap-2">
-                    <span>📚 Archives</span>
-                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-xs font-bold">{archiveCount}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <button 
+                    onClick={() => { setShowArchive(true); setEditingArchiveId(null); }} 
+                    className="group bg-gradient-to-br from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-between gap-3"
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="text-3xl">📚</span>
+                        <span className="text-lg">Archives</span>
+                    </div>
+                    <span className="bg-white/30 group-hover:bg-white/40 rounded-full px-4 py-1 text-sm font-bold backdrop-blur-sm">{archiveCount}</span>
                 </button>
-                <button onClick={() => { setSelectedRecordId(null); setFormData(initialFormState()); setIsFullEditorOpen(true); }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded text-sm">✏️ New</button>
-                <button onClick={() => { setSelectedRecordId(null); setFormData(initialFormState()); setActiveModal(null); setIsFullEditorOpen(false); }} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-3 rounded text-sm">🔄 Reset</button>
-                <button onClick={() => window.print()} disabled={!selectedRecordId} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🖨️ Print</button>
-                <button onClick={() => { if (selectedRecordId) { if (window.confirm('Delete?')) { setHistory(history.filter(h => h.id !== selectedRecordId)); setSelectedRecordId(null); } } }} disabled={!selectedRecordId} className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 px-3 rounded text-sm">🗑️ Delete</button>
+                <button 
+                    onClick={() => { const newForm = initialFormState(); setFormData(newForm); setSelectedRecordId(null); setIsFullEditorOpen(true); }} 
+                    className="bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-center gap-3"
+                >
+                    <span className="text-3xl">✏️</span>
+                    <span className="text-lg">New Entry</span>
+                </button>
+                <button 
+                    onClick={() => { const newForm = initialFormState(); setFormData(newForm); setSelectedRecordId(null); setActiveModal(null); setIsFullEditorOpen(false); }} 
+                    className="bg-gradient-to-br from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400 text-gray-800 font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-center gap-3"
+                >
+                    <span className="text-3xl">🔄</span>
+                    <span className="text-lg">Reset</span>
+                </button>
             </div>
 
-            <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-gray-800">Monthly Attendance by Category</h3>
-                    <span className="text-xs text-gray-500">Totals per month</span>
+            <div className="bg-gradient-to-br from-blue-50 via-white to-purple-50 border-2 border-blue-200 rounded-xl p-5 mb-6 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                            📊 Monthly Attendance Overview
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">Stacked totals per category</p>
+                    </div>
+                    <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full">
+                        {monthlyAttendance.length} months
+                    </span>
                 </div>
                 {monthlyAttendance.length === 0 ? (
-                    <div className="text-sm text-gray-500">No attendance data yet.</div>
+                    <div className="text-center py-12">
+                        <div className="text-4xl mb-2">📈</div>
+                        <div className="text-sm text-gray-500 font-medium">No attendance data yet</div>
+                        <div className="text-xs text-gray-400 mt-1">Create a record to see monthly trends</div>
+                    </div>
                 ) : (
-                    <div className="h-64">
+                    <div className="h-72 mt-2">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyAttendance} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                                <XAxis dataKey="month" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={50} />
-                                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                                <Tooltip />
-                                <Legend wrapperStyle={{ fontSize: 12 }} />
-                                <Bar dataKey="men" stackId="a" fill="#2563eb" name="Men" />
-                                <Bar dataKey="women" stackId="a" fill="#ec4899" name="Women" />
-                                <Bar dataKey="junior" stackId="a" fill="#f59e0b" name="Junior" />
-                                <Bar dataKey="children" stackId="a" fill="#10b981" name="Children" />
-                                <Bar dataKey="visitors" stackId="a" fill="#8b5cf6" name="Visitors" />
-                                <Bar dataKey="catechumens" stackId="a" fill="#ef4444" name="Catechumens" />
-                            </BarChart>
+                            <ComposedChart 
+                                data={monthlyAttendance} 
+                                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                            >
+                                <defs>
+                                    <linearGradient id="menGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#1e40af" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="womenGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#ec4899" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#be185d" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="juniorGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#d97706" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="childrenGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#059669" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="visitorsGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#6d28d9" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                    <linearGradient id="catechumensGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#ef4444" stopOpacity={0.9}/>
+                                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                                <XAxis 
+                                    dataKey="month" 
+                                    tick={{ fontSize: 12, fill: '#4b5563', fontWeight: 600 }} 
+                                    angle={-45} 
+                                    textAnchor="end" 
+                                    height={70}
+                                    stroke="#9ca3af"
+                                />
+                                <YAxis 
+                                    tick={{ fontSize: 12, fill: '#4b5563', fontWeight: 600 }} 
+                                    allowDecimals={false}
+                                    stroke="#9ca3af"
+                                    label={{ value: 'Attendance', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6b7280', fontWeight: 600 } }}
+                                />
+                                <Tooltip 
+                                    contentStyle={{ 
+                                        backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+                                        border: '2px solid #e5e7eb', 
+                                        borderRadius: '12px',
+                                        boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                                        padding: '12px'
+                                    }}
+                                    labelStyle={{ fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}
+                                    itemStyle={{ fontSize: '13px', padding: '4px 0' }}
+                                    formatter={(value, name) => {
+                                        if (name === 'trendLine') return [Math.round(value as number), '📉 Trend Line'];
+                                        if (name === 'movingAvg') return [Math.round(value as number), '📊 3-Month Avg'];
+                                        return [value, name];
+                                    }}
+                                />
+                                <Legend 
+                                    wrapperStyle={{ 
+                                        fontSize: 13, 
+                                        fontWeight: 600,
+                                        paddingTop: '15px'
+                                    }}
+                                    iconType="circle"
+                                />
+                                <Bar dataKey="men" stackId="a" fill="url(#menGradient)" name="Men" radius={[0, 0, 0, 0]} barSize={45} />
+                                <Bar dataKey="women" stackId="a" fill="url(#womenGradient)" name="Women" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="junior" stackId="a" fill="url(#juniorGradient)" name="Junior" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="children" stackId="a" fill="url(#childrenGradient)" name="Children" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="visitors" stackId="a" fill="url(#visitorsGradient)" name="Visitors" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="catechumens" stackId="a" fill="url(#catechumensGradient)" name="Catechumens" radius={[4, 4, 0, 0]} />
+                                <Line type="monotone" dataKey="trendLine" stroke="#ef4444" strokeWidth={3} dot={false} strokeDasharray="5 5" name="📉 Trend Line" isAnimationActive={false} />
+                                <Line type="monotone" dataKey="movingAvg" stroke="#3b82f6" strokeWidth={2.5} dot={false} name="📊 3-Month Avg" isAnimationActive={false} />
+                            </ComposedChart>
                         </ResponsiveContainer>
                     </div>
                 )}
             </div>
 
-            {/* Completion Progress Indicator */}
-            {selectedRecordId && (
-                <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-bold text-sm text-gray-700">Form Completion</h3>
-                        <span className="text-2xl font-bold text-purple-600">{completionStatus.completed}/{completionStatus.total}</span>
+            {/* Analytics & Predictions Section */}
+            {analytics && (
+                <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-300 rounded-2xl p-6 mb-6 shadow-2xl">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
+                                <span className="text-3xl">📈</span>
+                                Analytics & Predictions
+                            </h3>
+                            <p className="text-sm text-gray-600 mt-2">AI-powered insights based on historical data</p>
+                        </div>
+                        <span className="text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold px-5 py-2 rounded-full shadow-lg">
+                            {monthlyAttendance.length} months analyzed
+                        </span>
                     </div>
-                    <div className="w-full bg-gray-300 rounded-full h-3 mb-3">
-                        <div 
-                            className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
-                            style={{ width: `${(completionStatus.completed / completionStatus.total) * 100}%` }}
-                        ></div>
-                    </div>
-                    <div className="mb-3">
-                        {completionStatus.sections.some(s => !s.filled) && (
-                            <div className="text-sm font-semibold text-red-700 mb-2">
-                                ⚠️ Missing: {completionStatus.sections.filter(s => !s.filled).map(s => s.name).join(', ')}
+
+                    {/* Key Metrics Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
+                        <div className="group bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">👥</span>
+                                <div className="text-xs font-semibold opacity-90">Average Attendance</div>
                             </div>
-                        )}
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {completionStatus.sections.map(section => (
-                            <div key={section.name} className={`text-xs p-2 rounded font-semibold ${section.filled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                {section.filled ? '✓' : '✗'} {section.name}
+                            <div className="text-4xl font-black mb-1">{analytics.avgAttendance}</div>
+                            <div className="text-xs opacity-80">per month</div>
+                        </div>
+                        
+                        <div className={`group rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white ${
+                            analytics.trend === 'Growing' ? 'bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : 
+                            analytics.trend === 'Declining' ? 'bg-gradient-to-br from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700' : 
+                            'bg-gradient-to-br from-gray-500 to-slate-600 hover:from-gray-600 hover:to-slate-700'
+                        }`}>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">{analytics.trend === 'Growing' ? '📈' : analytics.trend === 'Declining' ? '📉' : '➡️'}</span>
+                                <div className="text-xs font-semibold opacity-90">Trend</div>
                             </div>
-                        ))}
+                            <div className="text-4xl font-black mb-1">{analytics.trend}</div>
+                            <div className="text-xs opacity-80">{analytics.trendPercentage}% rate</div>
+                        </div>
+                        
+                        <div className="group bg-gradient-to-br from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">🔮</span>
+                                <div className="text-xs font-semibold opacity-90">Next Month</div>
+                            </div>
+                            <div className="text-4xl font-black mb-1">{analytics.prediction}</div>
+                            <div className="text-xs opacity-80">{analytics.confidenceScore}% confidence</div>
+                        </div>
+                        
+                        <div className={`group rounded-2xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 text-white ${
+                            parseFloat(analytics.growthRate) > 0 ? 'bg-gradient-to-br from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700' : 
+                            parseFloat(analytics.growthRate) < 0 ? 'bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700' : 
+                            'bg-gradient-to-br from-gray-500 to-slate-600 hover:from-gray-600 hover:to-slate-700'
+                        }`}>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">{parseFloat(analytics.growthRate) > 0 ? '⬆️' : parseFloat(analytics.growthRate) < 0 ? '⬇️' : '➡️'}</span>
+                                <div className="text-xs font-semibold opacity-90">Recent Growth</div>
+                            </div>
+                            <div className="text-4xl font-black mb-1">{analytics.growthRate > 0 ? '+' : ''}{analytics.growthRate}%</div>
+                            <div className="text-xs opacity-80">last 3 months</div>
+                        </div>
+                    </div>
+
+                    {/* Category Breakdown */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border-2 border-white shadow-lg mb-5">
+                        <h4 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="text-xl">📊</span>
+                            Category Distribution
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {analytics.categoryPercentages.map((cat: any) => (
+                                <div key={cat.category} className="group bg-gradient-to-br from-gray-50 to-gray-100 hover:from-white hover:to-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all duration-300 hover:scale-105 shadow-sm hover:shadow-md">
+                                    <span className="text-sm font-bold text-gray-700 block mb-2">{cat.category}</span>
+                                    <div className="flex items-baseline gap-2">
+                                        <div className="text-2xl font-black text-indigo-600">{cat.percentage}%</div>
+                                        <div className="text-xs text-gray-500">{cat.count} total</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Category-Specific Predictions */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border-2 border-white shadow-lg mb-5">
+                        <h4 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="text-xl">🎯</span>
+                            Category Predictions
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {Object.entries(analytics.categoryPredictions).map(([category, data]: any) => (
+                                <div key={category} className={`rounded-xl p-4 border-2 transition-all duration-300 ${
+                                    data.trend === 'Growing' ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 hover:shadow-lg' :
+                                    data.trend === 'Declining' ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-300 hover:shadow-lg' :
+                                    'bg-gradient-to-br from-slate-50 to-gray-50 border-gray-300 hover:shadow-lg'
+                                }`}>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-sm font-bold text-gray-700">{category.charAt(0).toUpperCase() + category.slice(1)}</span>
+                                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                            data.trend === 'Growing' ? 'bg-green-200 text-green-800' :
+                                            data.trend === 'Declining' ? 'bg-orange-200 text-orange-800' :
+                                            'bg-gray-200 text-gray-800'
+                                        }`}>
+                                            {data.trend === 'Growing' ? '📈' : data.trend === 'Declining' ? '📉' : '➡️'} {data.trend}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-gray-600">Current:</span>
+                                            <span className="font-bold text-gray-800">{data.current}</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-gray-600">Predicted:</span>
+                                            <span className={`font-bold ${data.change > 0 ? 'text-green-700' : data.change < 0 ? 'text-orange-700' : 'text-gray-700'}`}>
+                                                {data.prediction} {data.change > 0 ? `(+${data.change})` : data.change < 0 ? `(${data.change})` : ''}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Year-over-Year Comparison */}
+                    <div className="bg-gradient-to-br from-cyan-100 to-blue-100 border-2 border-cyan-300 rounded-2xl p-5 shadow-lg mb-5">
+                        <h4 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <span className="text-xl">📊</span>
+                            Year-over-Year Comparison
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-white/60 rounded-xl p-4 border border-white">
+                                <div className="text-xs font-semibold text-gray-600 mb-2">This Year (Current Month)</div>
+                                <div className="text-3xl font-black text-blue-700">{analytics.currentYearTotal}</div>
+                                <div className="text-xs text-gray-500 mt-1">Total attendance</div>
+                            </div>
+                            <div className="bg-white/60 rounded-xl p-4 border border-white">
+                                <div className="text-xs font-semibold text-gray-600 mb-2">Last Year (Same Month)</div>
+                                <div className="text-3xl font-black text-gray-600">{analytics.lastYearTotal}</div>
+                                <div className="text-xs text-gray-500 mt-1">Total attendance</div>
+                            </div>
+                            <div className={`rounded-xl p-4 border-2 ${
+                                analytics.yearOverYearDiff > 0 ? 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-400' :
+                                analytics.yearOverYearDiff < 0 ? 'bg-gradient-to-br from-orange-100 to-amber-100 border-orange-400' :
+                                'bg-gradient-to-br from-gray-100 to-slate-100 border-gray-400'
+                            }`}>
+                                <div className="text-xs font-semibold text-gray-700 mb-2">Year-over-Year Change</div>
+                                <div className={`text-3xl font-black ${
+                                    analytics.yearOverYearDiff > 0 ? 'text-green-700' :
+                                    analytics.yearOverYearDiff < 0 ? 'text-orange-700' :
+                                    'text-gray-700'
+                                }`}>
+                                    {analytics.yearOverYearChange}%
+                                </div>
+                                <div className={`text-xs font-bold mt-1 ${
+                                    analytics.yearOverYearDiff > 0 ? 'text-green-700' :
+                                    analytics.yearOverYearDiff < 0 ? 'text-orange-700' :
+                                    'text-gray-700'
+                                }`}>
+                                    {analytics.yearOverYearDiff > 0 ? '+' : ''}{analytics.yearOverYearDiff} attendees
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* High/Low Months */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg p-4 border border-green-300">
+                            <div className="text-xs text-green-700 font-semibold mb-1">🏆 Highest Month</div>
+                            <div className="text-xl font-bold text-green-800">{analytics.highestMonth.month}</div>
+                            <div className="text-sm text-green-700 mt-1">{analytics.highestMonth.total} attendees</div>
+                        </div>
+                        <div className="bg-gradient-to-br from-orange-100 to-amber-100 rounded-lg p-4 border border-orange-300">
+                            <div className="text-xs text-orange-700 font-semibold mb-1">📉 Lowest Month</div>
+                            <div className="text-xl font-bold text-orange-800">{analytics.lowestMonth.month}</div>
+                            <div className="text-sm text-orange-700 mt-1">{analytics.lowestMonth.total} attendees</div>
+                        </div>
                     </div>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <button type="button" onClick={() => setActiveModal('details')} className="bg-blue-50 border-2 border-blue-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">📋</div>
-                    <h3 className="font-bold text-sm text-blue-900">Service Details</h3>
-                    <p className="text-xs text-blue-600">{formData.dateOfService}</p>
-                </button>
 
-                <button type="button" onClick={() => setActiveModal('attendance')} className="bg-emerald-50 border-2 border-emerald-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">👥</div>
-                    <h3 className="font-bold text-sm text-emerald-900">Attendance</h3>
-                    <p className="text-lg font-bold text-emerald-700">{totalAttendance}</p>
-                </button>
-
-                <button type="button" onClick={() => setActiveModal('visitors')} className="bg-purple-50 border-2 border-purple-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">🤝</div>
-                    <h3 className="font-bold text-sm text-purple-900">Visitors</h3>
-                    <p className="text-lg font-bold text-purple-700">{formData.visitorsList.length}</p>
-                </button>
-
-                <button type="button" onClick={() => setActiveModal('donations')} className="bg-rose-50 border-2 border-rose-200 p-4 rounded-lg hover:shadow-lg">
-                    <div className="text-2xl mb-1">💝</div>
-                    <h3 className="font-bold text-sm text-rose-900">Donations</h3>
-                    <p className="text-lg font-bold text-rose-700">{formData.donationsList.length}</p>
-                </button>
-
-                <button type="button" onClick={() => setActiveModal('events')} className="bg-orange-50 border-2 border-orange-200 p-4 rounded-lg hover:shadow-lg sm:col-span-2 lg:col-span-1">
-                    <div className="text-2xl mb-1">🙏</div>
-                    <h3 className="font-bold text-sm text-orange-900">Worship</h3>
-                    <p className="text-xs text-orange-600 line-clamp-1">{formData.sermonTopic || 'Add topic'}</p>
-                </button>
-            </div>
-
-            <button 
-                type="button" 
-                onClick={handleSubmit} 
-                disabled={!canSave}
-                className={`w-full mt-6 font-bold py-3 rounded-lg shadow-lg transition-all ${
-                    canSave 
-                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer' 
-                        : 'bg-gray-400 text-gray-700 cursor-not-allowed'
-                }`}
-            >
-                {canSave ? '💾 Save Record - Complete!' : `⚠️ Complete ${completionStatus.total - completionStatus.completed} more sections`}
-            </button>
 
             {activeModal === 'details' && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -352,12 +799,12 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                 <input type="date" name="dateOfService" value={formData.dateOfService} onChange={handleChange} className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Officiant *</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Preacher *</label>
                                 <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} placeholder="e.g., Rev. John Doe" className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist</label>
-                                <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="Optional" className="w-full border-2 rounded p-2"/>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist *</label>
+                                <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="e.g., Bro. John Smith" className="w-full border-2 border-blue-300 rounded p-2"/>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">Prepared By</label>
@@ -501,7 +948,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center py-4 text-gray-500">No visitors recorded yet</div>
+                                <div className="text-center py-4 text-gray-500">{formData.noVisitors ? '✓ No visitors recorded' : 'No visitors recorded yet'}</div>
                             )}
                         </div>
                         
@@ -609,16 +1056,29 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                     <div className="bg-white rounded-lg max-w-sm w-full p-6">
                         <h2 className="text-xl font-bold mb-4 text-gray-900">🙏 Worship & Events</h2>
                         <div className="space-y-3 mb-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
-                                <input 
-                                    type="text" 
-                                    name="sermonTopic" 
-                                    value={formData.sermonTopic} 
-                                    onChange={handleChange} 
-                                    placeholder="Main sermon topic"
-                                    className="w-full border-2 border-orange-300 rounded p-2"
-                                />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
+                                    <input 
+                                        type="text" 
+                                        name="sermonTopic" 
+                                        value={formData.sermonTopic} 
+                                        onChange={handleChange} 
+                                        placeholder="Main sermon topic"
+                                        className="w-full border-2 border-orange-300 rounded p-2"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Memory Verse</label>
+                                    <input 
+                                        type="text" 
+                                        name="memoryVerse" 
+                                        value={formData.memoryVerse} 
+                                        onChange={handleChange} 
+                                        placeholder="e.g., John 3:16"
+                                        className="w-full border-2 border-orange-300 rounded p-2"
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">Special Events / Announcements</label>
@@ -656,8 +1116,8 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] overflow-y-auto">
                         <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white p-4 rounded-t-2xl flex items-center justify-between">
                             <div>
-                                <h3 className="text-xl font-extrabold">New Weekly History</h3>
-                                <p className="text-sm opacity-90">Fill all sections below, then save.</p>
+                                <h3 className="text-xl font-extrabold">{selectedRecordId ? 'Edit Weekly History' : 'New Weekly History'}</h3>
+                                <p className="text-sm opacity-90">{selectedRecordId ? 'Update the form below and save changes.' : 'Fill all sections below, then save.'}</p>
                             </div>
                             <div className="flex gap-2">
                                 <button
@@ -716,12 +1176,12 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                         <input type="date" name="dateOfService" value={formData.dateOfService} onChange={handleChange} className="w-full border-2 border-blue-300 rounded p-2" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Officiant *</label>
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">Preacher *</label>
                                         <input type="text" name="officiant" value={formData.officiant} onChange={handleChange} placeholder="e.g., Rev. John Doe" className="w-full border-2 border-blue-300 rounded p-2" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist</label>
-                                        <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="Optional" className="w-full border-2 rounded p-2" />
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">Liturgist *</label>
+                                        <input type="text" name="liturgist" value={formData.liturgist} onChange={handleChange} placeholder="e.g., Bro. John Smith" className="w-full border-2 border-blue-300 rounded p-2" />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-700 mb-1">Prepared By</label>
@@ -777,6 +1237,23 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     <input type="text" value={newVisitor.reason} onChange={(e) => setNewVisitor(prev => ({ ...prev, reason: e.target.value }))} placeholder="Reason for visit (optional)" className="w-full border-2 rounded p-2 text-sm" />
                                 </div>
                                 <button onClick={handleAddVisitor} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded text-sm">➕ Add Visitor</button>
+                                <div className="mt-3 p-3 bg-white border-2 border-purple-200 rounded-lg">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.noVisitors || false}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    noVisitors: e.target.checked,
+                                                    visitorsList: e.target.checked ? [] : prev.visitorsList
+                                                }));
+                                            }}
+                                            className="w-4 h-4 cursor-pointer"
+                                        />
+                                        <span className="text-sm font-bold text-purple-900">No visitors this week</span>
+                                    </label>
+                                </div>
                                 <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
                                     {formData.visitorsList.length > 0 ? (
                                         formData.visitorsList.map((v, i) => (
@@ -791,7 +1268,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                             </div>
                                         ))
                                     ) : (
-                                        <div className="text-center py-2 text-gray-500">No visitors recorded yet</div>
+                                        <div className="text-center py-2 text-gray-500">{formData.noVisitors ? '✓ No visitors recorded' : 'No visitors recorded yet'}</div>
                                     )}
                                 </div>
                             </section>
@@ -850,9 +1327,15 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                                     <h4 className="text-orange-900 font-bold">Worship & Events</h4>
                                 </div>
                                 <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
-                                        <input type="text" name="sermonTopic" value={formData.sermonTopic} onChange={handleChange} placeholder="Main sermon topic" className="w-full border-2 border-orange-300 rounded p-2" />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Sermon Topic *</label>
+                                            <input type="text" name="sermonTopic" value={formData.sermonTopic} onChange={handleChange} placeholder="Main sermon topic" className="w-full border-2 border-orange-300 rounded p-2" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Memory Verse</label>
+                                            <input type="text" name="memoryVerse" value={formData.memoryVerse} onChange={handleChange} placeholder="e.g., John 3:16" className="w-full border-2 border-orange-300 rounded p-2" />
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-700 mb-1">Special Events / Announcements</label>
@@ -891,7 +1374,59 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory }) =>
                 onClose={() => setShowArchive(false)} 
                 history={history}
                 onEditRecord={handleEditArchiveRecord}
+                onDeleteRecord={handleDeleteArchiveRecord}
             />
+
+            {/* Save Success Dialog */}
+            {showSaveSuccess && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
+                    <div className="bg-gradient-to-br from-white via-green-50 to-emerald-50 rounded-3xl shadow-2xl p-8 max-w-sm mx-4 border-2 border-green-200 animate-in fade-in zoom-in-95 duration-300">
+                        <div className="flex flex-col items-center text-center">
+                            {/* Animated Checkmark Circle */}
+                            <div className="mb-6 relative">
+                                <div className="absolute inset-0 bg-gradient-to-r from-green-200 to-emerald-200 rounded-full animate-ping opacity-75"></div>
+                                <div className="absolute inset-0 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full animate-pulse"></div>
+                                <div className="relative bg-gradient-to-br from-green-100 to-emerald-100 rounded-full p-5 border-4 border-green-300">
+                                    <svg className="w-16 h-16 text-green-600 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            {/* Success Message */}
+                            <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">Record Saved!</h2>
+                            <p className="text-gray-700 font-medium mb-1">Weekly history successfully</p>
+                            <p className="text-gray-700 font-medium mb-6">saved to database</p>
+                            
+                            {/* Progress Bar */}
+                            <div className="w-full bg-gray-200 rounded-full h-2 mb-4 overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400 animate-pulse rounded-full" style={{
+                                    animation: 'slideProgress 3s ease-in-out'
+                                }}></div>
+                            </div>
+                            
+                            {/* Status Text */}
+                            <p className="text-sm text-gray-500 font-medium">Closing in a moment...</p>
+                            
+                            {/* Decorative Elements */}
+                            <div className="mt-4 flex gap-1 justify-center">
+                                <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{animationDelay: '0s'}}></div>
+                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                <div className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* CSS Animation for progress bar */}
+                    <style>{`
+                        @keyframes slideProgress {
+                            0% { width: 0%; }
+                            50% { width: 100%; }
+                            100% { width: 100%; }
+                        }
+                    `}</style>
+                </div>
+            )}
         </div>
     );
 };

@@ -241,6 +241,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
         serviceTypes: Array.isArray(raw.serviceTypes) ? raw.serviceTypes.map(sanitizeString) : [],
         serviceTypeOther: sanitizeString(raw.serviceTypeOther),
         sermonTopic: sanitizeString(raw.sermonTopic),
+        memoryVerse: sanitizeString(raw.memoryVerse),
         worshipHighlights: sanitizeString(raw.worshipHighlights),
         announcementsBy: sanitizeString(raw.announcementsBy),
         attendance: {
@@ -263,6 +264,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
             description: sanitizeString(d.description)
         })) : [],
         noDonation: typeof raw.noDonation === 'boolean' ? raw.noDonation : false,
+        noVisitors: typeof raw.noVisitors === 'boolean' ? raw.noVisitors : false,
         newMembersDetails: sanitizeString(raw.newMembersDetails),
         newMembersContact: sanitizeString(raw.newMembersContact),
         events: sanitizeString(raw.events),

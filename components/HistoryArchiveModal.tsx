@@ -7,9 +7,10 @@ interface HistoryArchiveModalProps {
     onClose: () => void;
     history: WeeklyHistoryRecord[];
     onEditRecord?: (record: WeeklyHistoryRecord) => void;
+    onDeleteRecord?: (id: string) => void;
 }
 
-const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClose, history, onEditRecord }) => {
+const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClose, history, onEditRecord, onDeleteRecord }) => {
     const [yearFilter, setYearFilter] = useState<string>('all');
     const [monthFilter, setMonthFilter] = useState<string>('all');
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -133,6 +134,18 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
                                             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm"
                                         >
                                             ✏️ Edit
+                                        </button>
+                                    )}
+                                    {onDeleteRecord && (
+                                        <button 
+                                            onClick={() => {
+                                                if (window.confirm(`Delete record from ${rec.dateOfService}?`)) {
+                                                    onDeleteRecord(rec.id);
+                                                }
+                                            }}
+                                            className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm"
+                                        >
+                                            🗑️ Delete
                                         </button>
                                     )}
                                 </div>

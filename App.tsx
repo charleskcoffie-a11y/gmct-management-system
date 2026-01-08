@@ -119,6 +119,13 @@ const App: React.FC = () => {
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
+    // Restrict statistician accounts to Weekly History only
+    useEffect(() => {
+        if (currentUser?.role === 'statistician' && activeTab !== 'weekly-history') {
+            setActiveTab('weekly-history');
+        }
+    }, [currentUser?.role, activeTab]);
+
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
         entries, members, history: weeklyHistory, users, monthLocks, classLeaders
@@ -1062,7 +1069,7 @@ const App: React.FC = () => {
                         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
                             <h3 className="text-lg font-bold">📅 Weekly History</h3>
                         </div>
-                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />
+                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
                     </div>
                 );
             case 'upcoming-birthdays':
