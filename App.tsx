@@ -13,11 +13,12 @@ import PasswordChangeModal from './components/PasswordChangeModal';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
-import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader } from './types';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
+import ProfileModal from './components/ProfileModal';
 
 // Lazy-load heavier pages to keep the initial bundle smaller
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -65,6 +66,7 @@ const INITIAL_SETTINGS: Settings = {
 };
 
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
+type LoginRequest = { username: string; password?: string; skipPassword?: boolean; role?: UserRole };
 
 const App: React.FC = () => {
     // --- State Management (Database-Driven - No localStorage for data) ---
@@ -82,6 +84,7 @@ const App: React.FC = () => {
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useState<MonthLock[]>([]);
+    const [sundayLocks, setSundayLocks] = useState<SundayLock[]>([]);
 
 
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -97,6 +100,8 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [userNotes, setUserNotes] = useLocalStorage<Record<string, string>>('gmct-user-notes', {});
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -128,9 +133,9 @@ const App: React.FC = () => {
 
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, history: weeklyHistory, users, monthLocks, classLeaders
+        entries, members, history: weeklyHistory, users, monthLocks, sundayLocks, classLeaders
     }, {
-        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings, setClassLeaders
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSundayLocks, setSettings, setClassLeaders
     });
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);
@@ -337,7 +342,7 @@ const App: React.FC = () => {
     const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#8b5cf6'];
 
     // --- Handlers ---
-    const handleLogin = (username: string, password: string) => {
+    const handleLogin = ({ username, password = '', skipPassword = false }: LoginRequest) => {
         const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
         const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
         const classLeaderFallback = username.trim().toLowerCase() === 'classleader'
@@ -408,8 +413,18 @@ const App: React.FC = () => {
         }
 
         // All other roles: require exact password match
-        if (!foundUser || foundUser.password !== password) {
+        if (!foundUser) {
             setLoginError('Invalid username or password.');
+            return;
+        }
+
+        const skipAllowed = foundUser.role === 'data-entry';
+        if (!skipPassword && foundUser.password !== password) {
+            setLoginError('Invalid username or password.');
+            return;
+        }
+        if (skipPassword && !skipAllowed) {
+            setLoginError('Password required for this role.');
             return;
         }
 
@@ -423,6 +438,13 @@ const App: React.FC = () => {
         else if (foundUser.role === 'statistician') setActiveTab('weekly-history');
         else setActiveTab('home');
     };
+
+    // Show profile modal automatically for finance-team and class-leader roles
+    useEffect(() => {
+        if (currentUser && (currentUser.role === 'finance-team' || currentUser.role === 'class-leader')) {
+            setShowProfileModal(true);
+        }
+    }, [currentUser]);
 
     const handleLogout = () => setCurrentUser(null);
 
@@ -561,7 +583,7 @@ const App: React.FC = () => {
     }
 
     if (!currentUser) {
-        return <Login users={users} onLogin={handleLogin} error={loginError} />;
+        return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "development-fund", "other"];
@@ -643,7 +665,7 @@ const App: React.FC = () => {
             }
         };
         switch (activeTab) {
-            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
+            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks}/>;
             case 'harvest':
                 return (
                     <Harvest 
@@ -1005,7 +1027,7 @@ const App: React.FC = () => {
                     />
                 );
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
-            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
+            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} sundayLocks={sundayLocks} setSundayLocks={setSundayLocks} currentUser={currentUser} settings={settings} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} />;
             case 'day-born':
                 return (
@@ -1321,6 +1343,15 @@ const App: React.FC = () => {
                         setUsers={setUsers}
                         settings={settings}
                         onClose={() => setIsPasswordModalOpen(false)}
+                    />
+                )}
+                {showProfileModal && currentUser && (
+                    <ProfileModal
+                        currentUser={currentUser}
+                        note={userNotes[currentUser.username.toLowerCase()] || ''}
+                        onSaveNote={(val) => setUserNotes(prev => ({ ...prev, [currentUser.username.toLowerCase()]: val }))}
+                        onChangePassword={() => { setShowProfileModal(false); setIsPasswordModalOpen(true); }}
+                        onClose={() => setShowProfileModal(false)}
                     />
                 )}
                 <KeyboardShortcuts onNavigate={handleNavigate} />

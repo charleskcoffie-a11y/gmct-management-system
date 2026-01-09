@@ -2,7 +2,7 @@
 // components/Dashboard.tsx
 import React, { useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import type { Entry, Settings, User, Member, MonthLock } from '../types';
+import type { Entry, Settings, User, Member, MonthLock, SundayLock } from '../types';
 import { formatCurrency, capitalize, isMonthLocked } from '../utils';
 import ChartModal from './ChartModal';
 
@@ -12,10 +12,23 @@ interface DashboardProps {
     settings: Settings;
     currentUser: User;
     monthLocks?: MonthLock[];
+    sundayLocks?: SundayLock[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [] }) => {
+const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [], sundayLocks = [] }) => {
     const [expandedChart, setExpandedChart] = useState<'trend' | 'pie' | null>(null);
+    
+    // Get the current or most recent Sunday
+    const getCurrentSunday = () => {
+        const today = new Date();
+        const day = today.getDay();
+        const diff = day === 0 ? 0 : day; // If today is Sunday (0), diff is 0; otherwise, days since last Sunday
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() - diff);
+        return sunday.toISOString().substring(0, 10);
+    };
+    
+    const currentSundayDate = getCurrentSunday();
     
     // --- Data Processing ---
     const activeEntries = entries.filter(e => !e.deleted);
@@ -90,19 +103,82 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
     // --- Notification / Alerts Logic ---
     const notifications = useMemo(() => {
         const alerts = [];
-        const currentMonth = new Date().toISOString().substring(0, 7);
-        const lastMonth = new Date();
-        lastMonth.setMonth(lastMonth.getMonth() - 1);
-        const lastMonthKey = lastMonth.toISOString().substring(0, 7);
-
-        // 1. Lock Status
-        const isCurrentLocked = isMonthLocked(currentMonth + "-01", monthLocks);
-        const isLastLocked = isMonthLocked(lastMonthKey + "-01", monthLocks);
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.toISOString().substring(0, 7);
+        const dayOfMonth = today.getDate();
         
-        if (!isLastLocked) alerts.push({ type: 'warning', msg: `${lastMonth.toLocaleDateString('en-US', {month: 'long'})} is still UNLOCKED. Remember to close the month.`});
-        if (isCurrentLocked) alerts.push({ type: 'info', msg: `Current month (${new Date().toLocaleDateString('en-US', {month: 'long'})}) is LOCKED.`});
+        // Finance team, admin, and finance-chair can see the alerts
+        const shouldShowLockAlerts = currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team';
 
-        // 2. New Members
+        // 1. Check for unlocked past months in CURRENT YEAR ONLY
+        if (shouldShowLockAlerts) {
+            const checkDate = new Date(today);
+            checkDate.setMonth(checkDate.getMonth() - 1); // Start from last month
+            
+            // Check all past months in current year only (stop at Jan if we go before current year)
+            while (checkDate.getFullYear() === currentYear && checkDate < today) {
+                const monthKey = checkDate.toISOString().substring(0, 7);
+                const isLocked = isMonthLocked(monthKey + "-01", monthLocks);
+                
+                if (!isLocked) {
+                    const monthName = checkDate.toLocaleDateString('en-US', { month: 'long' });
+                    alerts.push({ type: 'warning', msg: `${monthName} is still UNLOCKED. Please lock in Financial Control.`});
+                }
+                
+                checkDate.setMonth(checkDate.getMonth() - 1);
+            }
+        }
+
+        // 2. Current month reminder (show after mid-month)
+        if (shouldShowLockAlerts && dayOfMonth >= 15) {
+            const isCurrentLocked = isMonthLocked(currentMonth + "-01", monthLocks);
+            if (!isCurrentLocked) {
+                const monthName = today.toLocaleDateString('en-US', { month: 'long' });
+                alerts.push({ type: 'info', msg: `Remember to lock ${monthName} at the end of the month in Financial Control.`});
+            }
+        }
+
+        // 3. Check for all Sundays in CURRENT MONTH that are unlocked (past + current week's Sunday)
+        if (shouldShowLockAlerts) {
+            const currentMonthNum = today.getMonth();
+            const currentYearNum = today.getFullYear();
+            
+            // Get the first day of current month
+            const firstDay = new Date(currentYearNum, currentMonthNum, 1);
+            
+            // Get the first Sunday of the month
+            let firstSunday = new Date(firstDay);
+            const dayOfWeek = firstDay.getDay();
+            if (dayOfWeek === 0) {
+                // First day is already Sunday
+                firstSunday = new Date(firstDay);
+            } else {
+                // Calculate days until first Sunday
+                firstSunday.setDate(firstDay.getDate() + (7 - dayOfWeek));
+            }
+            
+            // Go through each Sunday in the current month
+            const checkSunday = new Date(firstSunday);
+            while (checkSunday.getMonth() === currentMonthNum && checkSunday.getFullYear() === currentYearNum) {
+                const sundayDateStr = checkSunday.toISOString().substring(0, 10);
+                
+                // Only show alerts for Sundays that are <= today (past or current)
+                if (checkSunday <= today) {
+                    const sundayLock = sundayLocks.find(l => l.date === sundayDateStr);
+                    const isSundayLocked = sundayLock?.isLocked || false;
+                    
+                    if (!isSundayLocked) {
+                        const sundayDisplay = checkSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        alerts.push({ type: 'warning', msg: `Sunday ${sundayDisplay} is UNLOCKED. Please lock in Financial Control.`});
+                    }
+                }
+                
+                checkSunday.setDate(checkSunday.getDate() + 7); // Move to next Sunday
+            }
+        }
+
+        // 4. New Members (show to everyone)
         const recentMembers = members.filter(m => {
             if (!m.createdAt) return false;
             const created = new Date(m.createdAt);
@@ -116,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
         }
 
         return alerts;
-    }, [monthLocks, members]);
+    }, [monthLocks, sundayLocks, members, currentSundayDate, currentUser.role]);
 
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
@@ -142,8 +218,8 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                 <p className="text-base text-slate-600 mt-3 font-medium">A quick overview of giving, trends, and alerts.</p>
             </div>
             
-            {/* Notification Panel (Admin/Chair Only) */}
-            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && (
+            {/* Notification Panel (Admin/Chair/Finance Team) */}
+            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team') && (
                 <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-cyan-50 rounded-xl shadow-lg border-2 border-indigo-200 p-6 mb-6">
                     <h3 className="text-lg font-bold text-indigo-800 border-b-2 border-indigo-100 pb-2 mb-4 flex items-center gap-2">
                         <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>

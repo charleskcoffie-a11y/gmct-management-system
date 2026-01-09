@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
-import type { Settings, Entry, Member, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry, MonthLock, ClassLeader } from '../types';
+import type { Settings, Entry, Member, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry, MonthLock, SundayLock, ClassLeader } from '../types';
 import { uploadDataToSupabase, downloadDataFromSupabase } from '../services/supabase';
 
 // Helper to check if Supabase is configured
@@ -16,16 +16,17 @@ export function useSupabaseAutoSync(
         history: WeeklyHistoryRecord[];
         users: User[];
         monthLocks?: MonthLock[];
+        sundayLocks?: SundayLock[];
         classLeaders?: ClassLeader[];
     },
     // Setters are required to update local state after a pull
     setters?: {
         setEntries: (d: Entry[]) => void;
         setMembers: (d: Member[]) => void;
-
         setHistory: (d: WeeklyHistoryRecord[]) => void;
         setUsers: (d: User[]) => void;
         setMonthLocks?: (d: MonthLock[]) => void;
+        setSundayLocks?: (d: SundayLock[]) => void;
         setSettings?: (d: Settings) => void;
         setClassLeaders?: (d: ClassLeader[]) => void;
     }
@@ -79,6 +80,7 @@ export function useSupabaseAutoSync(
                 const cloudHistory = cloudData.history || [];
                 const cloudUsers = cloudData.users || [];
                 const cloudLocks = cloudData.monthLocks || [];
+                const cloudSundayLocks = cloudData.sundayLocks || [];
                 const cloudClassLeaders = cloudData.classLeaders || [];
                 // Update UI with cloud data only
                 setters.setEntries(cloudEntries);
@@ -86,6 +88,7 @@ export function useSupabaseAutoSync(
                 setters.setHistory(cloudHistory);
                 setters.setUsers(cloudUsers);
                 setters.setMonthLocks?.(cloudLocks);
+                setters.setSundayLocks?.(cloudSundayLocks);
                 setters.setClassLeaders?.(cloudClassLeaders);
                 if (setters.setSettings) setters.setSettings(cloudSettings);
                 setStatus({ state: 'synced', lastSynced: new Date() });
