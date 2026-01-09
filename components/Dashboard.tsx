@@ -108,10 +108,11 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
         const currentMonth = today.toISOString().substring(0, 7);
         const dayOfMonth = today.getDate();
         
-        const canLock = currentUser.role === 'admin' || currentUser.role === 'finance-chair';
+        // Finance team, admin, and finance-chair can see the alerts
+        const shouldShowLockAlerts = currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team';
 
         // 1. Check for unlocked past months in CURRENT YEAR ONLY
-        if (canLock) {
+        if (shouldShowLockAlerts) {
             const checkDate = new Date(today);
             checkDate.setMonth(checkDate.getMonth() - 1); // Start from last month
             
@@ -130,7 +131,7 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
         }
 
         // 2. Current month reminder (show after mid-month)
-        if (canLock && dayOfMonth >= 15) {
+        if (shouldShowLockAlerts && dayOfMonth >= 15) {
             const isCurrentLocked = isMonthLocked(currentMonth + "-01", monthLocks);
             if (!isCurrentLocked) {
                 const monthName = today.toLocaleDateString('en-US', { month: 'long' });
@@ -139,7 +140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
         }
 
         // 3. Check for all Sundays in CURRENT MONTH that are unlocked (past + current week's Sunday)
-        if (canLock) {
+        if (shouldShowLockAlerts) {
             const currentMonthNum = today.getMonth();
             const currentYearNum = today.getFullYear();
             
