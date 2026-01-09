@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChurchIcon } from './icons';
+import { ChurchIcon, AdminIcon, FinanceIcon, DataEntryIcon, ClassLeaderIcon, PastorIcon, StatisticianIcon } from './icons';
 import type { User, UserRole, Settings } from '../types';
 
 type LoginRequest = { username: string; password?: string; skipPassword?: boolean; role?: UserRole };
@@ -31,6 +31,45 @@ const roleNotes: Partial<Record<UserRole, string>> = {
 const financeRoles: UserRole[] = ['finance-team'];
 
 const hiddenRoles: UserRole[] = ['finance-chair'];
+
+// Map roles to their icons and colors
+const roleIconMap: Record<UserRole, { icon: React.ReactNode; color: string; bgColor: string }> = {
+    admin: {
+        icon: <AdminIcon />,
+        color: 'text-purple-400',
+        bgColor: 'bg-purple-900/30',
+    },
+    'finance-chair': {
+        icon: <FinanceIcon />,
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-900/30',
+    },
+    'finance-team': {
+        icon: <FinanceIcon />,
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-900/30',
+    },
+    'data-entry': {
+        icon: <DataEntryIcon />,
+        color: 'text-emerald-400',
+        bgColor: 'bg-emerald-900/30',
+    },
+    pastor: {
+        icon: <PastorIcon />,
+        color: 'text-blue-400',
+        bgColor: 'bg-blue-900/30',
+    },
+    statistician: {
+        icon: <StatisticianIcon />,
+        color: 'text-cyan-400',
+        bgColor: 'bg-cyan-900/30',
+    },
+    'class-leader': {
+        icon: <ClassLeaderIcon />,
+        color: 'text-pink-400',
+        bgColor: 'bg-pink-900/30',
+    },
+};
 
 const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
@@ -133,27 +172,35 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
                         </div>
                         <div className="px-8 pb-8 space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {roles.map(role => (
-                                    <button
-                                        key={role}
-                                        type="button"
-                                        onClick={() => handleRoleSelect(role)}
-                                        className={`text-left w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 shadow hover:border-indigo-300/50 hover:bg-slate-900/60 transition focus:outline-none focus:ring-2 focus:ring-indigo-400/60 ${selectedRole === role ? 'border-indigo-300 bg-slate-900/70' : ''}`}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm font-semibold text-indigo-50">{roleLabels[role]}</p>
-                                                <p className="text-xs text-indigo-100/70">{roleNotes[role] || 'Sign in with your account'}</p>
+                                {roles.map(role => {
+                                    const { icon, color, bgColor } = roleIconMap[role];
+                                    return (
+                                        <button
+                                            key={role}
+                                            type="button"
+                                            onClick={() => handleRoleSelect(role)}
+                                            className={`text-left w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 shadow hover:border-indigo-300/50 hover:bg-slate-900/60 transition focus:outline-none focus:ring-2 focus:ring-indigo-400/60 ${selectedRole === role ? 'border-indigo-300 bg-slate-900/70' : ''}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3 flex-1">
+                                                    <div className={`flex-shrink-0 p-2 rounded-lg ${bgColor} ${color}`}>
+                                                        {icon}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-indigo-50">{roleLabels[role]}</p>
+                                                        <p className="text-xs text-indigo-100/70">{roleNotes[role] || 'Sign in with your account'}</p>
+                                                    </div>
+                                                </div>
+                                                {role === 'data-entry' && (
+                                                    <span className="text-[10px] uppercase font-bold text-emerald-200 bg-emerald-600/30 px-2 py-1 rounded-full">Auto</span>
+                                                )}
+                                                {financeRoles.includes(role) && (
+                                                    <span className="text-[10px] uppercase font-bold text-amber-200 bg-amber-600/30 px-2 py-1 rounded-full">Finance</span>
+                                                )}
                                             </div>
-                                            {role === 'data-entry' && (
-                                                <span className="text-[10px] uppercase font-bold text-emerald-200 bg-emerald-600/30 px-2 py-1 rounded-full">Auto</span>
-                                            )}
-                                            {financeRoles.includes(role) && (
-                                                <span className="text-[10px] uppercase font-bold text-amber-200 bg-amber-600/30 px-2 py-1 rounded-full">Finance</span>
-                                            )}
-                                        </div>
-                                    </button>
-                                ))}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             {displayedError && (
@@ -247,10 +294,17 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
             {showUserModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
                     <div className="w-full max-w-md rounded-2xl bg-slate-900 shadow-2xl border border-white/10 p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 className="text-lg font-bold text-white">Sign in</h3>
-                                <p className="text-sm text-slate-300">Select your account and enter the password.</p>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                {selectedRole && (
+                                    <div className={`flex-shrink-0 p-3 rounded-lg ${roleIconMap[selectedRole].bgColor} ${roleIconMap[selectedRole].color}`}>
+                                        {roleIconMap[selectedRole].icon}
+                                    </div>
+                                )}
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">{selectedRole ? roleLabels[selectedRole] : 'Sign in'}</h3>
+                                    <p className="text-sm text-slate-300">Enter your {selectedRole === 'class-leader' ? 'class and access code' : 'credentials'}</p>
+                                </div>
                             </div>
                             <button onClick={() => setShowUserModal(false)} className="text-slate-300 hover:text-white" aria-label="Close">×</button>
                         </div>
