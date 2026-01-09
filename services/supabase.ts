@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, ClassLeader } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, SundayLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, ClassLeader } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -258,6 +258,20 @@ const mapLockFromDB = (l: any): MonthLock => ({
     lockedAt: l.locked_at
 });
 
+const mapSundayLockToDB = (l: SundayLock) => ({
+    date: l.date,
+    is_locked: l.isLocked,
+    locked_by: l.lockedBy,
+    locked_at: toTimestamp(l.lockedAt)
+});
+
+const mapSundayLockFromDB = (l: any): SundayLock => ({
+    date: l.date,
+    isLocked: l.is_locked,
+    lockedBy: l.locked_by,
+    lockedAt: l.locked_at
+});
+
 const mapSettingsToDB = (s: Settings) => ({
     id: 'app_settings', // Single row for app-wide settings
     currency: s.currency,
@@ -360,7 +374,7 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const [members, entries, users, history, monthLocks, settings, classLeaders] = await Promise.all([
+    const [members, entries, users, history, monthLocks, sundayLocks, settings, classLeaders] = await Promise.all([
         withTimeout('members fetch', (async () => {
             const { data, error } = await supabase.from('members').select('*');
             if (error) throw new Error(`Fetch Members failed: ${error.message}`);
@@ -390,6 +404,15 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
                 return [] as MonthLock[];
             }
         })()),
+        withTimeout('sunday locks fetch', (async () => {
+            try {
+                const { data } = await supabase.from('sunday_locks').select('*');
+                return data ? data.map(mapSundayLockFromDB) : [];
+            } catch (e) {
+                console.log("Sunday locks table may not exist yet.");
+                return [] as SundayLock[];
+            }
+        })()),
         withTimeout('settings fetch', (async () => {
             try {
                 const { data } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
@@ -410,7 +433,7 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
         })())
     ]);
 
-    return { members, entries, users, history, monthLocks, settings, classLeaders };
+    return { members, entries, users, history, monthLocks, sundayLocks, settings, classLeaders };
 };
 
 // --- E-Transfers ---
@@ -679,6 +702,29 @@ export const saveMonthLockToSupabase = async (url: string, key: string, lock: Mo
     const { error } = await supabase.from('month_locks').upsert([mapLockToDB(lock)]);
     if (error) throw new Error(`Save month lock failed: ${error.message}`);
     return { success: true };
+};
+
+export const saveSundayLockToSupabase = async (url: string, key: string, lock: SundayLock) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    const { error } = await supabase.from('sunday_locks').upsert([mapSundayLockToDB(lock)]);
+    if (error) throw new Error(`Save Sunday lock failed: ${error.message}`);
+    return { success: true };
+};
+
+export const loadSundayLocksFromSupabase = async (url: string, key: string): Promise<SundayLock[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+
+    try {
+        const { data, error } = await supabase.from('sunday_locks').select('*');
+        if (error) throw error;
+        return data ? data.map(mapSundayLockFromDB) : [];
+    } catch (e) {
+        console.log("Sunday locks table may not exist yet.");
+        return [];
+    }
 };
 
 export const saveSettingsToSupabase = async (url: string, key: string, settings: Settings) => {

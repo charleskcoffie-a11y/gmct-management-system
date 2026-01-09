@@ -2,7 +2,7 @@
 // components/Dashboard.tsx
 import React, { useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import type { Entry, Settings, User, Member, MonthLock } from '../types';
+import type { Entry, Settings, User, Member, MonthLock, SundayLock } from '../types';
 import { formatCurrency, capitalize, isMonthLocked } from '../utils';
 import ChartModal from './ChartModal';
 
@@ -12,10 +12,23 @@ interface DashboardProps {
     settings: Settings;
     currentUser: User;
     monthLocks?: MonthLock[];
+    sundayLocks?: SundayLock[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [] }) => {
+const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [], sundayLocks = [] }) => {
     const [expandedChart, setExpandedChart] = useState<'trend' | 'pie' | null>(null);
+    
+    // Get the current or most recent Sunday
+    const getCurrentSunday = () => {
+        const today = new Date();
+        const day = today.getDay();
+        const diff = day === 0 ? 0 : day; // If today is Sunday (0), diff is 0; otherwise, days since last Sunday
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() - diff);
+        return sunday.toISOString().substring(0, 10);
+    };
+    
+    const currentSundayDate = getCurrentSunday();
     
     // --- Data Processing ---
     const activeEntries = entries.filter(e => !e.deleted);
@@ -90,19 +103,85 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
     // --- Notification / Alerts Logic ---
     const notifications = useMemo(() => {
         const alerts = [];
-        const currentMonth = new Date().toISOString().substring(0, 7);
-        const lastMonth = new Date();
-        lastMonth.setMonth(lastMonth.getMonth() - 1);
-        const lastMonthKey = lastMonth.toISOString().substring(0, 7);
-
-        // 1. Lock Status
-        const isCurrentLocked = isMonthLocked(currentMonth + "-01", monthLocks);
-        const isLastLocked = isMonthLocked(lastMonthKey + "-01", monthLocks);
+        const today = new Date();
+        const currentMonth = today.toISOString().substring(0, 7);
         
-        if (!isLastLocked) alerts.push({ type: 'warning', msg: `${lastMonth.toLocaleDateString('en-US', {month: 'long'})} is still UNLOCKED. Remember to close the month.`});
-        if (isCurrentLocked) alerts.push({ type: 'info', msg: `Current month (${new Date().toLocaleDateString('en-US', {month: 'long'})}) is LOCKED.`});
+        const canLock = currentUser.role === 'admin' || currentUser.role === 'finance-chair';
 
-        // 2. New Members
+        // 1. Check for unlocked past months (any month before current month that is not locked)
+        if (canLock) {
+            const checkDate = new Date(today);
+            checkDate.setMonth(checkDate.getMonth() - 1); // Start from last month
+            
+            // Check up to 12 months back
+            for (let i = 0; i < 12; i++) {
+                const monthKey = checkDate.toISOString().substring(0, 7);
+                const isLocked = isMonthLocked(monthKey + "-01", monthLocks);
+                
+                if (!isLocked) {
+                    const monthName = checkDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    alerts.push({ type: 'warning', msg: `${monthName} is still UNLOCKED. Please lock in Financial Control.`});
+                }
+                
+                checkDate.setMonth(checkDate.getMonth() - 1);
+            }
+        }
+
+        // 2. Check for last Sunday of current month
+        if (canLock) {
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            const lastDayOfMonth = new Date(year, month + 1, 0);
+            const lastSunday = new Date(lastDayOfMonth);
+            
+            // Find the last Sunday of the month
+            const dayOfWeek = lastDayOfMonth.getDay();
+            if (dayOfWeek !== 0) {
+                lastSunday.setDate(lastDayOfMonth.getDate() - dayOfWeek);
+            }
+            
+            const lastSundayDate = lastSunday.toISOString().substring(0, 10);
+            const lastSundayLock = sundayLocks.find(l => l.date === lastSundayDate);
+            const isLastSundayLocked = lastSundayLock?.isLocked || false;
+            
+            if (!isLastSundayLocked) {
+                const sundayDisplay = lastSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                alerts.push({ type: 'warning', msg: `Last Sunday of current month (${sundayDisplay}) is UNLOCKED. Lock it in Financial Control.`});
+            }
+        }
+
+        // 3. Check for current/most recent Sunday
+        if (canLock) {
+            const currentSundayLock = sundayLocks.find(l => l.date === currentSundayDate);
+            const isCurrentSundayLocked = currentSundayLock?.isLocked || false;
+            
+            if (!isCurrentSundayLocked) {
+                const sundayDisplay = new Date(currentSundayDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                alerts.push({ type: 'warning', msg: `This week's Sunday (${sundayDisplay}) is UNLOCKED. Lock it in Financial Control.`});
+            }
+        }
+
+        // 4. Check for any past Sundays that are unlocked (Sundays before current Sunday)
+        if (canLock) {
+            const checkSunday = new Date(currentSundayDate);
+            checkSunday.setDate(checkSunday.getDate() - 7); // Start from last week
+            
+            // Check up to 12 weeks back
+            for (let i = 0; i < 12; i++) {
+                const sundayDateStr = checkSunday.toISOString().substring(0, 10);
+                const sundayLock = sundayLocks.find(l => l.date === sundayDateStr);
+                const isSundayLocked = sundayLock?.isLocked || false;
+                
+                if (!isSundayLocked) {
+                    const sundayDisplay = checkSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    alerts.push({ type: 'warning', msg: `Sunday ${sundayDisplay} is UNLOCKED. Please lock in Financial Control.`});
+                }
+                
+                checkSunday.setDate(checkSunday.getDate() - 7); // Go back another week
+            }
+        }
+
+        // 5. New Members (show to everyone)
         const recentMembers = members.filter(m => {
             if (!m.createdAt) return false;
             const created = new Date(m.createdAt);
@@ -116,7 +195,7 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
         }
 
         return alerts;
-    }, [monthLocks, members]);
+    }, [monthLocks, sundayLocks, members, currentSundayDate, currentUser.role]);
 
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {

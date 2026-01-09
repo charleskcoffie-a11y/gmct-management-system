@@ -272,6 +272,13 @@ export interface MonthLock {
     lockedAt?: string;
 }
 
+export interface SundayLock {
+    date: string; // Format "YYYY-MM-DD" - the Sunday date
+    isLocked: boolean;
+    lockedBy?: string;
+    lockedAt?: string;
+}
+
 export interface WesleyHallReceipt {
     id: string;
     date: string; // ISO format YYYY-MM-DD

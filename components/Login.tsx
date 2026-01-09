@@ -1,26 +1,119 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ChurchIcon } from './icons';
-import type { User, UserRole } from '../types';
+import type { User, UserRole, Settings } from '../types';
+
+type LoginRequest = { username: string; password?: string; skipPassword?: boolean; role?: UserRole };
 
 interface LoginProps {
     users: User[];
-    onLogin: (username: string, password: string) => void;
+    onLogin: (request: LoginRequest) => void;
     error: string | null;
+    settings: Settings;
 }
 
-const Login: React.FC<LoginProps> = ({ users, onLogin, error }) => {
-    const [username, setUsername] = useState('');
+const roleLabels: Record<UserRole, string> = {
+    admin: 'Administrator',
+    'finance-chair': 'Finance Chair',
+    'finance-team': 'Finance Team',
+    'data-entry': 'Data Entry',
+    pastor: 'Pastor',
+    statistician: 'Statistician',
+    'class-leader': 'Class Leader',
+};
+
+const roleNotes: Partial<Record<UserRole, string>> = {
+    'finance-team': 'Select finance team member to continue',
+    'finance-chair': 'Finance leadership access',
+    'data-entry': 'Auto-login enabled',
+    'class-leader': 'Use class access code',
+};
+
+const financeRoles: UserRole[] = ['finance-team'];
+
+const hiddenRoles: UserRole[] = ['finance-chair'];
+
+const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
+    const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+    const [selectedUser, setSelectedUser] = useState('');
+    const [selectedClass, setSelectedClass] = useState('');
     const [password, setPassword] = useState('');
+    const [showUserModal, setShowUserModal] = useState(false);
+    const [localError, setLocalError] = useState<string | null>(null);
 
     // Ensure ClassLeader option is always available even if not yet in Supabase
-    const userOptions: User[] = users.some(u => u.username.toLowerCase() === 'classleader')
-        ? users
-        : [...users, { username: 'ClassLeader', role: 'class-leader' as UserRole }];
+    const userOptions: User[] = useMemo(() => (
+        users.some(u => u.username.toLowerCase() === 'classleader')
+            ? users
+            : [...users, { username: 'ClassLeader', role: 'class-leader' as UserRole }]
+    ), [users]);
+
+    const roles = useMemo(
+        () => Array.from(new Set(userOptions.map(u => u.role))).filter(r => !hiddenRoles.includes(r)),
+        [userOptions]
+    );
+
+    const getUsersForRole = (role: UserRole | null) => {
+        if (!role) return [];
+        // When finance-team is selected, show both finance-team and finance-chair users
+        if (role === 'finance-team') return userOptions.filter(u => u.role === 'finance-team' || u.role === 'finance-chair');
+        return userOptions.filter(u => u.role === role);
+    };
+
+    const handleRoleSelect = (role: UserRole) => {
+        setSelectedRole(role);
+        setPassword('');
+        setLocalError(null);
+
+        if (role === 'data-entry') {
+            const dataEntryUser = getUsersForRole(role)[0];
+            if (!dataEntryUser) {
+                setLocalError('No Data Entry user configured. Contact Admin.');
+                return;
+            }
+            onLogin({ username: dataEntryUser.username, password: dataEntryUser.password, skipPassword: true, role });
+            return;
+        }
+
+        if (role === 'class-leader') {
+            setSelectedClass('1');
+            setSelectedUser('ClassLeader');
+        } else {
+            const roleUsers = getUsersForRole(role);
+            setSelectedUser(roleUsers[0]?.username || '');
+        }
+        setShowUserModal(true);
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onLogin(username, password);
+        if (!selectedRole) {
+            setLocalError('Select a role to continue.');
+            return;
+        }
+        if (selectedRole === 'class-leader') {
+            if (!selectedClass) {
+                setLocalError('Select a class.');
+                return;
+            }
+            const classAccessCodes = settings.classAccessCodes || {};
+            const expectedPassword = classAccessCodes[selectedClass];
+            if (!expectedPassword || password !== expectedPassword) {
+                setLocalError('Invalid class access code.');
+                return;
+            }
+            setLocalError(null);
+            onLogin({ username: 'ClassLeader', password, role: selectedRole });
+        } else {
+            if (!selectedUser) {
+                setLocalError('Choose a user for this role.');
+                return;
+            }
+            setLocalError(null);
+            onLogin({ username: selectedUser, password, role: selectedRole });
+        }
     };
+
+    const displayedError = localError || error;
 
     return (
         <div className="relative min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-900 to-fuchsia-900 text-slate-100">
@@ -28,68 +121,47 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error }) => {
             <div className="relative w-full max-w-6xl">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Sign-in Card */}
-                    <div className="backdrop-blur-md bg-white/10 border border-white/10 shadow-2xl rounded-2xl overflow-hidden">
+                    <div className="backdrop-blur-md bg-white/10 border border-white/10 shadow-2xl rounded-2xl overflow-hidden relative">
                         <div className="px-8 pt-8 pb-4 flex items-center gap-4">
                             <div className="shrink-0">
                                 <ChurchIcon />
                             </div>
                             <div>
                                 <h1 className="text-2xl font-extrabold tracking-tight">GMCT Management System</h1>
-                                <p className="text-sm text-indigo-100/80">Welcome back — please sign in to continue</p>
+                                <p className="text-sm text-indigo-100/80">Choose your role to continue</p>
                             </div>
                         </div>
-                        <div className="px-8 pb-8">
-                            <form onSubmit={handleSubmit} className="space-y-5">
-                                <div>
-                                    <label htmlFor="username" className="block font-semibold text-indigo-100/90">Username</label>
-                                    <div className="mt-1 relative">
-                                        <select
-                                            id="username"
-                                            name="username"
-                                            required
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
-                                            className="appearance-none block w-full px-3 py-2 rounded-lg bg-slate-950/40 border border-white/10 text-slate-100 placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
-                                        >
-                                            <option value="" disabled>Select user</option>
-                                            {userOptions.map(user => (
-                                                <option key={user.username} value={user.username}>{user.username}</option>
-                                            ))}
-                                        </select>
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300/60 text-xs">{users.length} users</span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label htmlFor="password" className="block font-semibold text-indigo-100/90">Password</label>
-                                    <div className="mt-1">
-                                        <input
-                                            id="password"
-                                            name="password"
-                                            type="password"
-                                            autoComplete="current-password"
-                                            required
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            className="block w-full px-3 py-2 rounded-lg bg-slate-950/40 border border-white/10 text-slate-100 placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
-                                        />
-                                    </div>
-                                </div>
-
-                                {error && <p className="text-sm text-red-300 bg-red-900/30 border border-red-400/30 rounded-lg px-3 py-2">{error}</p>}
-
-                                <div className="pt-1">
+                        <div className="px-8 pb-8 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {roles.map(role => (
                                     <button
-                                        type="submit"
-                                        className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold text-white bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 shadow-lg shadow-indigo-900/30 focus:outline-none focus:ring-2 focus:ring-white/30"
+                                        key={role}
+                                        type="button"
+                                        onClick={() => handleRoleSelect(role)}
+                                        className={`text-left w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 shadow hover:border-indigo-300/50 hover:bg-slate-900/60 transition focus:outline-none focus:ring-2 focus:ring-indigo-400/60 ${selectedRole === role ? 'border-indigo-300 bg-slate-900/70' : ''}`}
                                     >
-                                        <span>Sign in</span>
-                                        <span aria-hidden>→</span>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-semibold text-indigo-50">{roleLabels[role]}</p>
+                                                <p className="text-xs text-indigo-100/70">{roleNotes[role] || 'Sign in with your account'}</p>
+                                            </div>
+                                            {role === 'data-entry' && (
+                                                <span className="text-[10px] uppercase font-bold text-emerald-200 bg-emerald-600/30 px-2 py-1 rounded-full">Auto</span>
+                                            )}
+                                            {financeRoles.includes(role) && (
+                                                <span className="text-[10px] uppercase font-bold text-amber-200 bg-amber-600/30 px-2 py-1 rounded-full">Finance</span>
+                                            )}
+                                        </div>
                                     </button>
-                                </div>
-                            </form>
-                            <p className="mt-4 text-sm text-indigo-100/70">Default Admin: <span className="font-semibold">Admin</span> / <span className="font-semibold">GMCT</span></p>
-                            <div className="mt-6 pt-4 border-t border-white/10 space-y-3">
+                                ))}
+                            </div>
+
+                            {displayedError && (
+                                <p className="text-sm text-red-300 bg-red-900/30 border border-red-400/30 rounded-lg px-3 py-2">{displayedError}</p>
+                            )}
+
+                            <p className="text-sm text-indigo-100/70">Default Admin: <span className="font-semibold">Admin</span> / <span className="font-semibold">GMCT</span></p>
+                            <div className="pt-4 border-t border-white/10 space-y-3">
                                 <div>
                                     <p className="text-xs font-semibold text-indigo-100 mb-2">Security Tips</p>
                                     <ul className="text-xs text-indigo-100/70 space-y-1">
@@ -171,6 +243,70 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error }) => {
                     </div>
                 </div>
             </div>
+
+            {showUserModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md rounded-2xl bg-slate-900 shadow-2xl border border-white/10 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Sign in</h3>
+                                <p className="text-sm text-slate-300">Select your account and enter the password.</p>
+                            </div>
+                            <button onClick={() => setShowUserModal(false)} className="text-slate-300 hover:text-white" aria-label="Close">×</button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            {selectedRole === 'class-leader' ? (
+                                <div>
+                                    <label className="block text-sm font-semibold text-indigo-100/90 mb-1">Class</label>
+                                    <select
+                                        value={selectedClass}
+                                        onChange={(e) => setSelectedClass(e.target.value)}
+                                        className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
+                                    >
+                                        {Array.from({ length: settings.maxClasses || 14 }, (_, i) => i + 1).map(num => (
+                                            <option key={num} value={String(num)}>Class {num}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-sm font-semibold text-indigo-100/90 mb-1">User</label>
+                                    <select
+                                        value={selectedUser}
+                                        onChange={(e) => setSelectedUser(e.target.value)}
+                                        className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
+                                    >
+                                        <option value="" disabled>Select user</option>
+                                        {getUsersForRole(selectedRole).map(user => (
+                                            <option key={user.username} value={user.username}>{user.username}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-semibold text-indigo-100/90 mb-1">Password / Access Code</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
+                                    autoFocus
+                                />
+                            </div>
+
+                            {displayedError && (
+                                <p className="text-sm text-red-300 bg-red-900/30 border border-red-400/30 rounded-lg px-3 py-2">{displayedError}</p>
+                            )}
+
+                            <div className="flex justify-end gap-3 pt-1">
+                                <button type="button" onClick={() => { setShowUserModal(false); setPassword(''); }} className="px-4 py-2 rounded-lg border border-white/10 text-slate-100 hover:bg-slate-800">Cancel</button>
+                                <button type="submit" className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white font-semibold shadow">Continue</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
