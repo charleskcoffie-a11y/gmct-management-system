@@ -308,6 +308,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                                                 <div>
                                                     <div className="font-semibold text-gray-900">{entry.memberName}</div>
                                                     <div className="text-sm text-gray-600 mt-1">📅 {entry.date}</div>
+                                                    <div className="text-xs text-gray-500 mt-1">Created by: {entry.createdBy || 'Unknown'}{entry.updatedBy ? ` | Updated by: ${entry.updatedBy}` : ''}</div>
                                                 </div>
                                                 <div className="text-right">
                                                     <div className="font-bold text-green-700 text-lg">

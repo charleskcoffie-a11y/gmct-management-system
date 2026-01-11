@@ -354,14 +354,21 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {activeEntries.slice(0, 5).map(entry => (
-                                        <tr key={entry.id} className="border-t border-cyan-100 hover:bg-cyan-50/50">
-                                            <td className="px-2 py-3 text-slate-700">{entry.date}</td>
-                                            <td className="px-2 py-3 font-medium text-slate-900">{entry.memberName}</td>
-                                            <td className="px-2 py-3 text-slate-700 capitalize"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">{entry.type.replace('-', ' ')}</span></td>
-                                            <td className="px-2 py-3 text-right font-bold text-slate-900">{formatCurrency(entry.amount, settings.currency)}</td>
-                                        </tr>
-                                    ))}
+                                    {activeEntries.slice(0, 5).map(entry => {
+                                        const tooltip = `Created by: ${entry.createdBy || 'Unknown'}${entry.updatedBy ? `\nUpdated by: ${entry.updatedBy}` : ''}`;
+                                        return (
+                                            <tr
+                                                key={entry.id}
+                                                className="border-t border-cyan-100 hover:bg-cyan-50/50 group"
+                                                title={tooltip}
+                                            >
+                                                <td className="px-2 py-3 text-slate-700">{entry.date}</td>
+                                                <td className="px-2 py-3 font-medium text-slate-900">{entry.memberName}</td>
+                                                <td className="px-2 py-3 text-slate-700 capitalize"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">{entry.type.replace('-', ' ')}</span></td>
+                                                <td className="px-2 py-3 text-right font-bold text-slate-900">{formatCurrency(entry.amount, settings.currency)}</td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

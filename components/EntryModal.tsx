@@ -286,7 +286,15 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                     </div>
                                     <div className="md:col-span-3">
                                         <label className="block text-sm font-semibold text-slate-700 mb-2">Full Name</label>
-                                        <input name="memberName" list="members-list" value={formData.memberName} onChange={handleMemberNameChange} placeholder="Search member name..." className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all" />
+                                        <input 
+                                            name="memberName" 
+                                            list="members-list" 
+                                            value={formData.memberName} 
+                                            onChange={handleMemberNameChange} 
+                                            placeholder="Search member name..." 
+                                            className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all" 
+                                            title={`Created by: ${entry?.createdBy || 'Unknown'}\nUpdated by: ${entry?.updatedBy || 'Unknown'}`}
+                                        />
                                         <datalist id="members-list">
                                             {searchFilteredMembers.slice(0, 10).map(m => <option key={m.id} value={m.name} />)}
                                         </datalist>
@@ -388,6 +396,14 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                         </div>
 
                         <div className="p-6 bg-gradient-to-r from-slate-100 to-slate-50 rounded-b-2xl flex justify-between items-center border-t-2 border-slate-200">
+                            <div className="flex flex-col text-xs text-slate-500">
+                                {entry && (
+                                    <>
+                                        <span>Created by: <span className="font-semibold text-slate-700">{entry.createdBy || 'Unknown'}</span></span>
+                                        <span>Last edited by: <span className="font-semibold text-slate-700">{entry.updatedBy || entry.createdBy || 'Unknown'}</span></span>
+                                    </>
+                                )}
+                            </div>
                             {entry ? (
                                 <button type="button" onClick={() => onDelete(entry.id)} className="text-red-600 font-bold hover:bg-red-50 px-4 py-2 rounded-lg transition-all flex items-center gap-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

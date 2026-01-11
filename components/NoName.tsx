@@ -305,78 +305,85 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-base">
-                            {sortedEntries.map(entry => (
-                                <tr key={entry.id} className="hover:bg-purple-50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap font-semibold">
-                                        {editingId === entry.id ? (
-                                            <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="border-2 border-slate-300 rounded-lg p-2 text-base" />
-                                        ) : (
-                                            entry.date
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 text-right font-bold text-lg">
-                                        {editingId === entry.id ? (
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={editAmount}
-                                                onChange={e => setEditAmount(e.target.value)}
-                                                className="border-2 border-slate-300 rounded-lg p-2 w-32 text-right text-base"
-                                            />
-                                        ) : (
-                                            <span className="text-purple-600">{formatCurrency(entry.amount, settings.currency)}</span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 max-w-xs">
-                                        {editingId === entry.id ? (
-                                            <input
-                                                type="text"
-                                                value={editNotes}
-                                                onChange={e => setEditNotes(e.target.value)}
-                                                className="border-2 border-slate-300 rounded-lg p-2 w-full text-base"
-                                            />
-                                        ) : (
-                                            <span className="text-slate-600">{entry.notes || '-'}</span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-slate-500 font-medium">{entry.createdBy || '-'}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex gap-2 justify-end">
+                            {sortedEntries.map(entry => {
+                                const tooltip = `Created by: ${entry.createdBy || 'Unknown'}${entry.updatedAt ? `\nLast edited: ${new Date(entry.updatedAt).toLocaleString()}` : ''}`;
+                                return (
+                                    <tr
+                                        key={entry.id}
+                                        className="hover:bg-purple-50 transition-colors group"
+                                        title={tooltip}
+                                    >
+                                        <td className="px-6 py-4 whitespace-nowrap font-semibold">
                                             {editingId === entry.id ? (
-                                                <>
-                                                    <button onClick={saveEdit} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`bg-green-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-green-600 hover:scale-105'}` }>
-                                                        Save
-                                                    </button>
-                                                    <button onClick={cancelEdit} className="bg-slate-400 hover:bg-slate-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all hover:scale-105">
-                                                        Cancel
-                                                    </button>
-                                                </>
+                                                <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="border-2 border-slate-300 rounded-lg p-2 text-base" />
                                             ) : (
-                                                <>
-                                                    <button
-                                                        onClick={() => startEdit(entry)}
-                                                        disabled={!isConnected}
-                                                        title={!isConnected ? 'Requires cloud connection' : undefined}
-                                                        className={`bg-purple-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-purple-600 hover:scale-105'}`}
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(entry.id)}
-                                                        disabled={!isConnected}
-                                                        title={!isConnected ? 'Requires cloud connection' : undefined}
-                                                        className={`bg-red-500 text-white font-bold px-3 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-red-600 hover:scale-105'}`}
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                                        </svg>
-                                                    </button>
-                                                </>
+                                                entry.date
                                             )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-bold text-lg">
+                                            {editingId === entry.id ? (
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={editAmount}
+                                                    onChange={e => setEditAmount(e.target.value)}
+                                                    className="border-2 border-slate-300 rounded-lg p-2 w-32 text-right text-base"
+                                                />
+                                            ) : (
+                                                <span className="text-purple-600">{formatCurrency(entry.amount, settings.currency)}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 max-w-xs">
+                                            {editingId === entry.id ? (
+                                                <input
+                                                    type="text"
+                                                    value={editNotes}
+                                                    onChange={e => setEditNotes(e.target.value)}
+                                                    className="border-2 border-slate-300 rounded-lg p-2 w-full text-base"
+                                                />
+                                            ) : (
+                                                <span className="text-slate-600">{entry.notes || '-'}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-slate-500 font-medium">{entry.createdBy || '-'}</td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex gap-2 justify-end">
+                                                {editingId === entry.id ? (
+                                                    <>
+                                                        <button onClick={saveEdit} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`bg-green-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-green-600 hover:scale-105'}` }>
+                                                            Save
+                                                        </button>
+                                                        <button onClick={cancelEdit} className="bg-slate-400 hover:bg-slate-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all hover:scale-105">
+                                                            Cancel
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={() => startEdit(entry)}
+                                                            disabled={!isConnected}
+                                                            title={!isConnected ? 'Requires cloud connection' : undefined}
+                                                            className={`bg-purple-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-purple-600 hover:scale-105'}`}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(entry.id)}
+                                                            disabled={!isConnected}
+                                                            title={!isConnected ? 'Requires cloud connection' : undefined}
+                                                            className={`bg-red-500 text-white font-bold px-3 py-2 rounded-lg text-sm transition-all ${!isConnected ? 'opacity-60 cursor-not-allowed' : 'hover:bg-red-600 hover:scale-105'}`}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                         <tfoot>
                             <tr className="bg-gradient-to-r from-purple-50 to-pink-50 border-t-2 border-purple-300">

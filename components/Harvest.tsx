@@ -382,7 +382,11 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                     const canEdit = !entry.deleted && currentUser?.role !== 'pastor';
                                     
                                     return (
-                                        <div key={entry.id} className={`rounded-xl border-2 p-5 transition-all ${entry.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-amber-50 border-slate-200 hover:shadow-md'}`}>
+                                        <div 
+                                            key={entry.id} 
+                                            className={`rounded-xl border-2 p-5 transition-all ${entry.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-amber-50 border-slate-200 hover:shadow-md'}`}
+                                            title={`Created by: ${entry.createdBy || 'Unknown'}\nUpdated by: ${entry.updatedBy || 'Unknown'}`}
+                                        >
                                             <div className="flex justify-between items-start">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-3 mb-2">
@@ -397,6 +401,9 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                                         <div>
                                                             <span className="text-slate-500 font-medium">Class:</span>
                                                             <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
+                                                        </div>
+                                                        <div className="col-span-2 text-xs text-slate-500 mt-1">
+                                                            Created by: {entry.createdBy || 'Unknown'}{entry.updatedBy ? ` | Updated by: ${entry.updatedBy}` : ''}
                                                         </div>
                                                     </div>
                                                     {entry.note && (

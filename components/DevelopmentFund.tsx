@@ -338,6 +338,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             amount: amountVal,
             note: row.note || undefined,
             createdAt: new Date().toISOString(),
+            createdBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+            updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
             deleted: false
         };
     };
@@ -380,7 +382,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         try {
             const updatedEntry = entries.find(e => e.id === editingId);
             if (updatedEntry) {
-                const newEntry = { ...updatedEntry, date: editDate, amount: amountVal, note: editDesc };
+                const newEntry = { ...updatedEntry, date: editDate, amount: amountVal, note: editDesc, updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown' };
                 if (settings.supabaseUrl && settings.supabaseKey) {
                     await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntry);
                 }
@@ -540,11 +542,21 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                 <input type="date" value={editDate} onChange={e=>setEditDate(e.target.value)} className="border-slate-300 rounded-md p-1" />
                                             ) : entry.date}
                                         </td>
-                                        <td className="px-4 py-3 font-medium text-slate-800">{entry.memberName}</td>
+                                        <td className="px-4 py-3 font-medium text-slate-800">
+                                            <span title={`Created by: ${entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}\nUpdated by: ${entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}`}>
+                                                {entry.memberName}
+                                            </span>
+                                        </td>
                                         <td className="px-4 py-3 text-center">{entry.classNumber}</td>
                                         <td className="px-4 py-3 truncate max-w-[150px]">
                                             {editingId===entry.id ? (
-                                                <input type="text" value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="border-slate-300 rounded-md p-1 w-full" />
+                                                <>
+                                                    <input type="text" value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="border-slate-300 rounded-md p-1 w-full" />
+                                                    <div className="text-xs text-slate-500 mt-2">
+                                                        Created by: {entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}<br/>
+                                                        Updated by: {entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}
+                                                    </div>
+                                                </>
                                             ) : entry.description}
                                         </td>
                                         <td className="px-4 py-3 text-right font-bold text-slate-800">
