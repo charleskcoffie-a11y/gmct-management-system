@@ -298,12 +298,16 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
 
             {/* Recent Entries & Breakdown (Hidden for Pastor Role if required, but showing aggregate pie chart is usually fine) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-violet-200">
+                <div className="relative overflow-hidden bg-gradient-to-br from-violet-50 via-fuchsia-50 to-rose-50 p-6 rounded-2xl shadow-2xl border-2 border-violet-200">
+                    <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-violet-200/20"></div>
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold text-violet-800">Contribution by Type</h3>
+                        <h3 className="text-lg font-bold text-violet-800 flex items-center gap-2">
+                            <svg className="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 11V7a1 1 0 112 0v4h4a1 1 0 110 2h-4v4a1 1 0 11-2 0v-4H7a1 1 0 110-2h4z" /></svg>
+                            Contribution by Type
+                        </h3>
                         <button 
                             onClick={() => setExpandedChart('pie')}
-                            className="p-2 hover:bg-slate-100 rounded-lg transition text-violet-600"
+                            className="p-2 hover:bg-violet-100 rounded-lg transition text-violet-600"
                             title="Expand to full screen"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -312,7 +316,7 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                         </button>
                     </div>
                     {pieData.length > 0 ? (
-                        <div style={{ width: '100%', height: 300 }}>
+                        <div style={{ width: '100%', height: 320 }}>
                             <ResponsiveContainer>
                                 <PieChart>
                                     <Pie
@@ -320,57 +324,92 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                                         cx="50%"
                                         cy="50%"
                                         labelLine={false}
-                                        outerRadius={100}
+                                        outerRadius={110}
+                                        innerRadius={60}
                                         fill="#8884d8"
                                         dataKey="value"
                                         nameKey="name"
+                                        isAnimationActive={true}
+                                        animationDuration={1200}
+                                        label={({ name, value, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
                                     >
                                         {pieData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            <Cell key={`cell-${index}`} fill={`url(#pieGradient${index})`} />
                                         ))}
                                     </Pie>
+                                    {/* Gradients for each slice */}
+                                    <defs>
+                                        {pieData.map((entry, index) => (
+                                            <linearGradient id={`pieGradient${index}`} key={index} x1="0" y1="0" x2="1" y2="1">
+                                                <stop offset="0%" stopColor={COLORS[index % COLORS.length]} stopOpacity="0.8" />
+                                                <stop offset="100%" stopColor={COLORS[(index+1) % COLORS.length]} stopOpacity="0.9" />
+                                            </linearGradient>
+                                        ))}
+                                    </defs>
                                     <Tooltip formatter={(value: number) => formatCurrency(value, settings.currency)} />
-                                    <Legend />
+                                    {/* Custom Legend */}
+                                    <Legend content={() => (
+                                        <div className="flex flex-wrap gap-4 justify-center mt-4">
+                                            {pieData.map((entry, index) => (
+                                                <div key={entry.name} className="flex items-center gap-2 text-sm font-semibold">
+                                                    <span className="inline-block w-4 h-4 rounded-full" style={{ background: `linear-gradient(135deg, ${COLORS[index % COLORS.length]}, ${COLORS[(index+1) % COLORS.length]})` }}></span>
+                                                    <span>{entry.name}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
                     ) : (
-                         <p className="text-slate-500 text-center py-12">No contributions recorded yet.</p>
+                        <p className="text-slate-500 text-center py-12">No contributions recorded yet.</p>
                     )}
                 </div>
                 
                 {/* Hide recent entries list for Pastor role for privacy */}
                 {currentUser.role !== 'pastor' && (
-                    <div className="bg-white p-4 rounded-xl shadow-lg border-2 border-cyan-200">
-                        <h3 className="text-lg font-bold text-cyan-800 mb-4 px-2">Recent Entries</h3>
-                        <div className="overflow-y-auto max-h-64">
-                            <table className="w-full text-left">
-                                <thead className="text-sm text-slate-700 sticky top-0 bg-cyan-50 z-10 border-b border-cyan-200">
-                                    <tr>
-                                        <th className="px-2 py-2">Date</th>
-                                        <th className="px-2 py-2">Member</th>
-                                        <th className="px-2 py-2">Type</th>
-                                        <th className="px-2 py-2 text-right">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {activeEntries.slice(0, 5).map(entry => {
-                                        const tooltip = `Created by: ${entry.createdBy || 'Unknown'}${entry.updatedBy ? `\nUpdated by: ${entry.updatedBy}` : ''}`;
-                                        return (
-                                            <tr
-                                                key={entry.id}
-                                                className="border-t border-cyan-100 hover:bg-cyan-50/50 group"
-                                                title={tooltip}
-                                            >
-                                                <td className="px-2 py-3 text-slate-700">{entry.date}</td>
-                                                <td className="px-2 py-3 font-medium text-slate-900">{entry.memberName}</td>
-                                                <td className="px-2 py-3 text-slate-700 capitalize"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">{entry.type.replace('-', ' ')}</span></td>
-                                                <td className="px-2 py-3 text-right font-bold text-slate-900">{formatCurrency(entry.amount, settings.currency)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                    <div className="bg-white p-4 rounded-2xl shadow-2xl border-2 border-cyan-200">
+                        <h3 className="text-lg font-bold text-cyan-800 mb-4 px-2 flex items-center gap-2">
+                            <svg className="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>
+                            Recent Entries
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                            {activeEntries.slice(0, 5).map(entry => {
+                                const tooltip = `Created by: ${entry.createdBy || 'Unknown'}${entry.updatedBy ? `\nUpdated by: ${entry.updatedBy}` : ''}`;
+                                // Icon by type
+                                const typeIcon = {
+                                    tithe: <svg className="w-7 h-7 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>,
+                                    offering: <svg className="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>,
+                                    "development-fund": <svg className="w-7 h-7 text-fuchsia-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>,
+                                    harvest: <svg className="w-7 h-7 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>,
+                                    "no-name": <svg className="w-7 h-7 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>,
+                                };
+                                return (
+                                    <div
+                                        key={entry.id}
+                                        className="flex items-center gap-4 bg-cyan-50/80 border border-cyan-100 rounded-xl p-3 shadow hover:shadow-lg transition group cursor-pointer relative"
+                                        title={tooltip}
+                                    >
+                                        <div className="shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-white border-2 border-cyan-200 shadow-inner">
+                                            {typeIcon[entry.type] || <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="2" /></svg>}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-slate-900 text-lg">{formatCurrency(entry.amount, settings.currency)}</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700 font-bold capitalize">{entry.type.replace('-', ' ')}</span>
+                                            </div>
+                                            <div className="text-slate-700 text-sm font-medium truncate">{entry.memberName}</div>
+                                            <div className="text-slate-500 text-xs">{entry.date}</div>
+                                        </div>
+                                        <div className="ml-2 flex flex-col items-end">
+                                            <span className="text-[10px] text-slate-400 group-hover:text-slate-600 transition" style={{whiteSpace:'pre-line'}}>
+                                                {entry.createdBy && <span>By: {entry.createdBy}</span>}
+                                                {entry.updatedBy && <span>\nEdit: {entry.updatedBy}</span>}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 )}

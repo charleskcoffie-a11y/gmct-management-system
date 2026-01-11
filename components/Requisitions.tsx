@@ -186,77 +186,92 @@ export default function Requisitions({ settings, currentUser }: Props) {
 
       {editing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl p-0 overflow-hidden">
-            <div className="bg-gradient-to-r from-slate-900 to-indigo-900 px-6 py-4 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-white/60 font-semibold">Requisition</div>
-                  <h3 className="text-xl font-extrabold">{editing.title ? 'Edit Requisition' : 'New Requisition'}</h3>
-                </div>
+          <div className="relative bg-gradient-to-br from-slate-100 to-white rounded-2xl shadow-2xl w-full max-w-3xl p-0 overflow-hidden border-4 border-slate-200">
+            {/* Watermark/Icon */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10 select-none">
+              <svg width="220" height="220" viewBox="0 0 24 24" fill="none" className="text-indigo-400"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" /><path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </div>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-900 to-fuchsia-900 px-8 py-5 text-white flex items-center justify-between shadow">
+              <div>
+                <div className="text-xs font-semibold tracking-widest uppercase text-white/70">Requisition Form</div>
+                <h3 className="text-2xl font-extrabold tracking-tight">{editing.title || 'New Requisition'}</h3>
+                <div className="text-xs mt-1 text-white/60">ID: <span className="font-mono">{editing.id.slice(0,8).toUpperCase()}</span></div>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <span className={statusStyle(editing.status)}>{editing.status}</span>
                 <button onClick={()=>setEditing(null)} className="text-white/80 hover:text-white text-lg">✕</button>
               </div>
             </div>
-            <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm text-slate-500">Requester: <span className="font-semibold text-slate-700">{currentUser.username}</span></div>
-              <div className="text-sm">
-                <span className={statusStyle(editing.status)}> {editing.status} </span>
+            {/* Form Body */}
+            <div className="p-8 relative z-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Requester</label>
+                  <div className="font-bold text-slate-800">{currentUser.username}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Fund/Category</label>
+                  <input className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white/80" value={editing.fund||''} onChange={e=>setEditing({...editing, fund: e.target.value})} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Needed By</label>
+                  <input type="date" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white/80" value={editing.neededBy||''} onChange={e=>setEditing({...editing, neededBy: e.target.value})} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Purpose</label>
+                  <textarea className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white/80" rows={2} value={editing.purpose||''} onChange={e=>setEditing({...editing, purpose: e.target.value})} />
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div>
-                <label className="text-sm text-slate-600">Title</label>
-                <input className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" value={editing.title} onChange={e=>setEditing({...editing, title: e.target.value})} />
+              <div className="mb-6">
+                <label className="text-xs font-semibold text-slate-600">Title</label>
+                <input className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white/80" value={editing.title} onChange={e=>setEditing({...editing, title: e.target.value})} />
               </div>
-              <div>
-                <label className="text-sm text-slate-600">Fund/Category</label>
-                <input className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" value={editing.fund||''} onChange={e=>setEditing({...editing, fund: e.target.value})} />
-              </div>
-              <div className="lg:col-span-3">
-                <label className="text-sm text-slate-600">Purpose</label>
-                <textarea className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" rows={2} value={editing.purpose||''} onChange={e=>setEditing({...editing, purpose: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-sm text-slate-600">Needed By</label>
-                <input type="date" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" value={editing.neededBy||''} onChange={e=>setEditing({...editing, neededBy: e.target.value})} />
-              </div>
-              <div className="text-right font-semibold self-end lg:col-span-2">
-                <div className="text-sm text-slate-500">Estimated Total</div>
-                <div className="text-2xl font-extrabold">{formatCurrency(editing.totalAmount||0, settings.currency || 'USD')}</div>
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-bold text-slate-800">Items</h4>
-                <button onClick={addItem} className="px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-black">Add Item</button>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-600">
-                    <th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(editing.items||[]).map(it => (
-                    <tr key={it.id} className="border-t">
-                      <td><input className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" value={it.description} onChange={e=>updateItem(it.id,{description:e.target.value})} /></td>
-                      <td><input type="number" min={0} step="0.01" className="w-24 border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" value={it.qty} onChange={e=>updateItem(it.id,{qty: parseFloat(e.target.value) || 0})} /></td>
-                      <td><input type="number" min={0} step="0.01" className="w-28 border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" value={it.unitPrice} onChange={e=>updateItem(it.id,{unitPrice: parseFloat(e.target.value) || 0})} /></td>
-                      <td className="text-right w-28 pr-2 font-semibold">{formatCurrency((it.qty||0)*(it.unitPrice||0), settings.currency || 'USD')}</td>
-                      <td className="text-right"><button onClick={()=>removeItem(it.id)} className="text-rose-600 hover:text-rose-700">Remove</button></td>
+              {/* Items Table */}
+              <div className="bg-white/90 rounded-xl border border-slate-200 shadow-inner p-4 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-bold text-slate-800 text-lg">Items</h4>
+                  <button onClick={addItem} className="px-3 py-1.5 rounded-lg bg-indigo-700 text-white hover:bg-indigo-900">Add Item</button>
+                </div>
+                <table className="w-full text-sm border-separate border-spacing-y-1">
+                  <thead>
+                    <tr className="text-left text-slate-600 bg-slate-50">
+                      <th className="rounded-l-md px-2 py-1">Description</th>
+                      <th>Qty</th>
+                      <th>Unit Price</th>
+                      <th className="text-right">Total</th>
+                      <th className="rounded-r-md"></th>
                     </tr>
-                  ))}
-                  {(editing.items||[]).length === 0 && (
-                    <tr><td colSpan={5} className="py-4 text-center text-slate-500">No items yet</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <button onClick={()=>setEditing(null)} className="px-4 py-2 rounded-xl border hover:bg-slate-50">Cancel</button>
-              <button onClick={onSave} className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
-              {editing.status==='draft' && <button onClick={()=>onSubmit(editing.id)} className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Submit</button>}
-            </div>
+                  </thead>
+                  <tbody>
+                    {(editing.items||[]).map((it, idx) => (
+                      <tr key={it.id} className={"bg-slate-50 " + (idx % 2 === 0 ? 'bg-opacity-80' : 'bg-opacity-100') + " hover:bg-indigo-50 transition"}>
+                        <td><input className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white/80" value={it.description} onChange={e=>updateItem(it.id,{description:e.target.value})} /></td>
+                        <td><input type="number" min={0} step="0.01" className="w-20 border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white/80" value={it.qty} onChange={e=>updateItem(it.id,{qty: parseFloat(e.target.value) || 0})} /></td>
+                        <td><input type="number" min={0} step="0.01" className="w-28 border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white/80" value={it.unitPrice} onChange={e=>updateItem(it.id,{unitPrice: parseFloat(e.target.value) || 0})} /></td>
+                        <td className="text-right w-28 pr-2 font-semibold">{formatCurrency((it.qty||0)*(it.unitPrice||0), settings.currency || 'USD')}</td>
+                        <td className="text-right"><button onClick={()=>removeItem(it.id)} className="text-rose-600 hover:text-rose-700">Remove</button></td>
+                      </tr>
+                    ))}
+                    {(editing.items||[]).length === 0 && (
+                      <tr><td colSpan={5} className="py-4 text-center text-slate-500">No items yet</td></tr>
+                    )}
+                  </tbody>
+                  {/* Summary Row */}
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} className="text-right font-bold text-slate-700 pt-2">Total</td>
+                      <td className="text-right font-extrabold text-indigo-800 text-lg pt-2">{formatCurrency(editing.totalAmount||0, settings.currency || 'USD')}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={()=>setEditing(null)} className="px-4 py-2 rounded-xl border hover:bg-slate-50">Cancel</button>
+                <button onClick={onSave} className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
+                {editing.status==='draft' && <button onClick={()=>onSubmit(editing.id)} className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Submit</button>}
+              </div>
             </div>
           </div>
         </div>
