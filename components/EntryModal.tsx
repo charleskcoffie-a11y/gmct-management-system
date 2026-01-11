@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, EntryType, Method, Member, Settings, User, MonthLock } from '../types';
 import { sanitizeEntry, isMonthLocked } from '../utils';
+import { logEntryDeletionToSupabase, markEntryAsDeletedInSupabase } from '../services/supabase';
 
 interface EntryModalProps {
     entry: Entry | null;
@@ -28,6 +29,12 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
     const [memberNumberInput, setMemberNumberInput] = useState('');
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [duplicateWarning, setDuplicateWarning] = useState<{ show: boolean; type: string } | null>(null);
+
+    // Delete modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteReason, setDeleteReason] = useState('');
+    const [deleteError, setDeleteError] = useState('');
+    const [deletionLog, setDeletionLog] = useState<{id: string, reason: string, deletedBy: string, deletedAt: string}[]>([]);
 
     useEffect(() => {
         const initialData = entry || sanitizeEntry({});
@@ -404,13 +411,111 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                     </>
                                 )}
                             </div>
+
                             {entry ? (
-                                <button type="button" onClick={() => onDelete(entry.id)} className="text-red-600 font-bold hover:bg-red-50 px-4 py-2 rounded-lg transition-all flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                    </svg>
-                                    Delete Entry
-                                </button>
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!currentUser || currentUser.role !== 'admin') {
+                                                alert('Only admins can delete entries.');
+                                                return;
+                                            }
+                                            setShowDeleteModal(true);
+                                            setDeleteReason('');
+                                            setDeleteError('');
+                                        }}
+                                        className="text-red-600 font-bold hover:bg-red-50 px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        Delete Entry
+                                    </button>
+                                    {/* Delete Confirmation Modal */}
+                                    {showDeleteModal && (
+                                        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                                            <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                                                <h4 className="text-lg font-bold mb-2 text-red-700">Confirm Delete Entry</h4>
+                                                <p className="mb-2">Please provide a reason for deleting this entry:</p>
+                                                <textarea className="w-full border-2 border-slate-300 rounded-lg p-2 mb-2" rows={3} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
+                                                {deleteError && <div className="text-red-600 text-sm mb-2">{deleteError}</div>}
+                                                <div className="flex gap-3 justify-end mt-2">
+                                                    <button onClick={() => setShowDeleteModal(false)} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!deleteReason.trim()) {
+                                                                setDeleteError('Reason is required.');
+                                                                return;
+                                                            }
+                                                            
+                                                            try {
+                                                                // Log deletion to database
+                                                                if (settings.supabaseUrl && settings.supabaseKey) {
+                                                                    await logEntryDeletionToSupabase(
+                                                                        settings.supabaseUrl,
+                                                                        settings.supabaseKey,
+                                                                        entry,
+                                                                        deleteReason,
+                                                                        currentUser?.username || 'Unknown'
+                                                                    );
+                                                                    
+                                                                    // Mark entry as deleted in database
+                                                                    await markEntryAsDeletedInSupabase(
+                                                                        settings.supabaseUrl,
+                                                                        settings.supabaseKey,
+                                                                        entry.id,
+                                                                        currentUser?.username || 'Unknown',
+                                                                        deleteReason
+                                                                    );
+                                                                }
+                                                                
+                                                                setShowDeleteModal(false);
+                                                                setDeleteError('');
+                                                                setDeletionLog(prev => [
+                                                                    ...prev,
+                                                                    {
+                                                                        id: entry.id,
+                                                                        reason: deleteReason,
+                                                                        deletedBy: currentUser?.username || 'Unknown',
+                                                                        deletedAt: new Date().toISOString(),
+                                                                    },
+                                                                ]);
+                                                                
+                                                                // Call parent delete handler
+                                                                onDelete(entry.id);
+                                                                
+                                                                // Show success message and close modal
+                                                                showToast(`✓ Entry deleted successfully by ${currentUser?.username || 'Unknown'}`, 'success', 3000);
+                                                                setTimeout(() => {
+                                                                    onClose();
+                                                                }, 500);
+                                                            } catch (error: any) {
+                                                                showToast(`Failed to log deletion: ${error.message}`, 'error', 5000);
+                                                            }
+                                                        }}
+                                                        className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Deletion Log Section */}
+                                    {deletionLog.length > 0 && (
+                                        <div className="bg-slate-50 rounded-xl shadow border p-4 mt-8">
+                                            <h4 className="font-bold text-slate-700 mb-2">Deleted Entries Log</h4>
+                                            <ul className="text-xs text-slate-600 space-y-1">
+                                                {deletionLog.map(log => (
+                                                    <li key={log.id}>
+                                                        <span className="font-semibold">ID:</span> {log.id} | <span className="font-semibold">By:</span> {log.deletedBy} | <span className="font-semibold">At:</span> {log.deletedAt} | <span className="font-semibold">Reason:</span> {log.reason}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </>
                             ) : (
                                 <div></div>
                             )}

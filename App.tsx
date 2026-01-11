@@ -115,6 +115,7 @@ const App: React.FC = () => {
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
+    const [modalDeletedFilter, setModalDeletedFilter] = useState<'all' | 'active' | 'deleted'>('all');
 
     // Navigation collapse state
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -818,7 +819,7 @@ const App: React.FC = () => {
                         )}
 
                         <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
-                            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && (
+                            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team') && (
                                 <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 border-b-2 border-red-300 flex justify-end">
                                     <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer">
                                         <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
@@ -836,8 +837,10 @@ const App: React.FC = () => {
                                ) : (
                                    sortedDates.map(date => {
                                        const dateEntries = entriesByDate[date];
-                                       const dateTotal = dateEntries.reduce((sum, e) => sum + e.amount, 0);
-                                       const hasDeleted = dateEntries.some(e => e.deleted);
+                                       const activeEntries = dateEntries.filter(e => !e.deleted);
+                                       const deletedEntries = dateEntries.filter(e => e.deleted);
+                                       const activeTotal = activeEntries.reduce((sum, e) => sum + e.amount, 0);
+                                       const deletedTotal = deletedEntries.reduce((sum, e) => sum + e.amount, 0);
                                        
                                        return (
                                            <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
@@ -858,13 +861,18 @@ const App: React.FC = () => {
                                                        <div>
                                                            <div className="flex items-center gap-3">
                                                                <h3 className="text-xl font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
-                                                               {hasDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">Has Deleted</span>}
+                                                               {deletedEntries.length > 0 && showDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">{deletedEntries.length} Deleted</span>}
                                                            </div>
-                                                           <p className="text-sm text-slate-600 mt-1 font-medium">{dateEntries.length} contribution{dateEntries.length !== 1 ? 's' : ''}</p>
+                                                           <p className="text-sm text-slate-600 mt-1 font-medium">
+                                                               {activeEntries.length} active{deletedEntries.length > 0 && showDeleted ? ` + ${deletedEntries.length} deleted` : ''}
+                                                           </p>
                                                        </div>
                                                    </div>
                                                    <div className="text-right">
-                                                       <div className="text-2xl font-bold text-green-600">{formatCurrency(dateTotal, settings.currency)}</div>
+                                                       <div className="text-2xl font-bold text-green-600">{formatCurrency(activeTotal, settings.currency)}</div>
+                                                       {deletedEntries.length > 0 && showDeleted && (
+                                                           <div className="text-sm text-red-600 font-semibold line-through">{formatCurrency(deletedTotal, settings.currency)} deleted</div>
+                                                       )}
                                                        <div className="text-sm text-blue-600 font-semibold mt-1 flex items-center gap-1">
                                                            Click to view details
                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -920,13 +928,27 @@ const App: React.FC = () => {
                                                     {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>)}
                                                 </select>
                                             </div>
+                                            {showDeleted && (
+                                                <div className="flex items-center gap-3">
+                                                    <label className="text-sm font-bold text-blue-100">Show:</label>
+                                                    <select 
+                                                        value={modalDeletedFilter} 
+                                                        onChange={e => setModalDeletedFilter(e.target.value as 'all' | 'active' | 'deleted')}
+                                                        className="border-2 border-blue-400 bg-white/95 text-slate-800 rounded-lg px-4 py-2 font-semibold focus:ring-2 focus:ring-white focus:border-white transition-all"
+                                                    >
+                                                        <option value="all">All Entries</option>
+                                                        <option value="active">Active Only</option>
+                                                        <option value="deleted">Deleted Only</option>
+                                                    </select>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     
                                     {/* Modal Body - Scrollable */}
                                     <div className="flex-1 overflow-y-auto p-6">
-                                        <div className="space-y-3">
-                                            {entriesByDate[selectedDateForModal]
+                                        {(() => {
+                                            const modalEntries = entriesByDate[selectedDateForModal]
                                                 .filter(entry => {
                                                     // Filter by class
                                                     if (modalClassFilter !== 'all') {
@@ -936,69 +958,147 @@ const App: React.FC = () => {
                                                     }
                                                     // Filter by type
                                                     if (modalTypeFilter !== 'all' && entry.type !== modalTypeFilter) return false;
+                                                    // Filter by deleted status
+                                                    if (modalDeletedFilter === 'active' && entry.deleted) return false;
+                                                    if (modalDeletedFilter === 'deleted' && !entry.deleted) return false;
                                                     return true;
-                                                })
-                                                .map((entry, idx) => {
-                                                const member = membersMap.get(entry.memberID);
-                                                const displayClass = entry.classNumber || member?.classNumber || '-';
-                                                const isLocked = isMonthLocked(entry.date, monthLocks);
-                                                const canEdit = !entry.deleted && currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair') && canWrite;
-                                                
-                                                return (
-                                                    <div key={entry.id} className={`rounded-xl border-2 p-5 transition-all ${entry.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md'}`}>
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center gap-3 mb-2">
-                                                                    <h3 className="text-lg font-bold text-slate-800">{entry.memberName}</h3>
-                                                                    {entry.deleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">DELETED</span>}
-                                                                    {isLocked && <span title="Month Locked">🔒</span>}
-                                                                </div>
-                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Member #:</span>
-                                                                        <span className="ml-1 font-bold text-slate-700">{member?.memberNumber || '-'}</span>
+                                                });
+                                            
+                                            const activeEntries = modalEntries.filter(e => !e.deleted);
+                                            const deletedEntries = modalEntries.filter(e => e.deleted);
+                                            
+                                            return (
+                                                <>
+                                                    {/* Active Entries Section */}
+                                                    {activeEntries.length > 0 && (
+                                                        <div className="space-y-3 mb-6">
+                                                            {activeEntries.map((entry, idx) => {
+                                                                const member = membersMap.get(entry.memberID);
+                                                                const displayClass = entry.classNumber || member?.classNumber || '-';
+                                                                const isLocked = isMonthLocked(entry.date, monthLocks);
+                                                                const canEdit = currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair') && canWrite;
+                                                                
+                                                                return (
+                                                                    <div key={entry.id} className="rounded-xl border-2 p-5 transition-all bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md">
+                                                                        <div className="flex justify-between items-start">
+                                                                            <div className="flex-1">
+                                                                                <div className="flex items-center gap-3 mb-2">
+                                                                                    <h3 className="text-lg font-bold text-slate-800">{entry.memberName}</h3>
+                                                                                    {isLocked && <span title="Month Locked">🔒</span>}
+                                                                                </div>
+                                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Member #:</span>
+                                                                                        <span className="ml-1 font-bold text-slate-700">{member?.memberNumber || '-'}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Class:</span>
+                                                                                        <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Type:</span>
+                                                                                        <span className="ml-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold capitalize">{entry.type.replace(/-/g, ' ')}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Method:</span>
+                                                                                        <span className="ml-1 font-semibold text-slate-700 capitalize">{entry.method}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                {entry.note && (
+                                                                                    <div className="mt-2 text-sm text-slate-600 italic">
+                                                                                        <span className="font-medium">Note:</span> {entry.note}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="text-right ml-4">
+                                                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
+                                                                                {canEdit && (
+                                                                                    <button 
+                                                                                        onClick={() => { 
+                                                                                            setSelectedEntry(entry); 
+                                                                                            setIsModalOpen(true); 
+                                                                                            setSelectedDateForModal(null);
+                                                                                        }} 
+                                                                                        disabled={!canWrite}
+                                                                                        title={!canWrite ? 'Requires cloud connection' : undefined}
+                                                                                        className={`mt-2 font-bold text-sm ${!canWrite ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
+                                                                                    >
+                                                                                        Edit
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Class:</span>
-                                                                        <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Type:</span>
-                                                                        <span className="ml-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold capitalize">{entry.type.replace(/-/g, ' ')}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Method:</span>
-                                                                        <span className="ml-1 font-semibold text-slate-700 capitalize">{entry.method}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {entry.note && (
-                                                                    <div className="mt-2 text-sm text-slate-600 italic">
-                                                                        <span className="font-medium">Note:</span> {entry.note}
-                                                                    </div>
-                                                                )}
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Deleted Entries Section */}
+                                                    {deletedEntries.length > 0 && showDeleted && (
+                                                        <div className="border-t-4 border-red-300 pt-4">
+                                                            <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-3 rounded-lg mb-3 flex items-center justify-between">
+                                                                <span className="text-red-700 font-bold text-sm uppercase flex items-center gap-2">
+                                                                    🗑️ Deleted Entries ({deletedEntries.length})
+                                                                </span>
+                                                                <span className="text-red-600 text-sm font-semibold">
+                                                                    Total: {formatCurrency(deletedEntries.reduce((s,e)=>s+e.amount,0), settings.currency)}
+                                                                </span>
                                                             </div>
-                                                            <div className="text-right ml-4">
-                                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
-                                                                {canEdit && (
-                                                                    <button 
-                                                                        onClick={() => { 
-                                                                            setSelectedEntry(entry); 
-                                                                            setIsModalOpen(true); 
-                                                                            setSelectedDateForModal(null);
-                                                                        }} 
-                                                                        disabled={!canWrite}
-                                                                        title={!canWrite ? 'Requires cloud connection' : undefined}
-                                                                        className={`mt-2 font-bold text-sm ${!canWrite ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
-                                                                    >
-                                                                        Edit
-                                                                    </button>
-                                                                )}
+                                                            <div className="space-y-3">
+                                                                {deletedEntries.map((entry) => {
+                                                                    const member = membersMap.get(entry.memberID);
+                                                                    const displayClass = entry.classNumber || member?.classNumber || '-';
+                                                                    
+                                                                    return (
+                                                                        <div key={entry.id} className="rounded-xl border-2 p-5 transition-all bg-red-50 border-red-200 opacity-75">
+                                                                            <div className="flex justify-between items-start">
+                                                                                <div className="flex-1">
+                                                                                    <div className="flex items-center gap-3 mb-2">
+                                                                                        <h3 className="text-lg font-bold text-red-500 line-through">{entry.memberName}</h3>
+                                                                                        <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">DELETED</span>
+                                                                                    </div>
+                                                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Member #:</span>
+                                                                                            <span className="ml-1 font-bold text-red-500 line-through">{member?.memberNumber || '-'}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Class:</span>
+                                                                                            <span className="ml-1 font-bold text-red-500 line-through">{displayClass}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Type:</span>
+                                                                                            <span className="ml-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold capitalize line-through">{entry.type.replace(/-/g, ' ')}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Method:</span>
+                                                                                            <span className="ml-1 font-semibold text-red-500 capitalize line-through">{entry.method}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {entry.note && (
+                                                                                        <div className="mt-2 text-sm text-red-600 italic line-through">
+                                                                                            <span className="font-medium">Note:</span> {entry.note}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="mt-3 text-xs text-red-700 bg-red-100 p-2 rounded">
+                                                                                        <div className="font-semibold">Deleted by: {entry.deletedBy || 'Unknown'}</div>
+                                                                                        <div className="italic">Reason: "{entry.deletedReason || 'No reason provided'}"</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="text-right ml-4">
+                                                                                    <div className="text-2xl font-bold text-red-500 line-through">{formatCurrency(entry.amount, settings.currency)}</div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                     
                                     {/* Modal Footer */}

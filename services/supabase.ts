@@ -164,6 +164,9 @@ const mapEntryFromDB = (e: any): Entry => ({
     updatedBy: e.updated_by,
     lastUpdated: e.last_updated,
     deleted: e.deleted,
+    deletedBy: e.deleted_by,
+    deletedReason: e.deleted_reason,
+    deletedAt: e.deleted_at,
     createdAt: e.created_at
 });
 
@@ -615,12 +618,54 @@ export const saveEntryToSupabase = async (url: string, key: string, entry: Entry
     return { success: true };
 };
 
-export const deleteEntryFromSupabase = async (url: string, key: string, entryId: string) => {
+export const markEntryAsDeletedInSupabase = async (
+    url: string, 
+    key: string, 
+    entryId: string,
+    deletedBy: string,
+    deletedReason: string
+) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
     
-    const { error } = await supabase.from('entries').delete().eq('id', entryId);
-    if (error) throw new Error(`Delete entry failed: ${error.message}`);
+    const { error } = await supabase
+        .from('entries')
+        .update({ 
+            deleted: true,
+            deleted_by: deletedBy,
+            deleted_reason: deletedReason,
+            deleted_at: new Date().toISOString()
+        })
+        .eq('id', entryId);
+    if (error) throw new Error(`Mark entry as deleted failed: ${error.message}`);
+    return { success: true };
+};
+
+export const logEntryDeletionToSupabase = async (
+    url: string, 
+    key: string, 
+    entry: Entry, 
+    reason: string, 
+    deletedBy: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error("Invalid Supabase configuration");
+    
+    const deletionRecord = {
+        entry_id: entry.id,
+        entry_type: entry.type,
+        member_id: entry.memberID || null,
+        member_name: entry.memberName || null,
+        amount: entry.amount,
+        original_date: entry.date,
+        deletion_reason: reason,
+        deleted_by: deletedBy,
+        deleted_at: new Date().toISOString(),
+        original_entry_data: entry
+    };
+    
+    const { error } = await supabase.from('entry_deletions').insert(deletionRecord);
+    if (error) throw new Error(`Failed to log deletion: ${error.message}`);
     return { success: true };
 };
 

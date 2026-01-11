@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings, SyncStatus } from '../types';
 import { formatCurrency } from '../utils';
-import { saveEntryToSupabase, deleteEntryFromSupabase } from '../services/supabase';
+import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
 
 interface DevelopmentFundProps {
     members: Member[];
@@ -20,6 +20,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [startDate, setStartDate] = useState(''); // Empty = show all
     const [endDate, setEndDate] = useState(''); // Empty = show all
     const [showToast, setShowToast] = useState(false);
+    const [showDeleted, setShowDeleted] = useState(false);
     const [datePreset, setDatePreset] = useState<'custom' | 'this-week' | 'this-month' | 'qtd' | 'ytd' | 'last-12m'>('custom');
     const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -73,7 +74,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const displayEntries = useMemo(() => {
         let filtered = entries.filter(e => {
             if (e.type !== 'development-fund') return false;
-            if (e.deleted) return false; // Hide deleted entries
+            if (e.deleted && !showDeleted) return false; // Hide deleted entries unless showDeleted is true
             if (startDate && e.date < startDate) return false;
             if (endDate && e.date > endDate) return false;
             return true;
@@ -106,7 +107,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             return sortConfig.direction === 'asc' ? cmp : -cmp;
         });
         return sortable;
-    }, [entries, members, startDate, endDate, sortConfig]);
+    }, [entries, members, startDate, endDate, sortConfig, showDeleted]);
 
     // Group entries by date
     const groupedEntries = useMemo(() => {
@@ -225,23 +226,100 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         }
     };
 
-    const handleDelete = async (id: string) => {
+    // --- Delete Modal State ---
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [deleteReason, setDeleteReason] = useState('');
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteError, setDeleteError] = useState('');
+    const [deletionLog, setDeletionLog] = useState<{id: string, reason: string, deletedBy: string, deletedAt: string}[]>([]);
+
+    const handleDelete = (id: string) => {
+        if (!currentUser || currentUser.role !== 'admin') {
+            alert('Only admins can delete entries.');
+            return;
+        }
+        setDeleteId(id);
+        setDeleteReason('');
+        setDeleteError('');
+        setShowDeleteModal(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteReason.trim()) {
+            setDeleteError('Reason is required.');
+            return;
+        }
+        if (!deleteId) return;
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus?.state !== 'synced') {
             alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             return;
         }
-        const entry = entries.find(e => e.id === id) || null;
-        if(window.confirm("Delete this contribution?")) {
-            try {
-                if (settings.supabaseUrl && settings.supabaseKey) {
-                    await deleteEntryFromSupabase(settings.supabaseUrl, settings.supabaseKey, id);
-                }
-                setEntries(prev => prev.filter(e => e.id !== id));
-                setLastDeleted(entry);
-            } catch (error: any) {
-                alert(`Failed to delete: ${error.message}`);
-            }
+        const entry = entries.find(e => e.id === deleteId);
+        if (!entry) {
+            alert('Entry not found');
+            return;
         }
+        
+        try {
+            // Log deletion to database first
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                await logEntryDeletionToSupabase(
+                    settings.supabaseUrl, 
+                    settings.supabaseKey, 
+                    entry,
+                    deleteReason,
+                    currentUser.username
+                );
+                
+                // Then mark as deleted in the entries table
+                await markEntryAsDeletedInSupabase(
+                    settings.supabaseUrl, 
+                    settings.supabaseKey, 
+                    deleteId,
+                    currentUser.username,
+                    deleteReason
+                );
+            }
+            
+            // Update local state
+            setEntries(prev => prev.map(e => e.id === deleteId ? { 
+                ...e, 
+                deleted: true, 
+                deletedReason: deleteReason, 
+                deletedBy: currentUser.username, 
+                deletedAt: new Date().toISOString() 
+            } : e));
+            
+            setLastDeleted(entry);
+            setDeletionLog(prev => [...prev, { 
+                id: deleteId, 
+                reason: deleteReason, 
+                deletedBy: currentUser.username, 
+                deletedAt: new Date().toISOString() 
+            }]);
+            
+            // Show success message
+            alert(`✓ Entry deleted successfully.\n\nDeleted by: ${currentUser.username}\nReason: ${deleteReason}`);
+        } catch (error: any) {
+            alert(`Failed to delete: ${error.message}`);
+            setShowDeleteModal(false);
+            setDeleteId(null);
+            setDeleteReason('');
+            setDeleteError('');
+            return;
+        }
+        
+        setShowDeleteModal(false);
+        setDeleteId(null);
+        setDeleteReason('');
+        setDeleteError('');
+    };
+
+    const handleCancelDelete = () => {
+        setShowDeleteModal(false);
+        setDeleteId(null);
+        setDeleteReason('');
+        setDeleteError('');
     };
 
     const submitBulkRows = async () => {
@@ -540,9 +618,17 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 </div>
 
                 <div className="px-6 py-4 bg-gradient-to-r from-white/70 to-purple-50 border-b border-purple-100 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-sm text-purple-700 font-semibold">
-                        <span className="bg-purple-600 text-white px-2 py-1 rounded-md text-xs font-bold">Tip</span>
-                        Use the button at the bottom-right to add contributions (single or bulk). Filters above keep the table focused on the date range you need.
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-purple-700 font-semibold">
+                            <span className="bg-purple-600 text-white px-2 py-1 rounded-md text-xs font-bold">Tip</span>
+                            Use the button at the bottom-right to add contributions (single or bulk). Filters above keep the table focused on the date range you need.
+                        </div>
+                        {(currentUser?.role === 'admin' || currentUser?.role === 'finance-chair') && (
+                            <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer bg-red-50 px-3 py-2 rounded-lg border border-red-300">
+                                <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
+                                🗑️ Show Deleted Records
+                            </label>
+                        )}
                     </div>
                 </div>
 
@@ -551,7 +637,20 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                         {groupedEntries.length === 0 && (
                             <div className="p-12 text-center text-slate-400 text-lg">No contributions found.</div>
                         )}
-                        {groupedEntries.map(group => (
+                        {groupedEntries.map(group => {
+                            // Separate active and deleted entries within each group
+                            const activeEntries = group.entries.filter(e => {
+                                const orig = entries.find(orig => orig.id === e.id);
+                                return !orig?.deleted;
+                            });
+                            const deletedEntries = group.entries.filter(e => {
+                                const orig = entries.find(orig => orig.id === e.id);
+                                return orig?.deleted === true;
+                            });
+                            const activeTotal = activeEntries.reduce((s,e)=>s+e.amount,0);
+                            const deletedTotal = deletedEntries.reduce((s,e)=>s+e.amount,0);
+                            
+                            return (
                             <div key={group.date} className="mb-4 border rounded-lg bg-gradient-to-r from-purple-50 to-pink-50">
                                 <div
                                     className="flex items-center justify-between px-4 py-2 cursor-pointer bg-gradient-to-r from-purple-200 to-pink-200 border-b"
@@ -559,65 +658,122 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                 >
                                     <div className="font-bold text-purple-800 text-lg">{group.date}</div>
                                     <div className="text-purple-600 font-semibold">
-                                        {expandedDates[group.date] ? '▼' : '►'} {group.entries.length} entr{group.entries.length === 1 ? 'y' : 'ies'} | {formatCurrency(group.entries.reduce((s,e)=>s+e.amount,0), settings.currency)}
+                                        {expandedDates[group.date] ? '▼' : '►'} {activeEntries.length} active{deletedEntries.length > 0 ? ` + ${deletedEntries.length} deleted` : ''} | {formatCurrency(activeTotal, settings.currency)}
                                     </div>
                                 </div>
                                 {expandedDates[group.date] && (
-                                    <table className="w-full text-left text-slate-700">
-                                        <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs uppercase font-bold sticky top-0 z-10 shadow-md">
-                                            <tr>
-                                                <th className="px-4 py-3">Member</th>
-                                                <th className="px-4 py-3">Class</th>
-                                                <th className="px-4 py-3">Desc</th>
-                                                <th className="px-4 py-3 text-right">Amount</th>
-                                                <th className="px-4 py-3"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-purple-100 text-sm">
-                                            {group.entries.map((entry, idx) => (
-                                                <tr key={entry.id} className={`transition ${idx % 2 === 0 ? 'bg-white hover:bg-purple-50' : 'bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100'}`}>
-                                                    <td className="px-4 py-3 font-medium text-slate-800">
-                                                        <span title={`Created by: ${entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}\nUpdated by: ${entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}`}>
-                                                            {entry.memberName}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center">{entry.classNumber}</td>
-                                                    <td className="px-4 py-3 truncate max-w-[150px]">
-                                                        {editingId===entry.id ? (
-                                                            <>
-                                                                <input type="text" value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="border-slate-300 rounded-md p-1 w-full" />
-                                                                <div className="text-xs text-slate-500 mt-2">
-                                                                    Created by: {entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}<br/>
-                                                                    Updated by: {entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}
-                                                                </div>
-                                                            </>
-                                                        ) : entry.description}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right font-bold text-slate-800">
-                                                        {editingId===entry.id ? (
-                                                            <input type="number" step="0.01" value={editAmount} onChange={e=>setEditAmount(e.target.value)} className="border-slate-300 rounded-md p-1 w-28 text-right" />
-                                                        ) : formatCurrency(entry.amount, settings.currency)}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right flex gap-2 justify-end">
-                                                        {editingId===entry.id ? (
-                                                            <>
-                                                                <button onClick={saveEdit} className="text-green-600 hover:text-green-800 font-bold px-2 py-1 rounded hover:bg-green-50">Save</button>
-                                                                <button onClick={cancelEdit} className="text-slate-600 hover:text-slate-800 font-bold px-2 py-1 rounded hover:bg-slate-100">Cancel</button>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <button onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description)} className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50">Edit</button>
-                                                                <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50">×</button>
-                                                            </>
-                                                        )}
-                                                    </td>
+                                    <div>
+                                        {/* Active Entries Section */}
+                                        {activeEntries.length > 0 && (
+                                        <table className="w-full text-left text-slate-700">
+                                            <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs uppercase font-bold sticky top-0 z-10 shadow-md">
+                                                <tr>
+                                                    <th className="px-4 py-3">Member</th>
+                                                    <th className="px-4 py-3">Class</th>
+                                                    <th className="px-4 py-3">Desc</th>
+                                                    <th className="px-4 py-3 text-right">Amount</th>
+                                                    <th className="px-4 py-3"></th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-purple-100 text-sm">
+                                                {activeEntries.map((entry, idx) => {
+                                                    const originalEntry = entries.find(e => e.id === entry.id);
+                                                    return (
+                                                    <tr key={entry.id} className={`transition ${idx % 2 === 0 ? 'bg-white hover:bg-purple-50' : 'bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100'}`}>
+                                                        <td className="px-4 py-3 font-medium text-slate-800">
+                                                            <span title={`Created by: ${originalEntry?.createdBy || 'Unknown'}\nUpdated by: ${originalEntry?.updatedBy || 'Unknown'}`}>
+                                                                {entry.memberName}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">{entry.classNumber}</td>
+                                                        <td className="px-4 py-3 truncate max-w-[150px]">
+                                                            {editingId===entry.id ? (
+                                                                <>
+                                                                    <input type="text" value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="border-slate-300 rounded-md p-1 w-full" />
+                                                                    <div className="text-xs text-slate-500 mt-2">
+                                                                        Created by: {originalEntry?.createdBy || 'Unknown'}<br/>
+                                                                        Updated by: {originalEntry?.updatedBy || 'Unknown'}
+                                                                    </div>
+                                                                </>
+                                                            ) : entry.description}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-bold text-slate-800">
+                                                            {editingId===entry.id ? (
+                                                                <input type="number" step="0.01" value={editAmount} onChange={e=>setEditAmount(e.target.value)} className="border-slate-300 rounded-md p-1 w-28 text-right" />
+                                                            ) : formatCurrency(entry.amount, settings.currency)}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right flex gap-2 justify-end">
+                                                            {editingId===entry.id ? (
+                                                                <>
+                                                                    <button onClick={saveEdit} className="text-green-600 hover:text-green-800 font-bold px-2 py-1 rounded hover:bg-green-50">Save</button>
+                                                                    <button onClick={cancelEdit} className="text-slate-600 hover:text-slate-800 font-bold px-2 py-1 rounded hover:bg-slate-100">Cancel</button>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <button onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description)} className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50">Edit</button>
+                                                                    <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50">×</button>
+                                                                </>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                        )}
+                                        
+                                        {/* Deleted Entries Section */}
+                                        {deletedEntries.length > 0 && showDeleted && (
+                                        <div className="border-t-4 border-red-200">
+                                            <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 flex items-center justify-between">
+                                                <span className="text-red-700 font-bold text-xs uppercase flex items-center gap-2">
+                                                    🗑️ Deleted Entries ({deletedEntries.length})
+                                                </span>
+                                                <span className="text-red-600 text-xs font-semibold">
+                                                    Total: {formatCurrency(deletedTotal, settings.currency)}
+                                                </span>
+                                            </div>
+                                            <table className="w-full text-left text-slate-700">
+                                                <thead className="bg-gradient-to-r from-red-600 to-pink-600 text-white text-xs uppercase font-bold shadow-md">
+                                                    <tr>
+                                                        <th className="px-4 py-3">Member</th>
+                                                        <th className="px-4 py-3">Class</th>
+                                                        <th className="px-4 py-3">Desc</th>
+                                                        <th className="px-4 py-3 text-right">Amount</th>
+                                                        <th className="px-4 py-3">Deleted Info</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-red-100 text-sm">
+                                                    {deletedEntries.map((entry) => {
+                                                        const originalEntry = entries.find(e => e.id === entry.id);
+                                                        return (
+                                                        <tr key={entry.id} className="bg-red-50/50 opacity-70 hover:opacity-90 transition">
+                                                            <td className="px-4 py-3 font-medium text-red-500 line-through">
+                                                                {entry.memberName}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-center text-red-500 line-through">{entry.classNumber}</td>
+                                                            <td className="px-4 py-3 truncate max-w-[150px] text-red-500 line-through">
+                                                                {entry.description}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right font-bold text-red-500 line-through">
+                                                                {formatCurrency(entry.amount, settings.currency)}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-xs text-red-700">
+                                                                <div className="font-semibold">By: {originalEntry?.deletedBy || 'Unknown'}</div>
+                                                                <div className="text-red-600 italic">"{originalEntry?.deletedReason || 'No reason'}"</div>
+                                                            </td>
+                                                        </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -627,6 +783,28 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                     <span className="font-bold">🗑️ Entry deleted.</span>
                     <button onClick={undoDelete} className="bg-white text-red-600 font-bold px-3 py-1 rounded-md hover:bg-red-100 transition">↩️ Undo</button>
                     <button onClick={()=>setLastDeleted(null)} className="text-red-200 hover:text-white transition font-bold">✕</button>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                        <h4 className="text-lg font-bold mb-2 text-red-700">Confirm Delete Entry</h4>
+                        <p className="mb-2">Please provide a reason for deleting this entry:</p>
+                        <textarea 
+                            className="w-full border-2 border-slate-300 rounded-lg p-2 mb-2" 
+                            rows={3} 
+                            value={deleteReason} 
+                            onChange={e => setDeleteReason(e.target.value)}
+                            placeholder="Enter reason for deletion (required)..."
+                        />
+                        {deleteError && <div className="text-red-600 text-sm mb-2">{deleteError}</div>}
+                        <div className="flex gap-3 justify-end mt-2">
+                            <button onClick={handleCancelDelete} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Delete</button>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -826,6 +1004,43 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                             <button onClick={() => setIsEntryModalOpen(false)} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg transition-all">Close</button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                        <h4 className="text-lg font-bold mb-2 text-red-700">Confirm Delete Entry</h4>
+                        <p className="mb-2">Please provide a reason for deleting this entry:</p>
+                        <textarea className="w-full border-2 border-slate-300 rounded-lg p-2 mb-2" rows={3} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
+                        {deleteError && <div className="text-red-600 text-sm mb-2">{deleteError}</div>}
+                        <div className="flex gap-3 justify-end mt-2">
+                            <button onClick={handleCancelDelete} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Deletion Log Section */}
+            {deletionLog.length > 0 && (
+                <div className="fixed bottom-24 right-6 bg-white rounded-xl shadow-lg border-2 border-slate-300 p-4 max-w-md max-h-60 overflow-y-auto z-40">
+                    <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Deleted Entries Log
+                    </h4>
+                    <ul className="text-xs text-slate-600 space-y-1">
+                        {deletionLog.map(log => (
+                            <li key={`${log.id}-${log.deletedAt}`} className="border-l-2 border-red-400 pl-2 py-1">
+                                <div><span className="font-semibold">ID:</span> {log.id.substring(0, 8)}...</div>
+                                <div><span className="font-semibold">By:</span> {log.deletedBy} | <span className="font-semibold">At:</span> {new Date(log.deletedAt).toLocaleString()}</div>
+                                <div><span className="font-semibold">Reason:</span> {log.reason}</div>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             )}
         </div>
