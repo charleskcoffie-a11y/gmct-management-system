@@ -234,8 +234,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [deletionLog, setDeletionLog] = useState<{id: string, reason: string, deletedBy: string, deletedAt: string}[]>([]);
 
     const handleDelete = (id: string) => {
-        if (!currentUser || currentUser.role !== 'admin') {
-            alert('Only admins can delete entries.');
+        if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'finance-chair')) {
+            alert('Only admins or finance chairs can delete entries.');
             return;
         }
         setDeleteId(id);
@@ -623,7 +623,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                             <span className="bg-purple-600 text-white px-2 py-1 rounded-md text-xs font-bold">Tip</span>
                             Use the button at the bottom-right to add contributions (single or bulk). Filters above keep the table focused on the date range you need.
                         </div>
-                        {(currentUser?.role === 'admin' || currentUser?.role === 'finance-chair') && (
+                        {(currentUser?.role === 'admin' || currentUser?.role === 'finance-chair' || currentUser?.role === 'finance-team') && (
                             <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer bg-red-50 px-3 py-2 rounded-lg border border-red-300">
                                 <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
                                 🗑️ Show Deleted Records

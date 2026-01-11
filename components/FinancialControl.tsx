@@ -68,18 +68,13 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                 await saveMonthLockToSupabase(settings.supabaseUrl, settings.supabaseKey, updatedLock);
             }
             setMonthLocks(locks);
-        } catch (error: any) {
-            alert(`Failed to update month lock: ${error.message}`);
+        } catch (error) {
+            alert("Failed to update month lock: " + (error?.message || error));
         }
     };
 
-    const getLockStatus = (monthStr: string) => {
-        return monthLocks.find(l => l.month === monthStr)?.isLocked || false;
-    };
-
-    const getLockInfo = (monthStr: string) => {
-        return monthLocks.find(l => l.month === monthStr);
-    };
+    const getLockStatus = (monthStr: string) => monthLocks.find(l => l.month === monthStr)?.isLocked || false;
+    const getLockInfo = (monthStr: string) => monthLocks.find(l => l.month === monthStr);
 
     const toggleSundayLock = async (dateStr: string) => {
         const locks = [...sundayLocks];
@@ -110,18 +105,13 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                 await saveSundayLockToSupabase(settings.supabaseUrl, settings.supabaseKey, updatedLock);
             }
             setSundayLocks(locks);
-        } catch (error: any) {
-            alert(`Failed to update Sunday lock: ${error.message}`);
+        } catch (error) {
+            alert("Failed to update Sunday lock: " + (error?.message || error));
         }
     };
 
-    const getSundayLockStatus = (dateStr: string) => {
-        return sundayLocks.find(l => l.date === dateStr)?.isLocked || false;
-    };
-
-    const getSundayLockInfo = (dateStr: string) => {
-        return sundayLocks.find(l => l.date === dateStr);
-    };
+    const getSundayLockStatus = (dateStr: string) => sundayLocks.find(l => l.date === dateStr)?.isLocked || false;
+    const getSundayLockInfo = (dateStr: string) => sundayLocks.find(l => l.date === dateStr);
 
     const totalLockedMonths = monthLocks.filter(l => l.isLocked).length;
     const totalLockedSundays = sundayLocks.filter(l => l.isLocked).length;
@@ -129,7 +119,7 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
     return (
         <div className="space-y-6 max-w-5xl">
             <div>
-                <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-3 rounded-xl shadow-lg">🔐 Financial Control</h2>
+                <h2 className="inline-block text-3xl font-extrabold text-white bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-3 rounded-xl shadow-lg"> Financial Control</h2>
                 <p className="text-base text-slate-600 mt-3 font-medium">Lock and unlock months to restrict editing by finance team members.</p>
             </div>
 
@@ -163,18 +153,14 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                     <h3 className="text-xl font-bold text-slate-800">Month Lock Status</h3>
                     <div className="text-sm font-semibold text-slate-600 flex items-center gap-2">
                         Year:
-                        <select 
-                            value={manageLockYear} 
-                            onChange={e => setManageLockYear(parseInt(e.target.value))} 
-                            className="border-2 border-slate-300 rounded-lg py-1 px-3 font-bold"
-                        >
+                        <select value={manageLockYear} onChange={e => setManageLockYear(parseInt(e.target.value))} className="border-2 border-slate-300 rounded-lg py-1 px-3 font-bold">
                             {[0,1,2].map(i => <option key={i} value={new Date().getFullYear()-i}>{new Date().getFullYear()-i}</option>)}
                         </select>
                     </div>
                 </div>
 
                 <p className="text-sm text-slate-600 mb-6 font-medium">
-                    🔒 <strong>Locked</strong> months cannot be edited by Finance Team or Data Entry staff. Only Admin and Finance Chair can edit locked months.
+                     <strong>Locked</strong> months cannot be edited by Finance Team or Data Entry staff. Only Admin and Finance Chair can edit locked months.
                 </p>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -191,19 +177,11 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                                 onClick={() => toggleMonthLock(monthStr)}
                                 disabled={isFuture}
                                 title={lockInfo ? `${lockInfo.isLocked ? 'Locked' : 'Unlocked'} by ${lockInfo.lockedBy}` : ''}
-                                className={`p-4 rounded-lg border-2 text-center transition-all font-bold ${
-                                    isLocked 
-                                        ? 'bg-gradient-to-br from-red-100 to-rose-100 border-red-400 text-red-800 hover:shadow-md hover:scale-105' 
-                                        : 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-400 text-green-800 hover:shadow-md hover:scale-105'
-                                } ${isFuture ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                className={`p-4 rounded-lg border-2 text-center transition-all font-bold ${isLocked ? 'bg-gradient-to-br from-red-100 to-rose-100 border-red-400 text-red-800 hover:shadow-md hover:scale-105' : 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-400 text-green-800 hover:shadow-md hover:scale-105'} ${isFuture ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                             >
                                 <div className="text-sm">{date.toLocaleDateString('en-US', { month: 'short' })}</div>
-                                <div className="text-xs uppercase font-extrabold mt-2">
-                                    {isLocked ? '🔒 Locked' : '🔓 Open'}
-                                </div>
-                                {lockInfo && !isFuture && (
-                                    <div className="text-[10px] mt-1 opacity-75">{lockInfo.lockedBy}</div>
-                                )}
+                                <div className="text-xs uppercase font-extrabold mt-2">{isLocked ? ' Locked' : ' Open'}</div>
+                                {lockInfo && !isFuture && <div className="text-[10px] mt-1 opacity-75">{lockInfo.lockedBy}</div>}
                             </button>
                         );
                     })}
@@ -216,29 +194,19 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                     <h3 className="text-xl font-bold text-slate-800">Sunday Lock Status</h3>
                     <div className="text-sm font-semibold text-slate-600 flex items-center gap-2">
                         Month:
-                        <select 
-                            value={manageLockMonth} 
-                            onChange={e => setManageLockMonth(parseInt(e.target.value))} 
-                            className="border-2 border-slate-300 rounded-lg py-1 px-3 font-bold"
-                        >
+                        <select value={manageLockMonth} onChange={e => setManageLockMonth(parseInt(e.target.value))} className="border-2 border-slate-300 rounded-lg py-1 px-3 font-bold">
                             {Array.from({ length: 12 }, (_, i) => (
-                                <option key={i} value={i}>
-                                    {new Date(manageLockYear, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-                                </option>
+                                <option key={i} value={i}>{new Date(manageLockYear, i, 1).toLocaleDateString('en-US', { month: 'long' })}</option>
                             ))}
                         </select>
-                        <select 
-                            value={manageLockYear} 
-                            onChange={e => setManageLockYear(parseInt(e.target.value))} 
-                            className="border-2 border-slate-300 rounded-lg py-1 px-3 font-bold"
-                        >
+                        <select value={manageLockYear} onChange={e => setManageLockYear(parseInt(e.target.value))} className="border-2 border-slate-300 rounded-lg py-1 px-3 font-bold">
                             {[0,1,2].map(i => <option key={i} value={new Date().getFullYear()-i}>{new Date().getFullYear()-i}</option>)}
                         </select>
                     </div>
                 </div>
 
                 <p className="text-sm text-slate-600 mb-6 font-medium">
-                    🔒 <strong>Locked</strong> Sundays prevent Finance Team and Data Entry from editing entries for that week. Only Admin and Finance Chair can edit locked Sundays.
+                     <strong>Locked</strong> Sundays prevent Finance Team and Data Entry from editing entries for that week. Only Admin and Finance Chair can edit locked Sundays.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -254,20 +222,12 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                                 onClick={() => toggleSundayLock(dateStr)}
                                 disabled={isFuture}
                                 title={lockInfo ? `${lockInfo.isLocked ? 'Locked' : 'Unlocked'} by ${lockInfo.lockedBy}` : ''}
-                                className={`p-4 rounded-lg border-2 text-center transition-all font-bold ${
-                                    isLocked 
-                                        ? 'bg-gradient-to-br from-red-100 to-rose-100 border-red-400 text-red-800 hover:shadow-md hover:scale-105' 
-                                        : 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-400 text-green-800 hover:shadow-md hover:scale-105'
-                                } ${isFuture ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                className={`p-4 rounded-lg border-2 text-center transition-all font-bold ${isLocked ? 'bg-gradient-to-br from-red-100 to-rose-100 border-red-400 text-red-800 hover:shadow-md hover:scale-105' : 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-400 text-green-800 hover:shadow-md hover:scale-105'} ${isFuture ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                             >
                                 <div className="text-sm font-bold">Week {idx + 1}</div>
                                 <div className="text-xs mt-1">{sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                                <div className="text-xs uppercase font-extrabold mt-2">
-                                    {isLocked ? '🔒 Locked' : '🔓 Open'}
-                                </div>
-                                {lockInfo && !isFuture && (
-                                    <div className="text-[10px] mt-1 opacity-75">{lockInfo.lockedBy}</div>
-                                )}
+                                <div className="text-xs uppercase font-extrabold mt-2">{isLocked ? ' Locked' : ' Open'}</div>
+                                {lockInfo && !isFuture && <div className="text-[10px] mt-1 opacity-75">{lockInfo.lockedBy}</div>}
                             </button>
                         );
                     })}
@@ -283,10 +243,10 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                     About Month Locking
                 </h4>
                 <ul className="space-y-2 text-sm text-blue-900 font-medium">
-                    <li>✓ <strong>Admin & Finance Chair</strong> can lock/unlock any month or Sunday and edit locked periods.</li>
-                    <li>✓ <strong>Finance Team & Data Entry</strong> cannot edit entries in locked months or Sundays.</li>
-                    <li>✓ Use month locking for month-end reconciliation and Sunday locking for weekly closeouts.</li>
-                    <li>✓ Each lock records who locked it and when for audit purposes.</li>
+                    <li> <strong>Admin & Finance Chair</strong> can lock/unlock any month or Sunday and edit locked periods.</li>
+                    <li> <strong>Finance Team & Data Entry</strong> cannot edit entries in locked months or Sundays.</li>
+                    <li> Use month locking for month-end reconciliation and Sunday locking for weekly closeouts.</li>
+                    <li> Each lock records who locked it and when for audit purposes.</li>
                 </ul>
             </div>
         </div>
