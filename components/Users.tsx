@@ -128,53 +128,59 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200/80 overflow-x-auto max-h-[70vh] overflow-y-auto">
-                <table className="w-full text-left text-slate-600">
-                    <thead className="text-sm text-slate-700 uppercase bg-gradient-to-r from-slate-50 to-indigo-50 sticky top-0 z-10 border-b border-indigo-100">
-                        <tr>
-                            <th className="px-6 py-3">Username</th>
-                            <th className="px-6 py-3">Role</th>
-                            <th className="px-6 py-3">Details</th>
-                            <th className="px-6 py-3"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {users.map(user => (
-                            <tr key={user.username} className="bg-white border-t border-slate-100 hover:bg-indigo-50/40">
-                                <td className="px-6 py-4 font-bold text-slate-900 tracking-wide">{sanitizeString(user.username)}</td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-3 py-1 rounded-full text-sm font-bold capitalize ${roleBadgeClass(user.role)}`}>{sanitizeUserRole(user.role).replace('-', ' ')}</span>
-                                </td>
-                                <td className="px-6 py-4 text-slate-500">—</td>
-                                <td className="px-6 py-4 text-right">
-                                            <button
-                                                onClick={() => {
-                                                    if (user.username.toLowerCase() === 'admin') {
-                                                        alert('The default Admin user cannot be edited.');
-                                                        return;
-                                                    }
-                                                    setSelectedUser(user);
-                                                    setIsModalOpen(true);
-                                                }}
-                                                className={`font-bold mr-4 ${user.username.toLowerCase() === 'admin' ? 'text-slate-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-800'}`}
-                                                title={user.username.toLowerCase() === 'admin' ? 'Admin user is locked' : 'Edit user'}
-                                                disabled={user.username.toLowerCase() === 'admin'}
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(user.username)}
-                                                className={`font-bold ${user.username.toLowerCase() === 'admin' ? 'text-slate-400 cursor-not-allowed' : 'text-rose-600 hover:text-rose-800'}`}
-                                                title={user.username.toLowerCase() === 'admin' ? 'Admin user cannot be deleted' : 'Delete user'}
-                                                disabled={user.username.toLowerCase() === 'admin'}
-                                            >
-                                                Delete
-                                            </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+            <div className="bg-gradient-to-br from-slate-50 to-indigo-50 rounded-xl shadow-lg border-2 border-slate-200/80 p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                    {users.map(user => {
+                        const initials = sanitizeString(user.username).split(' ').map(s => s[0]).join('').slice(0,2).toUpperCase();
+                        const isAdmin = user.username.toLowerCase() === 'admin';
+                        return (
+                            <div key={user.username} className={`relative flex flex-col gap-3 bg-white rounded-2xl border border-slate-200 shadow group hover:shadow-xl transition p-5 ${isAdmin ? 'opacity-80' : ''}`}>
+                                <div className="flex items-center gap-4">
+                                    <div className={`flex items-center justify-center w-14 h-14 rounded-full font-extrabold text-xl border-4 shadow-inner ${isAdmin ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-indigo-100 text-indigo-700 border-indigo-200'}`}> 
+                                        {initials}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-lg text-slate-900 truncate flex items-center gap-2">
+                                            {sanitizeString(user.username)}
+                                            {isAdmin && <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 font-bold">Admin</span>}
+                                        </div>
+                                        <div className="mt-1">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${roleBadgeClass(user.role)}`}>{sanitizeUserRole(user.role).replace('-', ' ')}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex-1 text-slate-500 text-sm mt-2">—</div>
+                                <div className="flex gap-2 justify-end mt-2">
+                                    <button
+                                        onClick={() => {
+                                            if (isAdmin) {
+                                                alert('The default Admin user cannot be edited.');
+                                                return;
+                                            }
+                                            setSelectedUser(user);
+                                            setIsModalOpen(true);
+                                        }}
+                                        className={`flex items-center gap-1 font-bold px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-900 transition ${isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                        title={isAdmin ? 'Admin user is locked' : 'Edit user'}
+                                        disabled={isAdmin}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M9 11l6 6M3 21h6v-6l9.293-9.293a1 1 0 00-1.414-1.414L9 11z" /></svg>
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(user.username)}
+                                        className={`flex items-center gap-1 font-bold px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-900 transition ${isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                        title={isAdmin ? 'Admin user cannot be deleted' : 'Delete user'}
+                                        disabled={isAdmin}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
             {isModalOpen && <UserModal user={selectedUser} users={users} members={members} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
