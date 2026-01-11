@@ -11,9 +11,10 @@ interface DevelopmentFundProps {
     setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
     settings: Settings;
     syncStatus?: SyncStatus;
+    currentUser?: import('../types').User | null;
 }
 
-const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, setEntries, settings, syncStatus }) => {
+const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, setEntries, settings, syncStatus, currentUser }) => {
     // --- State ---
     const [memberInput, setMemberInput] = useState('');
     const [startDate, setStartDate] = useState(''); // Empty = show all
@@ -105,8 +106,34 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             return sortConfig.direction === 'asc' ? cmp : -cmp;
         });
         return sortable;
-
     }, [entries, members, startDate, endDate, sortConfig]);
+
+    // Group entries by date
+    const groupedEntries = useMemo(() => {
+        const groups: { [date: string]: typeof displayEntries } = {};
+        displayEntries.forEach(entry => {
+            // Only use the date part (YYYY-MM-DD)
+            const dateKey = entry.date.slice(0, 10);
+            if (!groups[dateKey]) groups[dateKey] = [];
+            groups[dateKey].push(entry);
+        });
+        // Sort dates descending
+        const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+        return sortedDates.map(date => ({ date, entries: groups[date] }));
+    }, [displayEntries]);
+
+    // State for expanded/collapsed groups
+    const [expandedDates, setExpandedDates] = useState<{ [date: string]: boolean }>({});
+    useEffect(() => {
+        // Expand the most recent date by default on first load
+        if (groupedEntries.length > 0 && Object.keys(expandedDates).length === 0) {
+            setExpandedDates({ [groupedEntries[0].date]: true });
+        }
+    }, [groupedEntries]);
+
+    const toggleDateGroup = (date: string) => {
+        setExpandedDates(prev => ({ ...prev, [date]: !prev[date] }));
+    };
 
     const totalContributions = displayEntries.reduce((sum, e) => sum + e.amount, 0);
 
@@ -158,6 +185,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             amount: amountVal,
             note: newDesc || undefined,
             createdAt: new Date().toISOString(),
+            createdBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+            updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
             deleted: false
         };
 
@@ -519,84 +548,76 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
                 <div className="flex-1 overflow-hidden">
                     <div className="overflow-y-auto max-h-[60vh] border-t-2 border-purple-200">
-                        <table className="w-full text-left text-slate-700">
-                            <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs uppercase font-bold sticky top-0 z-10 shadow-md">
-                                <tr>
-                                    <th className="px-4 py-3 cursor-pointer" onClick={() => setSortConfig(s => ({ key: 'date', direction: s.key==='date' && s.direction==='asc' ? 'desc' : 'asc' }))}>
-                                        Date {sortConfig.key==='date' ? (sortConfig.direction==='asc' ? '▲' : '▼') : ''}
-                                    </th>
-                                    <th className="px-4 py-3">Member</th>
-                                    <th className="px-4 py-3">Class</th>
-                                    <th className="px-4 py-3">Desc</th>
-                                    <th className="px-4 py-3 text-right cursor-pointer" onClick={() => setSortConfig(s => ({ key: 'amount', direction: s.key==='amount' && s.direction==='asc' ? 'desc' : 'asc' }))}>
-                                        Amount {sortConfig.key==='amount' ? (sortConfig.direction==='asc' ? '▲' : '▼') : ''}
-                                    </th>
-                                    <th className="px-4 py-3"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-purple-100 text-sm">
-                                {displayEntries.map((entry, idx) => (
-                                    <tr key={entry.id} className={`transition ${idx % 2 === 0 ? 'bg-white hover:bg-purple-50' : 'bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100'}`}>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            {editingId===entry.id ? (
-                                                <input type="date" value={editDate} onChange={e=>setEditDate(e.target.value)} className="border-slate-300 rounded-md p-1" />
-                                            ) : entry.date}
-                                        </td>
-                                        <td className="px-4 py-3 font-medium text-slate-800">
-                                            <span title={`Created by: ${entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}\nUpdated by: ${entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}`}>
-                                                {entry.memberName}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-center">{entry.classNumber}</td>
-                                        <td className="px-4 py-3 truncate max-w-[150px]">
-                                            {editingId===entry.id ? (
-                                                <>
-                                                    <input type="text" value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="border-slate-300 rounded-md p-1 w-full" />
-                                                    <div className="text-xs text-slate-500 mt-2">
-                                                        Created by: {entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}<br/>
-                                                        Updated by: {entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}
-                                                    </div>
-                                                </>
-                                            ) : entry.description}
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-bold text-slate-800">
-                                            {editingId===entry.id ? (
-                                                <input type="number" step="0.01" value={editAmount} onChange={e=>setEditAmount(e.target.value)} className="border-slate-300 rounded-md p-1 w-28 text-right" />
-                                            ) : formatCurrency(entry.amount, settings.currency)}
-                                        </td>
-                                        <td className="px-4 py-3 text-right flex gap-2 justify-end">
-                                            {editingId===entry.id ? (
-                                                <>
-                                                    <button onClick={saveEdit} className="text-green-600 hover:text-green-800 font-bold px-2 py-1 rounded hover:bg-green-50">Save</button>
-                                                    <button onClick={cancelEdit} className="text-slate-600 hover:text-slate-800 font-bold px-2 py-1 rounded hover:bg-slate-100">Cancel</button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <button onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description)} className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50">Edit</button>
-                                                    <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50">×</button>
-                                                </>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {displayEntries.length === 0 && (
-                                    <tr>
-                                        <td colSpan={6} className="p-12 text-center text-slate-400">
-                                            <p className="text-lg">No contributions found.</p>
-                                        </td>
-                                    </tr>
+                        {groupedEntries.length === 0 && (
+                            <div className="p-12 text-center text-slate-400 text-lg">No contributions found.</div>
+                        )}
+                        {groupedEntries.map(group => (
+                            <div key={group.date} className="mb-4 border rounded-lg bg-gradient-to-r from-purple-50 to-pink-50">
+                                <div
+                                    className="flex items-center justify-between px-4 py-2 cursor-pointer bg-gradient-to-r from-purple-200 to-pink-200 border-b"
+                                    onClick={() => toggleDateGroup(group.date)}
+                                >
+                                    <div className="font-bold text-purple-800 text-lg">{group.date}</div>
+                                    <div className="text-purple-600 font-semibold">
+                                        {expandedDates[group.date] ? '▼' : '►'} {group.entries.length} entr{group.entries.length === 1 ? 'y' : 'ies'} | {formatCurrency(group.entries.reduce((s,e)=>s+e.amount,0), settings.currency)}
+                                    </div>
+                                </div>
+                                {expandedDates[group.date] && (
+                                    <table className="w-full text-left text-slate-700">
+                                        <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs uppercase font-bold sticky top-0 z-10 shadow-md">
+                                            <tr>
+                                                <th className="px-4 py-3">Member</th>
+                                                <th className="px-4 py-3">Class</th>
+                                                <th className="px-4 py-3">Desc</th>
+                                                <th className="px-4 py-3 text-right">Amount</th>
+                                                <th className="px-4 py-3"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-purple-100 text-sm">
+                                            {group.entries.map((entry, idx) => (
+                                                <tr key={entry.id} className={`transition ${idx % 2 === 0 ? 'bg-white hover:bg-purple-50' : 'bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100'}`}>
+                                                    <td className="px-4 py-3 font-medium text-slate-800">
+                                                        <span title={`Created by: ${entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}\nUpdated by: ${entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}`}>
+                                                            {entry.memberName}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">{entry.classNumber}</td>
+                                                    <td className="px-4 py-3 truncate max-w-[150px]">
+                                                        {editingId===entry.id ? (
+                                                            <>
+                                                                <input type="text" value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="border-slate-300 rounded-md p-1 w-full" />
+                                                                <div className="text-xs text-slate-500 mt-2">
+                                                                    Created by: {entries.find(e => e.id === entry.id)?.createdBy || 'Unknown'}<br/>
+                                                                    Updated by: {entries.find(e => e.id === entry.id)?.updatedBy || 'Unknown'}
+                                                                </div>
+                                                            </>
+                                                        ) : entry.description}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-bold text-slate-800">
+                                                        {editingId===entry.id ? (
+                                                            <input type="number" step="0.01" value={editAmount} onChange={e=>setEditAmount(e.target.value)} className="border-slate-300 rounded-md p-1 w-28 text-right" />
+                                                        ) : formatCurrency(entry.amount, settings.currency)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right flex gap-2 justify-end">
+                                                        {editingId===entry.id ? (
+                                                            <>
+                                                                <button onClick={saveEdit} className="text-green-600 hover:text-green-800 font-bold px-2 py-1 rounded hover:bg-green-50">Save</button>
+                                                                <button onClick={cancelEdit} className="text-slate-600 hover:text-slate-800 font-bold px-2 py-1 rounded hover:bg-slate-100">Cancel</button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description)} className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50">Edit</button>
+                                                                <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50">×</button>
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 )}
-                            </tbody>
-                            <tfoot>
-                                <tr className="bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 border-purple-300 font-bold text-slate-700">
-                                    <td className="px-4 py-3" colSpan={4}>
-                                        <span className="text-xs font-bold uppercase text-purple-600">Visible:</span>
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-extrabold text-purple-700">{formatCurrency(displayEntries.reduce((s,e)=>s+e.amount,0), settings.currency)}</td>
-                                    <td className="px-4 py-3 text-right text-purple-600">{displayEntries.length} entries</td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
