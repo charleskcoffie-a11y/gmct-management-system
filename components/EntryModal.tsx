@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, EntryType, Method, Member, Settings, User, MonthLock } from '../types';
-import { sanitizeEntry, isMonthLocked, getNowEST, isEntryWindowOpen } from '../utils';
+import { sanitizeEntry, isMonthLocked, getNowEST, isEntryWindowOpen, isWeekdayEST } from '../utils';
 import { logEntryDeletionToSupabase, markEntryAsDeletedInSupabase } from '../services/supabase';
 
 interface EntryModalProps {
@@ -169,6 +169,15 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
         }
 
         const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+        
+        // Special exception for contractor "Okyere CPA" - Monday to Friday only
+        if (currentUser?.username === 'Okyere CPA' && currentUser?.role === 'finance-team') {
+            const weekdayCheck = isWeekdayEST();
+            if (!weekdayCheck.isWeekday) {
+                showToast(`Special restriction for contractors: ${weekdayCheck.reason}`, 'error');
+                return false;
+            }
+        }
         
         // Data Entry role: NEVER allowed to edit, only create new entries
         if (entry && currentUser?.role === 'data-entry') {

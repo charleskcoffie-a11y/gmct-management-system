@@ -592,3 +592,23 @@ function findNextAllowedDay(allowedDays: string[]): string {
     
     return allowedDays[0] || 'Sunday';
 }
+
+/**
+ * Check if current day is Monday-Friday in EST (for special contractor users)
+ */
+export function isWeekdayEST(): { isWeekday: boolean; currentDay: string; reason?: string } {
+    const now = new Date();
+    const estFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Toronto',
+        weekday: 'long'
+    });
+    const currentDay = estFormatter.format(now);
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const isWeekday = weekdays.includes(currentDay);
+    
+    return {
+        isWeekday,
+        currentDay,
+        reason: isWeekday ? undefined : `Entries only allowed Monday-Friday. Today is ${currentDay}.`
+    };
+}
