@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { NoNameEntry, Settings, User, SyncStatus } from '../types';
-import { formatCurrency, getTodayEST } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST } from '../utils';
 
 interface NoNameProps {
     entries: NoNameEntry[];
@@ -77,13 +77,13 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
             amount: amountVal,
             notes: newNotes,
             createdBy: currentUser.username,
-            updatedAt: new Date().toISOString(),
+            updatedAt: getNowEST(),
         };
 
         setEntries(prev => [...prev, entry]);
         setNewAmount('');
         setNewNotes('');
-        setNewDate(new Date().toISOString().slice(0, 10));
+        setNewDate(getTodayEST());
 
         setToastMsg('✓ Entry added');
         setShowToast(true);
@@ -136,7 +136,7 @@ const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentU
         setEntries(prev =>
             prev.map(e =>
                 e.id === editingId
-                    ? { ...e, date: editDate, amount: amountVal, notes: editNotes, updatedAt: new Date().toISOString() }
+                    ? { ...e, date: editDate, amount: amountVal, notes: editNotes, updatedAt: getNowEST() }
                     : e
             )
         );
