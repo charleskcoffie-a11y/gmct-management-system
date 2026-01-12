@@ -205,7 +205,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             method: newMethod,
             amount: amountVal,
             note: newDesc || generatePaymentDescription(newPaymentMonth),
-            createdAt: new Date().toISOString(),
+            createdAt: getNowEST(),
             createdBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
             updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
             deleted: false
@@ -311,7 +311,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 deleted: true, 
                 deletedReason: deleteReason, 
                 deletedBy: currentUser.username, 
-                deletedAt: new Date().toISOString() 
+                deletedAt: getNowEST() 
             } : e));
             
             setLastDeleted(entry);
@@ -319,7 +319,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 id: deleteId, 
                 reason: deleteReason, 
                 deletedBy: currentUser.username, 
-                deletedAt: new Date().toISOString() 
+                deletedAt: getNowEST() 
             }]);
             
             // Show success message
@@ -379,7 +379,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 memberInput: '',
                 memberId: '',
                 memberName: '',
-                date: new Date().toISOString().slice(0, 10),
+                date: getTodayEST(),
                 amount: '',
                 note: '',
                 method: 'cash'
@@ -403,7 +403,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             memberInput: '',
             memberId: '',
             memberName: '',
-            date: new Date().toISOString().slice(0, 10),
+            date: getTodayEST(),
             amount: '',
             note: '',
             method: 'cash'

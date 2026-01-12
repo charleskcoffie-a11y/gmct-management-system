@@ -123,7 +123,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
             // Reset for new entry
             const nextEntry: Entry = {
                 id: uuidv4(),
-                date: new Date().toISOString().split('T')[0],
+                date: getTodayEST(),
                 memberID: '',
                 memberName: '',
                 type: 'day-born',
@@ -174,7 +174,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                     id: deleteId,
                     reason: deleteReason,
                     deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
-                    deletedAt: new Date().toISOString(),
+                    deletedAt: getNowEST(),
                 }
             );
 

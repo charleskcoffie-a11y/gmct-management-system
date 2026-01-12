@@ -12,7 +12,7 @@ import PasswordChangeModal from './components/PasswordChangeModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
-import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
+import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST } from './utils';
 import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -515,7 +515,7 @@ const App: React.FC = () => {
                     ...entries[entryIndex],
                     deleted: true,
                     updatedBy: currentUser?.username || 'Unknown',
-                    lastUpdated: new Date().toISOString()
+                    lastUpdated: getNowEST()
                 };
 
                 try {
@@ -635,7 +635,7 @@ const App: React.FC = () => {
                 amount: amount,
                 note: `Harvest pledge payment (Pledge ID: ${pledge.id.substring(0, 8)})`,
                 createdBy: currentUser?.username,
-                createdAt: new Date().toISOString(),
+                createdAt: getNowEST(),
             };
 
             // Update pledge remaining amount
@@ -643,7 +643,7 @@ const App: React.FC = () => {
                 ...pledge,
                 remaining: Math.max(0, pledge.remaining - amount),
                 updatedBy: currentUser?.username,
-                lastUpdated: new Date().toISOString()
+                lastUpdated: getNowEST()
             };
 
             // Save to Supabase and reload data

@@ -13,7 +13,7 @@ interface NoNameProps {
 
 const NoName: React.FC<NoNameProps> = ({ entries, setEntries, settings, currentUser, syncStatus }) => {
     const [newAmount, setNewAmount] = useState('');
-    const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
+    const [newDate, setNewDate] = useState(getTodayEST());
     const [newNotes, setNewNotes] = useState('');
     const [showToast, setShowToast] = useState(false);
     const [toastMsg, setToastMsg] = useState('');
