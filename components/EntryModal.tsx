@@ -170,6 +170,12 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
 
         const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
         
+        // Data Entry role: NEVER allowed to edit, only create new entries
+        if (entry && currentUser?.role === 'data-entry') {
+            showToast('Data Entry staff cannot edit entries. Only Admin, Finance Chair, and Finance Team can edit. You can only create new entries.', 'error');
+            return false;
+        }
+
         // Check entry window restriction - applies to all except Admin & Finance Chair
         const entryWindowStatus = isEntryWindowOpen(settings.entryWindow);
         if (!entryWindowStatus.isOpen && currentUser?.role !== 'admin' && currentUser?.role !== 'finance-chair') {
@@ -177,26 +183,23 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             return false;
         }
 
+        // EDIT operations: block outside window for everyone except admin/chair
+        if (entry && !entryWindowStatus.isOpen && currentUser?.role !== 'admin' && currentUser?.role !== 'finance-chair') {
+            showToast(`Editing is not allowed outside the entry window.\n${entryWindowStatus.reason}\n${entryWindowStatus.nextOpenTime}`, 'error');
+            return false;
+        }
+
         // If Admin or Finance Chair overrides entry window, log it
-        if (!entryWindowStatus.isOpen && (currentUser?.role === 'admin' || currentUser?.role === 'finance-chair') && entry) {
+        if (!entryWindowStatus.isOpen && (currentUser?.role === 'admin' || currentUser?.role === 'finance-chair')) {
             const actor = (currentUser?.role || 'admin').toUpperCase();
-            const overrideNote = `[OVERRIDE (${actor}) - Outside entry window] ${formData.note || ''}`;
+            const actionType = entry ? 'EDIT' : 'CREATE';
+            const overrideNote = `[OVERRIDE (${actor}) - ${actionType} outside entry window] ${formData.note || ''}`;
             formData.note = overrideNote.trim();
         }
 
         if (isMonthLocked(formData.date, monthLocks) && !canOverrideLock) {
             showToast(`The financial month for ${formData.date} is LOCKED. You cannot add or edit entries for this period.`, 'error');
             return false;
-        }
-
-        if (entry && currentUser?.role === 'data-entry') {
-            const createdTime = new Date(entry.createdAt || new Date()).getTime();
-            const now = new Date().getTime();
-            const minutesDiff = (now - createdTime) / (1000 * 60);
-            if (minutesDiff > 15) {
-                showToast('Time limit exceeded. Data Entry staff can only edit records within 15 minutes of creation. Please contact a Finance Team member.', 'error');
-                return false;
-            }
         }
 
         const now = getNowEST();

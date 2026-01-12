@@ -374,13 +374,20 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                                 </p>
                             </div>
                         ) : (
-                            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                <div className="p-4 space-y-2">
-                                    {dateFilteredEntries.map(entry => (
+                            <div className="p-4 space-y-2">
+                                {dateFilteredEntries.map(entry => {
+                                    const allowedRoles = ['admin','finance-chair','finance-team'];
+                                    const canEditRole = currentUser && allowedRoles.includes(currentUser.role);
+                                    const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                    const canClickToEdit = canEditRole && (windowStatus.isOpen || canOverride);
+                                    
+                                    return (
                                         <div
                                             key={entry.id}
-                                            onClick={() => handleEditEntry(entry)}
-                                            className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-100 hover:border-green-400 hover:shadow-md cursor-pointer transition-all"
+                                            onClick={() => canClickToEdit && handleEditEntry(entry)}
+                                            className={`p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-100 transition-all ${canClickToEdit ? 'hover:border-green-400 hover:shadow-md cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                                            title={!canClickToEdit ? (currentUser?.role === 'data-entry' ? 'Data Entry cannot edit' : `Editing locked. ${windowStatus.reason}`) : undefined}
                                         >
                                             <div className="flex justify-between items-start">
                                                 <div>
@@ -399,8 +406,8 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                                                 <div className="text-xs text-gray-600 mt-2 pt-2 border-t border-green-200">📝 {entry.note}</div>
                                             )}
                                         </div>
-                                    ))}
-                                </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

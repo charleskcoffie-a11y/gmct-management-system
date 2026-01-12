@@ -800,7 +800,39 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                                     >
                                                                         💬
                                                                     </button>
-                                                                    <button onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description, (originalEntry?.method as Method) || 'cash')} className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50">✏️</button>
+                                                                    {(() => {
+                                                                        // Determine if user can edit based on role and entry window
+                                                                        if (!currentUser) return null;
+                                                                        if (currentUser.role === 'data-entry') return null; // data-entry cannot edit
+                                                                        
+                                                                        const editAllowedRoles = ['admin','finance-chair','finance-team'];
+                                                                        if (!editAllowedRoles.includes(currentUser.role)) return null;
+                                                                        
+                                                                        const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                                                        const canOverride = currentUser.role === 'admin' || currentUser.role === 'finance-chair';
+                                                                        
+                                                                        if (!windowStatus.isOpen && !canOverride) {
+                                                                            return (
+                                                                                <button
+                                                                                    disabled
+                                                                                    title={`Editing is locked. ${windowStatus.reason}`}
+                                                                                    className="text-gray-400 cursor-not-allowed font-bold px-2 py-1 rounded"
+                                                                                >
+                                                                                    ✏️
+                                                                                </button>
+                                                                            );
+                                                                        }
+                                                                        
+                                                                        return (
+                                                                            <button
+                                                                                onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description, (originalEntry?.method as Method) || 'cash')}
+                                                                                className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50"
+                                                                                title="Edit entry"
+                                                                            >
+                                                                                ✏️
+                                                                            </button>
+                                                                        );
+                                                                    })()}
                                                                     <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50">🗑️</button>
                                                                 </div>
                                                             </div>

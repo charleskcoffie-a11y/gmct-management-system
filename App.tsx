@@ -1029,20 +1029,30 @@ const App: React.FC = () => {
                                                                             </div>
                                                                             <div className="text-right ml-4">
                                                                                 <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
-                                                                                {canEdit && (
-                                                                                    <button 
-                                                                                        onClick={() => { 
-                                                                                            setSelectedEntry(entry); 
-                                                                                            setIsModalOpen(true); 
-                                                                                            setSelectedDateForModal(null);
-                                                                                        }} 
-                                                                                        disabled={!canWrite}
-                                                                                        title={!canWrite ? 'Requires cloud connection' : undefined}
-                                                                                        className={`mt-2 font-bold text-sm ${!canWrite ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
-                                                                                    >
-                                                                                        Edit
-                                                                                    </button>
-                                                                                )}
+                                                                                {(() => {
+                                                                                    if (!canEdit) return null;
+                                                                                    // Data-entry cannot edit at all
+                                                                                    if (currentUser?.role === 'data-entry') return null;
+                                                                                    // Check window status for edits
+                                                                                    const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                                                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                                                                    const disabled = !canWrite || (!windowStatus.isOpen && !canOverride);
+                                                                                    const title = !canWrite ? 'Requires cloud connection' : (!windowStatus.isOpen && !canOverride ? `Editing is locked. ${windowStatus.reason}` : undefined);
+                                                                                    return (
+                                                                                        <button 
+                                                                                            onClick={() => { 
+                                                                                                setSelectedEntry(entry); 
+                                                                                                setIsModalOpen(true); 
+                                                                                                setSelectedDateForModal(null);
+                                                                                            }} 
+                                                                                            disabled={disabled}
+                                                                                            title={title}
+                                                                                            className={`mt-2 font-bold text-sm ${disabled ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
+                                                                                        >
+                                                                                            Edit
+                                                                                        </button>
+                                                                                    );
+                                                                                })()}
                                                                             </div>
                                                                         </div>
                                                                     </div>
