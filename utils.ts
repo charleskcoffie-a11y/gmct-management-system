@@ -251,6 +251,23 @@ export function sanitizeUser(raw: any): User {
 }
 
 export function sanitizeSettings(raw: any): Settings {
+    const validDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const entryWindowRaw = raw.entryWindow;
+    const entryWindowSanitized = entryWindowRaw && typeof entryWindowRaw === 'object'
+        ? {
+            enabled: !!entryWindowRaw.enabled,
+            days: Array.isArray(entryWindowRaw.days)
+                ? entryWindowRaw.days.filter((d: any) => typeof d === 'string' && validDays.includes(d))
+                : [],
+            startTime: typeof entryWindowRaw.startTime === 'string' && entryWindowRaw.startTime.length >= 4
+                ? entryWindowRaw.startTime
+                : '06:00',
+            endTime: typeof entryWindowRaw.endTime === 'string' && entryWindowRaw.endTime.length >= 4
+                ? entryWindowRaw.endTime
+                : '18:00',
+        }
+        : undefined;
+
     return {
         currency: sanitizeString(raw.currency) || DEFAULT_CURRENCY,
         maxClasses: typeof raw.maxClasses === 'number' && raw.maxClasses > 0 ? raw.maxClasses : DEFAULT_MAX_CLASSES,
@@ -268,6 +285,7 @@ export function sanitizeSettings(raw: any): Settings {
         etransferNotificationEmail: sanitizeString(raw.etransferNotificationEmail),
         etransferInboundSecret: sanitizeString(raw.etransferInboundSecret),
         etransferProvider: sanitizeString(raw.etransferProvider) as any,
+        entryWindow: entryWindowSanitized,
     }
 }
 
