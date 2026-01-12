@@ -161,6 +161,13 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             if (!proceed) return false;
         }
 
+        // Only certain roles can add financial entries
+        const allowedRolesForEntries = ['admin', 'finance-chair', 'finance-team', 'data-entry'] as const;
+        if (!currentUser || !allowedRolesForEntries.includes(currentUser.role as any)) {
+            showToast('Your role is limited. Only Admin, Finance Chair, Finance Team, and Data Entry can record financial entries. Statistician accounts can only add Weekly History.', 'error');
+            return false;
+        }
+
         const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
         
         // Check entry window restriction - applies to all non-admin users
