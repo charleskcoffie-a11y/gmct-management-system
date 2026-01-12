@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings, SyncStatus, Method } from '../types';
-import { formatCurrency, getTodayEST, getNowEST } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST, isEntryWindowOpen } from '../utils';
 import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
 import { downloadReceipt, shareViaWhatsApp } from '../utils/receiptGenerator';
 
@@ -890,14 +890,26 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 </div>
             )}
 
-            <button
-                type="button"
-                onClick={() => { setIsEntryModalOpen(true); setIsBulkMode(false); }}
-                className="fixed bottom-6 right-6 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 text-base"
-            >
-                <span className="text-2xl leading-none">+</span>
-                Add Entry
-            </button>
+            {(() => {
+                const allowedRoles = ['admin','finance-chair','finance-team','data-entry'];
+                const canSee = currentUser && allowedRoles.includes(currentUser.role);
+                const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                const disabled = (!windowStatus.isOpen && !canOverride);
+                const title = (!windowStatus.isOpen && !canOverride) ? `${windowStatus.reason}. ${windowStatus.nextOpenTime}` : undefined;
+                return canSee ? (
+                    <button
+                        type="button"
+                        onClick={() => { setIsEntryModalOpen(true); setIsBulkMode(false); }}
+                        disabled={disabled}
+                        title={title}
+                        className={`fixed bottom-6 right-6 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 text-base ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700'}`}
+                    >
+                        <span className="text-2xl leading-none">+</span>
+                        Add Entry
+                    </button>
+                ) : null;
+            })()}
 
             {isEntryModalOpen && (
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex justify-center items-center p-4" onClick={() => setIsEntryModalOpen(false)}>

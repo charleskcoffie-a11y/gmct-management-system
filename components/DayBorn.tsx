@@ -6,7 +6,7 @@ import EntryModal from './EntryModal';
 import BulkDayBornModal from './BulkDayBornModal';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from './ToastProvider';
-import { getTodayEST, getNowEST } from '../utils';
+import { getTodayEST, getNowEST, isEntryWindowOpen } from '../utils';
 
 interface DayBornProps {
     members: Member[];
@@ -267,18 +267,34 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                             </div>
                         </div>
                         <div className="flex gap-3">
-                            <button
-                                onClick={() => setIsBulkModalOpen(true)}
-                                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all"
-                            >
-                                📊 Bulk Entry
-                            </button>
-                            <button
-                                onClick={handleAddEntry}
-                                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all"
-                            >
-                                ➕ Add Entry
-                            </button>
+                            {(() => {
+                                const allowedRoles = ['admin','finance-chair','finance-team','data-entry'];
+                                const canSee = currentUser && allowedRoles.includes(currentUser.role);
+                                const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                const disabled = (!windowStatus.isOpen && !canOverride);
+                                const title = (!windowStatus.isOpen && !canOverride) ? `${windowStatus.reason}. ${windowStatus.nextOpenTime}` : undefined;
+                                return canSee ? (
+                                    <>
+                                        <button
+                                            onClick={() => setIsBulkModalOpen(true)}
+                                            disabled={disabled}
+                                            title={title}
+                                            className={`px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-lg shadow-lg transition-all ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:from-blue-700 hover:to-cyan-700 hover:shadow-xl'}`}
+                                        >
+                                            📊 Bulk Entry
+                                        </button>
+                                        <button
+                                            onClick={handleAddEntry}
+                                            disabled={disabled}
+                                            title={title}
+                                            className={`px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg shadow-lg transition-all ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:from-purple-700 hover:to-indigo-700 hover:shadow-xl'}`}
+                                        >
+                                            ➕ Add Entry
+                                        </button>
+                                    </>
+                                ) : null;
+                            })()}
                         </div>
                     </div>
                 </div>

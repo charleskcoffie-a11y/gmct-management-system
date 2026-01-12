@@ -13,7 +13,7 @@ import PasswordChangeModal from './components/PasswordChangeModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
-import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST } from './utils';
+import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST, isEntryWindowOpen } from './utils';
 import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -725,14 +725,22 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                                 {/* Hide Create Button for Pastor */}
-                                {currentUser.role !== 'pastor' && (
-                                    <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} disabled={!canWrite} title={!canWrite ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!canWrite ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}>
+                                {(() => {
+                                    const allowedRoles = ['admin','finance-chair','finance-team','data-entry'];
+                                    const canSee = currentUser && allowedRoles.includes(currentUser.role);
+                                    const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                    const disabled = !canWrite || (!windowStatus.isOpen && !canOverride);
+                                    const title = !canWrite ? 'Requires cloud connection' : (!windowStatus.isOpen && !canOverride ? `${windowStatus.reason}. ${windowStatus.nextOpenTime}` : undefined);
+                                    return canSee ? (
+                                        <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} disabled={disabled} title={title} className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                                         </svg>
                                         Record Contribution
-                                    </button>
-                                )}
+                                        </button>
+                                    ) : null;
+                                })()}
                             </div>
                         </div>
 
