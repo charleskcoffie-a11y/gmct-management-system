@@ -7,6 +7,7 @@ import EntryModal from './components/EntryModal';
 import ConfirmationModal from './components/ConfirmationModal';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import Login from './components/Login';
+import EntryWindowBanner from './components/EntryWindowBanner';
 import { ToastProvider } from './components/ToastProvider';
 import PasswordChangeModal from './components/PasswordChangeModal';
 
@@ -1439,6 +1440,9 @@ const App: React.FC = () => {
                     </aside>
                     <section className="lg:col-span-4">
                         <Suspense fallback={<div className="p-10 text-center text-slate-500">Loading page...</div>}>
+                                <div className="px-6 pt-4">
+                                    <EntryWindowBanner settings={settings} currentUser={currentUser} />
+                                </div>
                             {renderTabContent()}
                         </Suspense>
                     </section>
