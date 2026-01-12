@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { Member, Settings } from '../types';
 import type { HarvestPledge, HarvestPledgeCategory } from '../types/harvestPledge';
+import { getTodayEST, getNowEST } from '../utils';
 
 interface BulkPledgesModalProps {
   members: Member[];
@@ -19,7 +20,7 @@ const BulkPledgesModal: React.FC<BulkPledgesModalProps> = ({ members, settings, 
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(getTodayEST());
   const [amount, setAmount] = useState<string>('');
   const [category, setCategory] = useState<HarvestPledgeCategory>(defaultCategory);
   const [note, setNote] = useState('');
@@ -58,7 +59,7 @@ const BulkPledgesModal: React.FC<BulkPledgesModalProps> = ({ members, settings, 
         remaining: amt,
         category,
         note,
-        createdAt: new Date().toISOString(),
+        createdAt: getNowEST(),
       } as HarvestPledge;
     });
     onCreate(pledges);

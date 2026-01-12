@@ -2,8 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { Member, Settings, User, AttendanceStatus, SyncStatus } from '../types';
 import { saveAttendanceToSupabase, loadAttendanceForDate, loadAttendanceReport, saveMemberToSupabase as saveMemberToSupabaseFn } from '../services/supabase';
 import MemberModal from './MemberModal';
-import { useToast } from './ToastProvider';
-
+import { useToast } from './ToastProvider';import { getTodayEST, getWeekStart } from '../utils';
 interface ClassAttendanceProps {
     members: Member[];
     setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
@@ -14,7 +13,7 @@ interface ClassAttendanceProps {
 const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, settings, currentUser, syncStatus }) => {
     const { showToast } = useToast();
     // Base date selector; we will snap it to the week start (Sunday)
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+    const [selectedDate, setSelectedDate] = useState<string>(getTodayEST());
     const [attendance, setAttendance] = useState<Map<string, AttendanceStatus>>(new Map());
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
@@ -48,7 +47,7 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
         end.setUTCDate(start.getUTCDate() + 6);
         return end.toISOString().slice(0, 10);
     };
-    const currentWeekStart = getWeekStart(new Date().toISOString().slice(0, 10));
+    const currentWeekStart = getWeekStart(getTodayEST());
     const selectedWeekStart = getWeekStart(selectedDate);
     const selectedWeekEnd = getWeekEnd(selectedDate);
     const isCurrentWeek = selectedWeekStart === currentWeekStart;

@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Member, AttendanceRecord, AttendanceStatus, Settings, User } from '../types';
 import AttendanceReportModal from './AttendanceReportModal';
-import { sanitizeAttendanceStatus, sanitizeString } from '../utils';
+import { sanitizeAttendanceStatus, sanitizeString, getTodayEST } from '../utils';
 
 interface AdminAttendanceViewProps {
     members: Member[];
@@ -15,7 +15,7 @@ interface AdminAttendanceViewProps {
 type SortKey = 'name' | 'status';
 
 const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, attendance, settings, currentUser }) => {
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+    const [selectedDate, setSelectedDate] = useState(getTodayEST());
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [classFilter, setClassFilter] = useState<string>('all');
     

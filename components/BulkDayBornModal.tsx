@@ -19,7 +19,7 @@ const BulkDayBornModal: React.FC<BulkDayBornModalProps> = ({
   onClose,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(getTodayEST());
   const [amount, setAmount] = useState<string>('');
   const [method, setMethod] = useState<'cash' | 'cheque' | 'transfer' | 'mobile-money'>('cash');
   const [note, setNote] = useState('');
@@ -66,7 +66,7 @@ const BulkDayBornModal: React.FC<BulkDayBornModalProps> = ({
         amount: amt,
         note,
         createdBy: undefined,
-        createdAt: new Date().toISOString(),
+        createdAt: getNowEST(),
       } as Entry;
     });
 

@@ -4,6 +4,53 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, MonthLock, NoNameEntry, HarvestEntry } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 
+// --- Timezone Helper (EST/Toronto) ---
+
+/**
+ * Get current date in EST/Toronto timezone as YYYY-MM-DD string
+ */
+export function getTodayEST(): string {
+    const now = new Date();
+    // Create formatter for EST timezone
+    const estFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Toronto',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    const parts = estFormatter.formatToParts(now);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get current ISO string in EST/Toronto timezone
+ */
+export function getNowEST(): string {
+    const now = new Date();
+    // Create formatter for EST timezone
+    const estFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Toronto',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    const parts = estFormatter.formatToParts(now);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    const hour = parts.find(p => p.type === 'hour')?.value;
+    const minute = parts.find(p => p.type === 'minute')?.value;
+    const second = parts.find(p => p.type === 'second')?.value;
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+}
+
 // --- String & Sanitization ---
 
 export function sanitizeString(input: any): string {
@@ -25,7 +72,7 @@ export function sanitizeEntry(raw: any): Entry {
     const parsedDate = new Date(raw.date);
     const date = (raw.date && !isNaN(parsedDate.getTime()))
         ? parsedDate.toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+        : getTodayEST();
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),
@@ -43,7 +90,7 @@ export function sanitizeEntry(raw: any): Entry {
         // Important: Return undefined or valid string, never empty string for optional date fields
         lastUpdated: sanitizeString(raw.lastUpdated) || undefined, 
         deleted: !!raw.deleted,
-        createdAt: sanitizeString(raw.createdAt) || new Date().toISOString()
+        createdAt: sanitizeString(raw.createdAt) || getNowEST()
     };
 }
 
@@ -51,7 +98,7 @@ export function sanitizeDevelopmentFundEntry(raw: any): DevelopmentFundEntry {
     const parsedDate = new Date(raw.date);
     const date = (raw.date && !isNaN(parsedDate.getTime()))
         ? parsedDate.toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+        : getTodayEST();
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),
@@ -67,7 +114,7 @@ export function sanitizeNoNameEntry(raw: any): NoNameEntry {
     const parsedDate = new Date(raw.date);
     const date = (raw.date && !isNaN(parsedDate.getTime()))
         ? parsedDate.toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+        : getTodayEST();
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),
@@ -75,7 +122,7 @@ export function sanitizeNoNameEntry(raw: any): NoNameEntry {
         amount: isNaN(parseFloat(raw.amount)) ? 0 : parseFloat(raw.amount),
         notes: sanitizeString(raw.notes),
         createdBy: sanitizeString(raw.createdBy),
-        updatedAt: sanitizeString(raw.updatedAt) || new Date().toISOString(),
+        updatedAt: sanitizeString(raw.updatedAt) || getNowEST(),
     };
 }
 
@@ -83,7 +130,7 @@ export function sanitizeHarvestEntry(raw: any): HarvestEntry {
     const parsedDate = new Date(raw.date);
     const date = (raw.date && !isNaN(parsedDate.getTime()))
         ? parsedDate.toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+        : getTodayEST();
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),
@@ -148,7 +195,7 @@ export function sanitizeMember(raw: any): Member {
             ? (findVal(['active', 'isActive', 'status']) as boolean)
             : true,
         // Ensure createdAt is never empty string
-        createdAt: sanitizeString(findVal(['createdAt', 'created_at'])) || new Date().toISOString(),
+        createdAt: sanitizeString(findVal(['createdAt', 'created_at'])) || getNowEST(),
         // Development fund pledge fields
         devFundPledge: typeof findVal(['devFundPledge', 'dev_fund_pledge', 'developmentFundPledge']) === 'boolean'
             ? (findVal(['devFundPledge', 'dev_fund_pledge', 'developmentFundPledge']) as boolean)
@@ -230,7 +277,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
     const parsedDate = new Date(raw.dateOfService);
     const dateOfService = (raw.dateOfService && !isNaN(parsedDate.getTime()))
         ? parsedDate.toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+        : getTodayEST();
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),

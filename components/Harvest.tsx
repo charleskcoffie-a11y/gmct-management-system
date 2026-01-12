@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, Member, Settings, SyncStatus, User } from '../types';
-import { formatCurrency } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST } from '../utils';
 import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
 
 interface HarvestProps {
@@ -21,8 +21,8 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     
     // Filters
-    const [startDateFilter, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
-    const [endDateFilter, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
+    const [startDateFilter, setStartDateFilter] = useState(getTodayEST());
+    const [endDateFilter, setEndDateFilter] = useState(getTodayEST());
     const [classFilter, setClassFilter] = useState('all');
     const [searchFilter, setSearchFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
@@ -39,7 +39,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     // Form state
     const [formData, setFormData] = useState<Entry>({
         id: '',
-        date: new Date().toISOString().split('T')[0],
+        date: getTodayEST(),
         memberID: '',
         memberName: '',
         classNumber: '',
@@ -48,7 +48,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         method: 'cash',
         amount: 0,
         note: '',
-        createdAt: new Date().toISOString()
+        createdAt: getNowEST()
     });
     const harvestCategories = [
         { value: 'harvest-levy', label: 'Harvest Levy' },
@@ -118,7 +118,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         } else {
             setFormData({
                 id: crypto.randomUUID(),
-                date: new Date().toISOString().split('T')[0],
+                date: getTodayEST(),
                 memberID: '',
                 memberName: '',
                 classNumber: '',
@@ -128,7 +128,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 amount: 0,
                 note: '',
                 createdBy: currentUser?.username,
-                createdAt: new Date().toISOString()
+                createdAt: getNowEST()
             });
             setAmountInput('');
             setMemberNumberInput('');
@@ -152,7 +152,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         if (selectedEntry) {
             setEntries(prev => prev.map(entry => 
                 entry.id === selectedEntry.id 
-                    ? { ...formData, updatedBy: currentUser?.username, lastUpdated: new Date().toISOString() }
+                    ? { ...formData, updatedBy: currentUser?.username, lastUpdated: getNowEST() }
                     : entry
             ));
         } else {
@@ -197,7 +197,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                     id: deleteId,
                     reason: deleteReason,
                     deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
-                    deletedAt: new Date().toISOString(),
+                    deletedAt: getNowEST(),
                 }
             );
 

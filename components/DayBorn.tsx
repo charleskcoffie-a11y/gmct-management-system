@@ -6,6 +6,7 @@ import EntryModal from './EntryModal';
 import BulkDayBornModal from './BulkDayBornModal';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from './ToastProvider';
+import { getTodayEST, getNowEST } from '../utils';
 
 interface DayBornProps {
     members: Member[];
@@ -60,7 +61,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
     const handleAddEntry = () => {
         const newEntry: Entry = {
             id: uuidv4(),
-            date: new Date().toISOString().split('T')[0],
+            date: getTodayEST(),
             memberID: '',
             memberName: '',
             type: 'day-born',

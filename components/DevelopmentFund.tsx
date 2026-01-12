@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings, SyncStatus, Method } from '../types';
-import { formatCurrency } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST } from '../utils';
 import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
 import { downloadReceipt, shareViaWhatsApp } from '../utils/receiptGenerator';
 
@@ -51,7 +50,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         memberInput: '',
         memberId: '',
         memberName: '',
-        date: new Date().toISOString().slice(0, 10),
+        date: getTodayEST(),
         amount: '',
         note: '',
         method: 'cash'
@@ -59,7 +58,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
     // Form State
     const [newAmount, setNewAmount] = useState('');
-    const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [newDate, setNewDate] = useState(() => getTodayEST());
     const [newDesc, setNewDesc] = useState('');
     const [newMethod, setNewMethod] = useState<Method>('cash');
     const [newPaymentMonth, setNewPaymentMonth] = useState(() => {
@@ -223,7 +222,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             // Reset form completely
             setNewAmount('');
             setNewDesc('');
-            setNewDate(new Date().toISOString().slice(0, 10)); // Reset to today
+            setNewDate(getTodayEST()); // Reset to today
             setNewMethod('cash'); // Reset to default method
             const now = new Date();
             setNewPaymentMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); // Reset to current month

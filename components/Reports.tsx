@@ -18,7 +18,7 @@ interface ReportsProps {
 }
 
 const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, settings, history, setHistory, setEntries, targetSection, onConsumeTarget }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayEST();
   const [activeSection, setActiveSection] = useState<'financial' | 'weekly' | 'birthdays'>('financial');
 
   const combinedEntries = useMemo(() => {

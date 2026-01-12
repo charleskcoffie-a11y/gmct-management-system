@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Entry, Member, Settings, User } from '../types';
-import { formatCurrency } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST } from '../utils';
 import { saveHarvestPledgeToSupabase, type HarvestPledge } from '../services/supabase';
 
 interface HarvestPledgesProps {
@@ -31,13 +31,13 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [showBulkModal, setShowBulkModal] = useState(false);
-  const [bulkDate, setBulkDate] = useState(new Date().toISOString().split('T')[0]);
+  const [bulkDate, setBulkDate] = useState(getTodayEST());
   const [bulkGroup, setBulkGroup] = useState<PledgeGroup>('Men');
   const [bulkCategory, setBulkCategory] = useState<PledgeCategory>('harvest-appeal');
   const [bulkEntries, setBulkEntries] = useState<Array<{memberID: string; amount: string}>>([]);
   const [showPayment, setShowPayment] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(getTodayEST());
   const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
 
   const filteredPledges = useMemo(() => pledges.filter(p => {
@@ -91,7 +91,7 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
           remaining: parseFloat(e.amount),
           category: bulkCategory as PledgeCategory,
           note: bulkCategory === 'harvest-appeal' ? 'Harvest Appeal' : 'Harvest Sales',
-          createdAt: new Date().toISOString(),
+          createdAt: getNowEST(),
           createdBy: 'bulk-entry',
         };
       });
@@ -127,7 +127,7 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
     onPayPledge(pledge, payAmt, paymentDate);
     setShowPayment(null);
     setPaymentAmount('');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(getTodayEST());
   };
 
   const handleDelete = (pledgeId: string) => {
@@ -157,7 +157,7 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
         ...pledge,
         deleted: true,
         updatedBy: pledge.updatedBy || pledge.createdBy || 'Unknown',
-        lastUpdated: new Date().toISOString()
+        lastUpdated: getNowEST()
       };
 
       await saveHarvestPledgeToSupabase(settings.supabaseUrl, settings.supabaseKey, updatedPledge);

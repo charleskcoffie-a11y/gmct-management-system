@@ -2,7 +2,7 @@
 // components/Attendance.tsx
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Member, AttendanceRecord, AttendanceStatus, User, Settings } from '../types';
-import { sanitizeAttendanceStatus, sanitizeString } from '../utils';
+import { sanitizeAttendanceStatus, sanitizeString, getTodayEST } from '../utils';
 import BulkAttendanceModal from './BulkAttendanceModal';
 
 interface AttendanceProps {
@@ -14,7 +14,7 @@ interface AttendanceProps {
 }
 
 const Attendance: React.FC<AttendanceProps> = ({ members, attendance, setAttendance, currentUser, settings }) => {
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+    const [selectedDate, setSelectedDate] = useState(getTodayEST());
     const [classFilter, setClassFilter] = useState<string>('all');
     const [pendingChanges, setPendingChanges] = useState<Map<string, AttendanceStatus>>(new Map());
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);

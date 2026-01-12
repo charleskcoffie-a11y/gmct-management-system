@@ -1,6 +1,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, SundayLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, ClassLeader } from '../types';
+import { getNowEST } from '../utils';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -96,7 +97,7 @@ const mapMemberToDB = (m: Member) => ({
     dev_fund_pledge: m.devFundPledge || false,
     dev_fund_pledge_amount: typeof m.devFundPledgeAmount === 'number' ? m.devFundPledgeAmount : null,
     active: typeof m.active === 'boolean' ? m.active : true,
-    created_at: m.createdAt || new Date().toISOString() // Ensure never empty
+    created_at: m.createdAt || getNowEST() // Ensure never empty
 });
 
 const mapMemberFromDB = (m: any): Member => {
@@ -144,7 +145,7 @@ const mapEntryToDB = (e: Entry) => ({
     updated_by: e.updatedBy,
     last_updated: toTimestamp(e.lastUpdated),
     deleted: e.deleted,
-    created_at: e.createdAt || new Date().toISOString()
+    created_at: e.createdAt || getNowEST()
 });
 
 const mapEntryFromDB = (e: any): Entry => ({
@@ -572,7 +573,7 @@ export const saveRequisition = async (url: string, key: string, req: Requisition
 export const submitRequisition = async (url: string, key: string, id: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: new Date().toISOString() }).eq('id', id);
+    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: getNowEST() }).eq('id', id);
     if (error) throw new Error(error.message);
 };
 
@@ -581,7 +582,7 @@ export const decideRequisition = async (url: string, key: string, approval: Requ
     if (!supabase) throw new Error('Invalid Supabase configuration');
     const { error: insErr } = await supabase.from('requisition_approvals').insert([mapApprovalToDB(approval)]);
     if (insErr) throw new Error(insErr.message);
-    const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: new Date().toISOString() }).eq('id', approval.requisitionId);
+    const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: getNowEST() }).eq('id', approval.requisitionId);
     if (updErr) throw new Error(updErr.message);
 };
 
@@ -634,7 +635,7 @@ export const markEntryAsDeletedInSupabase = async (
             deleted: true,
             deleted_by: deletedBy,
             deleted_reason: deletedReason,
-            deleted_at: new Date().toISOString()
+            deleted_at: getNowEST()
         })
         .eq('id', entryId);
     if (error) throw new Error(`Mark entry as deleted failed: ${error.message}`);
@@ -660,7 +661,7 @@ export const logEntryDeletionToSupabase = async (
         original_date: entry.date,
         deletion_reason: reason,
         deleted_by: deletedBy,
-        deleted_at: new Date().toISOString(),
+        deleted_at: getNowEST(),
         original_entry_data: entry
     };
     
@@ -928,7 +929,7 @@ const mapHarvestPledgeToDB = (p: HarvestPledge): HarvestPledgeDB => ({
     updated_by: p.updatedBy,
     last_updated: toTimestamp(p.lastUpdated),
     deleted: p.deleted,
-    created_at: p.createdAt || new Date().toISOString()
+    created_at: p.createdAt || getNowEST()
 });
 
 const mapHarvestPledgeFromDB = (p: any): HarvestPledge => ({
@@ -983,7 +984,7 @@ export const saveHarvestPledgePayment = async (
             payment_date: paymentDate,
             amount: amount,
             paid_by: paidBy,
-            created_at: new Date().toISOString()
+            created_at: getNowEST()
         }]);
     
     if (error) throw new Error(`Save harvest pledge payment failed: ${error.message}`);
@@ -1043,7 +1044,7 @@ const mapMemberLevyToDB = (l: MemberLevy): MemberLevyDB => ({
     remaining: l.remaining,
     class_number: l.classNumber,
     group_name: l.groupName,
-    created_at: l.createdAt || new Date().toISOString(),
+    created_at: l.createdAt || getNowEST(),
 });
 
 const mapMemberLevyFromDB = (l: any): MemberLevy => ({
@@ -1146,7 +1147,7 @@ const mapWesleyHallToDB = (r: WesleyHallReceipt) => ({
     updated_by: r.updatedBy,
     last_updated: toTimestamp(r.lastUpdated),
     deleted: r.deleted,
-    created_at: r.createdAt || new Date().toISOString(),
+    created_at: r.createdAt || getNowEST(),
 });
 
 const mapWesleyHallFromDB = (r: any): WesleyHallReceipt => ({
@@ -1336,7 +1337,7 @@ export const deleteAssetFromSupabase = async (url: string, key: string, id: stri
     // Soft delete
     const { error } = await supabase
         .from('assets')
-        .update({ deleted: true, updated_at: new Date().toISOString() })
+        .update({ deleted: true, updated_at: getNowEST() })
         .eq('id', id);
     if (error) throw new Error(`Delete asset failed: ${error.message}`);
     return { success: true };
@@ -1427,7 +1428,7 @@ export const saveUtilityValue = async (
             value,
             description: description || null,
             updated_by: updatedBy || null,
-            updated_at: new Date().toISOString(),
+            updated_at: getNowEST(),
         }]);
     if (error) throw new Error(`Save utility ${utilityKey} failed: ${error.message}`);
     return { success: true };

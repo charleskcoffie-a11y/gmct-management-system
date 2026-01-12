@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, EntryType, Method, Member, Settings, User, MonthLock } from '../types';
-import { sanitizeEntry, isMonthLocked } from '../utils';
+import { sanitizeEntry, isMonthLocked, getNowEST } from '../utils';
 import { logEntryDeletionToSupabase, markEntryAsDeletedInSupabase } from '../services/supabase';
 
 interface EntryModalProps {
@@ -177,7 +177,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             }
         }
 
-        const now = new Date().toISOString();
+        const now = getNowEST();
         const entryToSave = {
             ...formData,
             updatedBy: currentUser?.username || 'Unknown',
@@ -478,7 +478,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                                                         id: entry.id,
                                                                         reason: deleteReason,
                                                                         deletedBy: currentUser?.username || 'Unknown',
-                                                                        deletedAt: new Date().toISOString(),
+                                                                        deletedAt: getNowEST(),
                                                                     },
                                                                 ]);
                                                                 

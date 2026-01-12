@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Settings, User, SyncStatus, WesleyHallReceipt } from '../types';
-import { formatCurrency } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST } from '../utils';
 import { v4 as uuidv4 } from 'uuid';
 import { loadWesleyHallReceipts, saveWesleyHallReceipt, deleteWesleyHallReceipt } from '../services/supabase';
 
@@ -13,7 +13,7 @@ interface WesleyHallProps {
 const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStatus }) => {
     const [receipts, setReceipts] = useState<WesleyHallReceipt[]>([]);
 
-    const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState<string>(getTodayEST());
     const [amount, setAmount] = useState<string>('');
     const [notes, setNotes] = useState<string>('');
 
@@ -69,12 +69,12 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
             amount: amt,
             notes,
             createdBy: currentUser.username,
-            createdAt: new Date().toISOString(),
+            createdAt: getNowEST(),
         };
         try {
             await saveWesleyHallReceipt(settings.supabaseUrl, settings.supabaseKey, rec);
             setReceipts(prev => [rec, ...prev]);
-            setDate(new Date().toISOString().slice(0, 10));
+            setDate(getTodayEST());
             setAmount('');
             setNotes('');
         } catch (e: any) {
