@@ -1,7 +1,7 @@
 // components/DayBorn.tsx
 import React, { useState, useMemo } from 'react';
 import type { Member, Entry, Settings, User, SyncStatus, MonthLock } from '../types';
-import { saveEntryToSupabase } from '../services/supabase';
+import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
 import EntryModal from './EntryModal';
 import BulkDayBornModal from './BulkDayBornModal';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,6 +26,13 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [filterDate, setFilterDate] = useState<string>('');
+    const [showDeleted, setShowDeleted] = useState(false);
+    
+    // Delete state
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [deleteReason, setDeleteReason] = useState('');
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteError, setDeleteError] = useState('');
 
     // Filter members by selected day of the week
     const filteredMembers = useMemo(() => {
@@ -34,12 +41,13 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
 
     // Get entries for filtered members for the day-born type
     const dayBornEntries = useMemo(() => {
-        return entries.filter(e => 
-            e.type === 'day-born' && 
-            filteredMembers.some(m => m.id === e.memberID) &&
-            !e.deleted
-        ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [entries, filteredMembers]);
+        return entries.filter(e => {
+            if (e.type !== 'day-born') return false;
+            if (!filteredMembers.some(m => m.id === e.memberID)) return false;
+            if (e.deleted && !showDeleted) return false;
+            return true;
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [entries, filteredMembers, showDeleted]);
 
     const dateFilteredEntries = useMemo(() => {
         if (!filterDate) return dayBornEntries;
@@ -129,19 +137,68 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
         }
     };
 
-    const handleDeleteEntry = async (id: string) => {
-        if (!requireCloud()) return;
-        const updatedEntries = entries.map(e => 
-            e.id === id ? { ...e, deleted: true, updatedBy: currentUser?.username } : e
-        );
-        const deletedEntry = updatedEntries.find(e => e.id === id);
-        try {
-            if (deletedEntry) await persistEntry(deletedEntry);
-            setEntries(updatedEntries);
-            showToast(`✅ Entry deleted`, 'success', 2000);
-        } catch (err: any) {
-            showToast(`❌ Failed to delete entry in cloud: ${err.message || err}`, 'error', 5000);
+    const handleDeleteEntry = (id: string) => {
+        if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'finance-chair')) {
+            alert('Only admins or finance chairs can delete entries.');
+            return;
         }
+        setDeleteId(id);
+        setDeleteReason('');
+        setDeleteError('');
+        setShowDeleteModal(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus?.state !== 'synced') {
+            setDeleteError('Writes are disabled until connected to the cloud.');
+            return;
+        }
+
+        const entry = entries.find(e => e.id === deleteId);
+        if (!entry) {
+            setDeleteError('Entry not found');
+            return;
+        }
+
+        try {
+            // Mark as deleted in Supabase
+            await markEntryAsDeletedInSupabase(settings.supabaseUrl, settings.supabaseKey, deleteId);
+            
+            // Log the deletion
+            await logEntryDeletionToSupabase(
+                settings.supabaseUrl,
+                settings.supabaseKey,
+                {
+                    id: deleteId,
+                    reason: deleteReason,
+                    deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                    deletedAt: new Date().toISOString(),
+                }
+            );
+
+            // Update local state
+            setEntries(prev => prev.map(e => e.id === deleteId ? {
+                ...e,
+                deleted: true,
+                deletedReason: deleteReason,
+                deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+            } : e));
+
+            showToast('Entry deleted successfully', 'success');
+            setShowDeleteModal(false);
+            setDeleteId(null);
+            setDeleteReason('');
+        } catch (error: any) {
+            setDeleteError(`Failed to delete: ${error.message}`);
+        }
+    };
+
+    const cancelDelete = () => {
+        setShowDeleteModal(false);
+        setDeleteId(null);
+        setDeleteReason('');
+        setDeleteError('');
     };
 
     const handleBulkSave = async (newEntries: Entry[]) => {
@@ -287,6 +344,10 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                                         Clear
                                     </button>
                                 )}
+                                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                    <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
+                                    🗑️ Show Deleted
+                                </label>
                             </div>
                         </div>
                         {dateFilteredEntries.length === 0 ? (
@@ -356,6 +417,49 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                     onSave={handleBulkSave}
                     onClose={() => setIsBulkModalOpen(false)}
                 />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                        <h2 className="text-xl font-bold text-red-700 mb-4">Delete Entry</h2>
+                        
+                        <p className="text-slate-600 mb-4">Are you sure you want to delete this day-born entry? This action is permanent.</p>
+                        
+                        <div className="mb-4">
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Reason for Deletion (Optional)</label>
+                            <textarea
+                                value={deleteReason}
+                                onChange={e => setDeleteReason(e.target.value)}
+                                rows={3}
+                                placeholder="Enter reason for deletion..."
+                                className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-red-400 focus:border-red-400"
+                            />
+                        </div>
+
+                        {deleteError && (
+                            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3 mb-4">
+                                <p className="text-red-700 text-sm font-semibold">{deleteError}</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={cancelDelete}
+                                className="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

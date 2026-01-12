@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Member, Entry, Settings, SyncStatus } from '../types';
+import type { Member, Entry, Settings, SyncStatus, Method } from '../types';
 import { formatCurrency } from '../utils';
 import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
+import { downloadReceipt, shareViaWhatsApp } from '../utils/receiptGenerator';
 
 interface DevelopmentFundProps {
     members: Member[];
@@ -20,6 +21,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [startDate, setStartDate] = useState(''); // Empty = show all
     const [endDate, setEndDate] = useState(''); // Empty = show all
     const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
     const [datePreset, setDatePreset] = useState<'custom' | 'this-week' | 'this-month' | 'qtd' | 'ytd' | 'last-12m'>('custom');
     const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -27,6 +29,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     const [editDate, setEditDate] = useState<string>('');
     const [editAmount, setEditAmount] = useState<string>('');
     const [editDesc, setEditDesc] = useState<string>('');
+    const [editMethod, setEditMethod] = useState<Method>('cash');
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [lastDeleted, setLastDeleted] = useState<Entry | null>(null);
     const [duplicateWarning, setDuplicateWarning] = useState(false);
     const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -38,6 +42,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         date: string;
         amount: string;
         note: string;
+        method: Method;
     };
     const [isBulkMode, setIsBulkMode] = useState(false);
     const [bulkSaving, setBulkSaving] = useState(false);
@@ -48,13 +53,29 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         memberName: '',
         date: new Date().toISOString().slice(0, 10),
         amount: '',
-        note: ''
+        note: '',
+        method: 'cash'
     }]);
 
     // Form State
     const [newAmount, setNewAmount] = useState('');
     const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [newDesc, setNewDesc] = useState('');
+    const [newMethod, setNewMethod] = useState<Method>('cash');
+    const [newPaymentMonth, setNewPaymentMonth] = useState(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+    const [editPaymentMonth, setEditPaymentMonth] = useState('');
+
+    // Helper function to generate default description based on payment month
+    const generatePaymentDescription = (monthStr: string): string => {
+        const [year, month] = monthStr.split('-');
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthName = monthNames[parseInt(month) - 1];
+        return `${monthName} ${year} Payment`;
+    };
 
     // --- Derived Data ---
     // Filter members to show only those who have pledged to development fund
@@ -182,9 +203,9 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             classNumber: selectedMember.classNumber,
             type: 'development-fund',
             fund: 'development-fund',
-            method: 'other',
+            method: newMethod,
             amount: amountVal,
-            note: newDesc || undefined,
+            note: newDesc || generatePaymentDescription(newPaymentMonth),
             createdAt: new Date().toISOString(),
             createdBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
             updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
@@ -203,9 +224,13 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             setNewAmount('');
             setNewDesc('');
             setNewDate(new Date().toISOString().slice(0, 10)); // Reset to today
+            setNewMethod('cash'); // Reset to default method
+            const now = new Date();
+            setNewPaymentMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); // Reset to current month
             setDuplicateWarning(false); // Clear any previous warning
             setMemberInput('');
 
+            setToastMessage('Contribution Added');
             setShowToast(true);
             setTimeout(() => setShowToast(false), 3000);
             setIsEntryModalOpen(false);
@@ -357,11 +382,13 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 memberName: '',
                 date: new Date().toISOString().slice(0, 10),
                 amount: '',
-                note: ''
+                note: '',
+                method: 'cash'
             }]);
             setIsBulkMode(false);
             setMemberInput('');
             setIsEntryModalOpen(false);
+            setToastMessage('Bulk Contributions Added');
             setShowToast(true);
             setTimeout(() => setShowToast(false), 3000);
         } catch (error: any) {
@@ -379,7 +406,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             memberName: '',
             date: new Date().toISOString().slice(0, 10),
             amount: '',
-            note: ''
+            note: '',
+            method: 'cash'
         }]);
     };
 
@@ -441,7 +469,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             classNumber: member?.classNumber,
             type: 'development-fund',
             fund: 'development-fund',
-            method: 'other',
+            method: row.method,
             amount: amountVal,
             note: row.note || undefined,
             createdAt: new Date().toISOString(),
@@ -468,11 +496,30 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         }
     };
 
-    const startEdit = (entryId: string, date: string, amount: number, desc: string) => {
+    const startEdit = (entryId: string, date: string, amount: number, desc: string, method: Method = 'cash') => {
         setEditingId(entryId);
         setEditDate(date);
         setEditAmount(String(amount));
         setEditDesc(desc || '');
+        setEditMethod(method);
+        // Try to extract month from description, otherwise use current month
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        let extractedMonth = '';
+        if (desc) {
+            const match = desc.match(/(\w+)\s+(\d{4})\s+Payment/);
+            if (match) {
+                const monthIndex = monthNames.indexOf(match[1]);
+                if (monthIndex !== -1) {
+                    extractedMonth = `${match[2]}-${String(monthIndex + 1).padStart(2, '0')}`;
+                }
+            }
+        }
+        setEditPaymentMonth(extractedMonth || (() => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        })());
+        setIsEditModalOpen(true);
     };
 
     const saveEdit = async () => {
@@ -487,22 +534,42 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             if (!window.confirm('Date is in the future. Continue?')) return;
         }
         try {
+            console.log('Saving edit for entry:', editingId);
             const updatedEntry = entries.find(e => e.id === editingId);
-            if (updatedEntry) {
-                const newEntry = { ...updatedEntry, date: editDate, amount: amountVal, note: editDesc, updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown' };
-                if (settings.supabaseUrl && settings.supabaseKey) {
-                    await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntry);
-                }
-                setEntries(prev => prev.map(e => e.id === editingId ? newEntry : e));
+            console.log('Found entry to edit:', updatedEntry);
+            if (!updatedEntry) {
+                alert('Error: Entry not found');
+                return;
             }
+            const newEntry = { ...updatedEntry, date: editDate, amount: amountVal, note: editDesc || generatePaymentDescription(editPaymentMonth), method: editMethod || 'cash', updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown' };
+            console.log('New entry data:', newEntry);
+            if (settings.supabaseUrl && settings.supabaseKey) {
+                console.log('Saving to Supabase...');
+                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntry);
+                console.log('Saved to Supabase successfully');
+            }
+            console.log('Updating local state...');
+            setEntries(prev => {
+                const updated = prev.map(e => e.id === editingId ? newEntry : e);
+                console.log('Updated entries:', updated);
+                console.log('Original entries:', prev);
+                console.log('Finding updated entry:', updated.find(e => e.id === editingId));
+                return updated;
+            });
+            setToastMessage('Entry updated successfully!');
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
             setEditingId(null);
+            setIsEditModalOpen(false);
         } catch (error: any) {
+            console.error('Error saving edit:', error);
             alert(`Failed to save edit: ${error.message}`);
         }
     };
 
     const cancelEdit = () => {
         setEditingId(null);
+        setIsEditModalOpen(false);
     };
 
     const applyPreset = (preset: typeof datePreset) => {
@@ -548,7 +615,9 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
     useEffect(() => {
         try {
             const savedPreset = localStorage.getItem('devfund-datePreset') as any;
-            if (savedPreset) setDatePreset(savedPreset);
+            if (savedPreset && savedPreset !== 'custom') {
+                applyPreset(savedPreset);
+            }
         } catch {}
     }, []);
 
@@ -591,7 +660,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
             {showToast && (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-2 rounded-full shadow-lg font-bold animate-fadeIn z-50">
-                    ✓ Contribution Added
+                    ✓ {toastMessage || 'Contribution Added'}
                 </div>
             )}
 
@@ -610,6 +679,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                         <span className="text-purple-600 font-bold">to</span>
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border-2 border-purple-300 text-sm focus:ring-purple-400 focus:border-purple-400 text-slate-700 bg-white rounded px-2 py-1"/>
                         <div className="flex gap-1 ml-2">
+                            <button key="all" type="button" onClick={() => {setStartDate(''); setEndDate(''); setDatePreset('all');}} className={`px-2 py-1 rounded-md text-xs font-bold transition transform hover:scale-110 ${datePreset==='all' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' : 'bg-white text-slate-700 border border-purple-300 hover:border-purple-600'}`}>All</button>
                             {(['this-week','this-month','qtd','ytd','last-12m'] as const).map(p => (
                                 <button key={p} type="button" onClick={() => applyPreset(p)} className={`px-2 py-1 rounded-md text-xs font-bold transition transform hover:scale-110 ${datePreset===p ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' : 'bg-white text-slate-700 border border-purple-300 hover:border-purple-600'}`}>{p.replace('-', ' ')}</button>
                             ))}
@@ -662,70 +732,90 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                     </div>
                                 </div>
                                 {expandedDates[group.date] && (
-                                    <div>
+                                    <div className="max-h-[500px] overflow-y-auto">
                                         {/* Active Entries Section */}
                                         {activeEntries.length > 0 && (
-                                        <table className="w-full text-left text-slate-700">
-                                            <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs uppercase font-bold sticky top-0 z-10 shadow-md">
-                                                <tr>
-                                                    <th className="px-4 py-3">Member</th>
-                                                    <th className="px-4 py-3">Class</th>
-                                                    <th className="px-4 py-3">Desc</th>
-                                                    <th className="px-4 py-3 text-right">Amount</th>
-                                                    <th className="px-4 py-3"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-purple-100 text-sm">
-                                                {activeEntries.map((entry, idx) => {
+                                        <div className="space-y-3 p-4">
+                                                {activeEntries.map((entry) => {
                                                     const originalEntry = entries.find(e => e.id === entry.id);
                                                     return (
-                                                    <tr key={entry.id} className={`transition ${idx % 2 === 0 ? 'bg-white hover:bg-purple-50' : 'bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100'}`}>
-                                                        <td className="px-4 py-3 font-medium text-slate-800">
-                                                            <span title={`Created by: ${originalEntry?.createdBy || 'Unknown'}\nUpdated by: ${originalEntry?.updatedBy || 'Unknown'}`}>
-                                                                {entry.memberName}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center">{entry.classNumber}</td>
-                                                        <td className="px-4 py-3 truncate max-w-[150px]">
-                                                            {editingId===entry.id ? (
-                                                                <>
-                                                                    <input type="text" value={editDesc} onChange={e=>setEditDesc(e.target.value)} className="border-slate-300 rounded-md p-1 w-full" />
-                                                                    <div className="text-xs text-slate-500 mt-2">
-                                                                        Created by: {originalEntry?.createdBy || 'Unknown'}<br/>
-                                                                        Updated by: {originalEntry?.updatedBy || 'Unknown'}
-                                                                    </div>
-                                                                </>
-                                                            ) : entry.description}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right font-bold text-slate-800">
-                                                            {editingId===entry.id ? (
-                                                                <input type="number" step="0.01" value={editAmount} onChange={e=>setEditAmount(e.target.value)} className="border-slate-300 rounded-md p-1 w-28 text-right" />
-                                                            ) : formatCurrency(entry.amount, settings.currency)}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right flex gap-2 justify-end">
-                                                            {editingId===entry.id ? (
-                                                                <>
-                                                                    <button onClick={saveEdit} className="text-green-600 hover:text-green-800 font-bold px-2 py-1 rounded hover:bg-green-50">Save</button>
-                                                                    <button onClick={cancelEdit} className="text-slate-600 hover:text-slate-800 font-bold px-2 py-1 rounded hover:bg-slate-100">Cancel</button>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <button onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description)} className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50">Edit</button>
-                                                                    <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50">×</button>
-                                                                </>
-                                                            )}
-                                                        </td>
-                                                    </tr>
+                                                    <div key={entry.id} className="bg-white border-l-4 border-purple-500 rounded-lg p-4 shadow hover:shadow-md transition">
+                                                        <div className="flex items-start justify-between gap-4">
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <span className="font-bold text-slate-800">{entry.memberName}</span>
+                                                                    <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Class {entry.classNumber}</span>
+                                                                </div>
+                                                                <p className="text-slate-600 text-sm mb-2">{entry.description}</p>
+                                                                <div className="flex items-center gap-3 flex-wrap">
+                                                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
+                                                                        {originalEntry?.method?.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Cash'}
+                                                                    </span>
+                                                                    {originalEntry?.createdBy && (
+                                                                        <span className="text-slate-500 text-xs">By {originalEntry.createdBy}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-2xl font-bold text-green-600 mb-3">
+                                                                    {formatCurrency(entry.amount, settings.currency)}
+                                                                </div>
+                                                                <div className="flex gap-2">
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            if (!originalEntry) {
+                                                                                setToastMessage('Error: Original entry not found');
+                                                                                setShowToast(true);
+                                                                                setTimeout(() => setShowToast(false), 3000);
+                                                                                return;
+                                                                            }
+                                                                            const member = members.find(m => m.id === originalEntry.memberID);
+                                                                            console.log('Download button clicked for entry:', originalEntry.id, 'Member:', member);
+                                                                            const result = downloadReceipt({ entry: originalEntry, member, settings });
+                                                                            setToastMessage(result.message);
+                                                                            setShowToast(true);
+                                                                            setTimeout(() => setShowToast(false), 3000);
+                                                                        }}
+                                                                        title="Download Receipt"
+                                                                        className="text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded hover:bg-blue-50"
+                                                                    >
+                                                                        📄
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            if (!originalEntry) {
+                                                                                setToastMessage('Error: Original entry not found');
+                                                                                setShowToast(true);
+                                                                                setTimeout(() => setShowToast(false), 3000);
+                                                                                return;
+                                                                            }
+                                                                            const member = members.find(m => m.id === originalEntry.memberID);
+                                                                            console.log('WhatsApp button clicked for entry:', originalEntry.id, 'Member:', member);
+                                                                            const result = shareViaWhatsApp({ entry: originalEntry, member, settings });
+                                                                            setToastMessage(result.message);
+                                                                            setShowToast(true);
+                                                                            setTimeout(() => setShowToast(false), 3000);
+                                                                        }}
+                                                                        title="Share via WhatsApp"
+                                                                        className="text-green-600 hover:text-green-800 font-bold px-2 py-1 rounded hover:bg-green-50"
+                                                                    >
+                                                                        💬
+                                                                    </button>
+                                                                    <button onClick={() => startEdit(entry.id, entry.date, entry.amount, entry.description, (originalEntry?.method as Method) || 'cash')} className="text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded hover:bg-indigo-50">✏️</button>
+                                                                    <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50">🗑️</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                     );
                                                 })}
-                                            </tbody>
-                                        </table>
+                                        </div>
                                         )}
                                         
                                         {/* Deleted Entries Section */}
                                         {deletedEntries.length > 0 && showDeleted && (
-                                        <div className="border-t-4 border-red-200">
-                                            <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 flex items-center justify-between">
+                                        <div className="border-t-4 border-red-200 pt-4">
+                                            <div className="px-4 py-2 mb-3 flex items-center justify-between">
                                                 <span className="text-red-700 font-bold text-xs uppercase flex items-center gap-2">
                                                     🗑️ Deleted Entries ({deletedEntries.length})
                                                 </span>
@@ -733,40 +823,33 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                     Total: {formatCurrency(deletedTotal, settings.currency)}
                                                 </span>
                                             </div>
-                                            <table className="w-full text-left text-slate-700">
-                                                <thead className="bg-gradient-to-r from-red-600 to-pink-600 text-white text-xs uppercase font-bold shadow-md">
-                                                    <tr>
-                                                        <th className="px-4 py-3">Member</th>
-                                                        <th className="px-4 py-3">Class</th>
-                                                        <th className="px-4 py-3">Desc</th>
-                                                        <th className="px-4 py-3 text-right">Amount</th>
-                                                        <th className="px-4 py-3">Deleted Info</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-red-100 text-sm">
-                                                    {deletedEntries.map((entry) => {
-                                                        const originalEntry = entries.find(e => e.id === entry.id);
-                                                        return (
-                                                        <tr key={entry.id} className="bg-red-50/50 opacity-70 hover:opacity-90 transition">
-                                                            <td className="px-4 py-3 font-medium text-red-500 line-through">
-                                                                {entry.memberName}
-                                                            </td>
-                                                            <td className="px-4 py-3 text-center text-red-500 line-through">{entry.classNumber}</td>
-                                                            <td className="px-4 py-3 truncate max-w-[150px] text-red-500 line-through">
-                                                                {entry.description}
-                                                            </td>
-                                                            <td className="px-4 py-3 text-right font-bold text-red-500 line-through">
-                                                                {formatCurrency(entry.amount, settings.currency)}
-                                                            </td>
-                                                            <td className="px-4 py-3 text-xs text-red-700">
-                                                                <div className="font-semibold">By: {originalEntry?.deletedBy || 'Unknown'}</div>
-                                                                <div className="text-red-600 italic">"{originalEntry?.deletedReason || 'No reason'}"</div>
-                                                            </td>
-                                                        </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
+                                            <div className="space-y-3 px-4">
+                                                {deletedEntries.map((entry) => {
+                                                    const originalEntry = entries.find(e => e.id === entry.id);
+                                                    return (
+                                                    <div key={entry.id} className="bg-red-50/50 border-l-4 border-red-500 rounded-lg p-4 opacity-70">
+                                                        <div className="flex items-start justify-between gap-4">
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <span className="font-bold text-red-500 line-through">{entry.memberName}</span>
+                                                                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs">Class {entry.classNumber}</span>
+                                                                </div>
+                                                                <p className="text-red-600 text-sm mb-2 line-through">{entry.description}</p>
+                                                                <div className="text-xs text-red-700">
+                                                                    <div className="font-semibold">Deleted by: {originalEntry?.deletedBy || 'Unknown'}</div>
+                                                                    <div className="text-red-600 italic">Reason: "{originalEntry?.deletedReason || 'No reason'}"</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-lg font-bold text-red-500 line-through">
+                                                                    {formatCurrency(entry.amount, settings.currency)}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                         )}
                                     </div>
@@ -888,9 +971,28 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                             <input inputMode="decimal" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0.00" className="w-full border-2 border-green-300 rounded-lg p-3 font-bold text-2xl text-right text-green-700 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-all bg-white" />
                                         </div>
                                     </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-white rounded-xl p-4 shadow-md border-2 border-orange-100">
+                                            <label className="block text-xs font-bold text-orange-600 uppercase mb-2">Payment For (Month)</label>
+                                            <input type="month" value={newPaymentMonth} onChange={e => {setNewPaymentMonth(e.target.value); if (!newDesc || newDesc === generatePaymentDescription(newPaymentMonth)) { setNewDesc(generatePaymentDescription(e.target.value)); }}} className="w-full border-2 border-orange-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all bg-white" />
+                                        </div>
+                                        <div></div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-white rounded-xl p-4 shadow-md border-2 border-blue-100">
+                                            <label className="block text-xs font-bold text-blue-600 uppercase mb-2">Payment Method</label>
+                                            <select value={newMethod} onChange={e => setNewMethod(e.target.value as Method)} className="w-full border-2 border-blue-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all bg-white">
+                                                <option value="cash">Cash</option>
+                                                <option value="e-transfer">E-Transfer</option>
+                                                <option value="check">Check</option>
+                                                <option value="other">Other</option>
+                                            </select>
+                                        </div>
+                                        <div></div>
+                                    </div>
                                     <div className="bg-white rounded-xl p-4 shadow-md border-2 border-slate-200">
                                         <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Note (Optional)</label>
-                                        <textarea rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Add any additional details..." className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all" />
+                                        <textarea rows={3} value={newDesc || generatePaymentDescription(newPaymentMonth)} onChange={e => setNewDesc(e.target.value)} placeholder={generatePaymentDescription(newPaymentMonth)} className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all" />
                                     </div>
                                     <div className="flex justify-end">
                                         <button
@@ -925,6 +1027,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                     <th className="px-3 py-2 text-left">Member / ID</th>
                                                     <th className="px-3 py-2 text-left">Date</th>
                                                     <th className="px-3 py-2 text-left">Amount</th>
+                                                    <th className="px-3 py-2 text-left">Payment Method</th>
                                                     <th className="px-3 py-2 text-left">Note</th>
                                                     <th className="px-3 py-2 text-right">Remove</th>
                                                 </tr>
@@ -967,6 +1070,18 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                                 {inlineDuplicate && (
                                                                     <div className="text-xs text-red-600 font-semibold mt-1">⚠️ Duplicate exists for this member/date</div>
                                                                 )}
+                                                            </td>
+                                                            <td className="px-3 py-2 align-top">
+                                                                <select
+                                                                    value={row.method}
+                                                                    onChange={e => updateBulkRow(row.id, { method: e.target.value as Method })}
+                                                                    className="w-full border-2 border-slate-200 rounded-md p-2 text-sm focus:border-blue-400 focus:ring-blue-200"
+                                                                >
+                                                                    <option value="cash">Cash</option>
+                                                                    <option value="e-transfer">E-Transfer</option>
+                                                                    <option value="check">Check</option>
+                                                                    <option value="other">Other</option>
+                                                                </select>
                                                             </td>
                                                             <td className="px-3 py-2 align-top">
                                                                 <input
@@ -1041,6 +1156,87 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                             </li>
                         ))}
                     </ul>
+                </div>
+            )}
+
+            {/* Edit Entry Modal */}
+            {isEditModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+                        <h2 className="text-xl font-bold text-purple-700 mb-4">Edit Contribution Entry</h2>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Date</label>
+                                <input 
+                                    type="date" 
+                                    value={editDate} 
+                                    onChange={e => setEditDate(e.target.value)} 
+                                    className="w-full border-2 border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-400 focus:border-purple-400"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Amount</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    value={editAmount} 
+                                    onChange={e => setEditAmount(e.target.value)} 
+                                    className="w-full border-2 border-green-300 rounded-lg p-2 text-right font-bold text-green-700 focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Payment Method</label>
+                                <select 
+                                    value={editMethod} 
+                                    onChange={e => setEditMethod(e.target.value as Method)} 
+                                    className="w-full border-2 border-blue-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                                >
+                                    <option value="cash">Cash</option>
+                                    <option value="e-transfer">E-Transfer</option>
+                                    <option value="check">Check</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Payment For (Month)</label>
+                                <input 
+                                    type="month" 
+                                    value={editPaymentMonth} 
+                                    onChange={e => {setEditPaymentMonth(e.target.value); if (!editDesc || editDesc === generatePaymentDescription(editPaymentMonth)) { setEditDesc(generatePaymentDescription(e.target.value)); }}} 
+                                    className="w-full border-2 border-orange-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Description/Note</label>
+                                <textarea 
+                                    value={editDesc} 
+                                    onChange={e => setEditDesc(e.target.value)} 
+                                    rows={3}
+                                    className="w-full border-2 border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 mt-6">
+                            <button 
+                                onClick={saveEdit} 
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition"
+                            >
+                                Save
+                            </button>
+                            <button 
+                                onClick={cancelEdit} 
+                                className="flex-1 bg-slate-400 hover:bg-slate-500 text-white font-bold py-2 rounded-lg transition"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -432,10 +432,9 @@ const App: React.FC = () => {
         setCurrentUser(foundUser);
         setLoginError(null);
         // Intelligent Redirect based on Role
-        if (foundUser.role === 'admin' || foundUser.role === 'finance-chair') setActiveTab('home');
+        if (foundUser.role === 'admin' || foundUser.role === 'finance-chair' || foundUser.role === 'pastor') setActiveTab('home');
         else if (foundUser.role === 'finance-team') setActiveTab('records');
         else if (foundUser.role === 'data-entry') setActiveTab('records');
-        else if (foundUser.role === 'pastor') setActiveTab('insights');
         else if (foundUser.role === 'statistician') setActiveTab('weekly-history');
         else setActiveTab('home');
     };
@@ -587,7 +586,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "development-fund", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "covenant", "development-fund", "other"];
 
     const renderTabContent = () => {
         // Class leaders are restricted to attendance only
@@ -963,12 +962,21 @@ const App: React.FC = () => {
                                                     if (modalDeletedFilter === 'deleted' && !entry.deleted) return false;
                                                     return true;
                                                 });
+                                            const filteredTotal = modalEntries.reduce((sum, e) => sum + e.amount, 0);
+                                            const filteredCount = modalEntries.length;
                                             
                                             const activeEntries = modalEntries.filter(e => !e.deleted);
                                             const deletedEntries = modalEntries.filter(e => e.deleted);
                                             
                                             return (
                                                 <>
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs font-bold uppercase text-slate-500">Filtered Total</span>
+                                                            <span className="text-2xl font-extrabold text-green-600">{formatCurrency(filteredTotal, settings.currency)}</span>
+                                                        </div>
+                                                        <span className="text-sm font-semibold text-slate-600">{filteredCount} entr{filteredCount === 1 ? 'y' : 'ies'}</span>
+                                                    </div>
                                                     {/* Active Entries Section */}
                                                     {activeEntries.length > 0 && (
                                                         <div className="space-y-3 mb-6">
@@ -1124,6 +1132,7 @@ const App: React.FC = () => {
                         setPledges={setHarvestPledges}
                         settings={settings}
                         onPayPledge={handlePayPledge}
+                        currentUser={currentUser}
                     />
                 );
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;

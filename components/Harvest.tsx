@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, Member, Settings, SyncStatus, User } from '../types';
 import { formatCurrency } from '../utils';
+import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
 
 interface HarvestProps {
     members: Member[];
@@ -25,6 +26,12 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [classFilter, setClassFilter] = useState('all');
     const [searchFilter, setSearchFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
+    
+    // Delete state
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [deleteReason, setDeleteReason] = useState('');
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteError, setDeleteError] = useState('');
 
     // Harvest types to filter
     const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge'] as const;
@@ -155,14 +162,67 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     };
 
     const handleDelete = (id: string) => {
-        if (!isConnected) {
-            showToast('Requires cloud connection to delete', 'warning');
+        if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'finance-chair')) {
+            alert('Only admins or finance chairs can delete entries.');
             return;
         }
-        showConfirm('Are you sure you want to delete this harvest entry?', () => {
-            setEntries(prev => prev.map(e => e.id === id ? { ...e, deleted: true, updatedBy: currentUser?.username, lastUpdated: new Date().toISOString() } : e));
-            setIsModalOpen(false);
-        });
+        setDeleteId(id);
+        setDeleteReason('');
+        setDeleteError('');
+        setShowDeleteModal(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus?.state !== 'synced') {
+            setDeleteError('Writes are disabled until connected to the cloud.');
+            return;
+        }
+
+        const entry = entries.find(e => e.id === deleteId);
+        if (!entry) {
+            setDeleteError('Entry not found');
+            return;
+        }
+
+        try {
+            // Mark as deleted in Supabase
+            await markEntryAsDeletedInSupabase(settings.supabaseUrl, settings.supabaseKey, deleteId);
+            
+            // Log the deletion
+            await logEntryDeletionToSupabase(
+                settings.supabaseUrl,
+                settings.supabaseKey,
+                {
+                    id: deleteId,
+                    reason: deleteReason,
+                    deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                    deletedAt: new Date().toISOString(),
+                }
+            );
+
+            // Update local state
+            setEntries(prev => prev.map(e => e.id === deleteId ? {
+                ...e,
+                deleted: true,
+                deletedReason: deleteReason,
+                deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+            } : e));
+
+            showToast('Entry deleted successfully', 'success');
+            setShowDeleteModal(false);
+            setDeleteId(null);
+            setDeleteReason('');
+        } catch (error: any) {
+            setDeleteError(`Failed to delete: ${error.message}`);
+        }
+    };
+
+    const cancelDelete = () => {
+        setShowDeleteModal(false);
+        setDeleteId(null);
+        setDeleteReason('');
+        setDeleteError('');
     };
 
     const handleMemberNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,7 +338,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
 
             {/* Grouped List */}
             <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
-                {(currentUser?.role === 'admin' || currentUser?.role === 'finance-chair') && (
+                {(currentUser?.role === 'admin' || currentUser?.role === 'finance-chair' || currentUser?.role === 'finance-team' || currentUser?.role === 'pastor') && (
                     <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 border-b-2 border-red-300 flex justify-end">
                         <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer">
                             <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
@@ -380,6 +440,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                     const member = membersMap.get(entry.memberID);
                                     const displayClass = entry.classNumber || member?.classNumber || '-';
                                     const canEdit = !entry.deleted && currentUser?.role !== 'pastor';
+                                    const canDelete = !entry.deleted && currentUser && (currentUser.role === 'admin' || currentUser.role === 'finance-chair');
                                     
                                     return (
                                         <div 
@@ -414,20 +475,30 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                                 </div>
                                                 <div className="text-right ml-4">
                                                     <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
-                                                    {canEdit && (
-                                                        <button 
-                                                            onClick={() => { 
-                                                                if (!isConnected) { showToast('Requires cloud connection to edit', 'warning'); return; }
-                                                                handleOpenModal(entry);
-                                                                setSelectedDateForModal(null);
-                                                            }} 
-                                                            disabled={!isConnected}
-                                                            title={!isConnected ? 'Requires cloud connection' : undefined}
-                                                            className={`mt-2 font-bold text-sm ${!isConnected ? 'text-amber-400 cursor-not-allowed' : 'text-amber-600 hover:text-amber-800 hover:underline'}`}
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                    )}
+                                                    <div className="mt-2 flex items-center gap-3 justify-end">
+                                                        {canEdit && (
+                                                            <button 
+                                                                onClick={() => { 
+                                                                    if (!isConnected) { showToast('Requires cloud connection to edit', 'warning'); return; }
+                                                                    handleOpenModal(entry);
+                                                                    setSelectedDateForModal(null);
+                                                                }} 
+                                                                disabled={!isConnected}
+                                                                title={!isConnected ? 'Requires cloud connection' : undefined}
+                                                                className={`font-bold text-sm ${!isConnected ? 'text-amber-400 cursor-not-allowed' : 'text-amber-600 hover:text-amber-800 hover:underline'}`}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                onClick={() => handleDelete(entry.id)}
+                                                                className="text-sm font-bold text-red-600 hover:text-red-800 hover:underline"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -566,6 +637,49 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                 </div>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                        <h2 className="text-xl font-bold text-red-700 mb-4">Delete Entry</h2>
+                        
+                        <p className="text-slate-600 mb-4">Are you sure you want to delete this harvest entry? This action is permanent.</p>
+                        
+                        <div className="mb-4">
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Reason for Deletion (Optional)</label>
+                            <textarea
+                                value={deleteReason}
+                                onChange={e => setDeleteReason(e.target.value)}
+                                rows={3}
+                                placeholder="Enter reason for deletion..."
+                                className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-red-400 focus:border-red-400"
+                            />
+                        </div>
+
+                        {deleteError && (
+                            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3 mb-4">
+                                <p className="text-red-700 text-sm font-semibold">{deleteError}</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={cancelDelete}
+                                className="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition"
+                            >
+                                Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

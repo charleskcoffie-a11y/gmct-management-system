@@ -108,8 +108,8 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
         const currentMonth = today.toISOString().substring(0, 7);
         const dayOfMonth = today.getDate();
         
-        // Finance team, admin, and finance-chair can see the alerts
-        const shouldShowLockAlerts = currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team';
+        // Finance team, admin, finance-chair, and pastor can see the alerts
+        const shouldShowLockAlerts = currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team' || currentUser.role === 'pastor';
 
         // 1. Check for unlocked past months in CURRENT YEAR ONLY
         if (shouldShowLockAlerts) {
@@ -218,8 +218,8 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                 <p className="text-base text-slate-600 mt-3 font-medium">A quick overview of giving, trends, and alerts.</p>
             </div>
             
-            {/* Notification Panel (Admin/Chair/Finance Team) */}
-            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team') && (
+            {/* Notification Panel (Admin/Chair/Finance Team/Pastor) */}
+            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team' || currentUser.role === 'pastor') && (
                 <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-cyan-50 rounded-xl shadow-lg border-2 border-indigo-200 p-6 mb-6">
                     <h3 className="text-lg font-bold text-indigo-800 border-b-2 border-indigo-100 pb-2 mb-4 flex items-center gap-2">
                         <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
@@ -366,8 +366,8 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                     )}
                 </div>
                 
-                {/* Hide recent entries list for Pastor role for privacy */}
-                {currentUser.role !== 'pastor' && (
+                {/* Recent Entries */}
+                {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team' || currentUser.role === 'pastor') && (
                     <div className="bg-white p-4 rounded-2xl shadow-2xl border-2 border-cyan-200">
                         <h3 className="text-lg font-bold text-cyan-800 mb-4 px-2 flex items-center gap-2">
                             <svg className="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import type { Entry, Member, Settings } from '../types';
+import type { Entry, Member, Settings, User } from '../types';
 import { formatCurrency } from '../utils';
 import { saveHarvestPledgeToSupabase, type HarvestPledge } from '../services/supabase';
 
@@ -9,6 +9,7 @@ interface HarvestPledgesProps {
   setPledges: React.Dispatch<React.SetStateAction<HarvestPledge[]>>;
   settings: Settings;
   onPayPledge: (pledge: HarvestPledge, amount: number, paymentDate: string) => void;
+  currentUser?: User | null;
 }
 
 type PledgeCategory = 'harvest-appeal' | 'harvest-sales';
@@ -21,10 +22,14 @@ const pledgeCategories: { value: PledgeCategory; label: string }[] = [
 
 const pledgeGroups: PledgeGroup[] = ['Men', 'Women', 'Youth', 'Day Born', 'Main'];
 
-const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPledges, settings, onPayPledge }) => {
+const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPledges, settings, onPayPledge, currentUser }) => {
   const [filterName, setFilterName] = useState('');
   const [filterClass, setFilterClass] = useState('all');
   const [filterGroup, setFilterGroup] = useState('all');
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkDate, setBulkDate] = useState(new Date().toISOString().split('T')[0]);
   const [bulkGroup, setBulkGroup] = useState<PledgeGroup>('Men');
@@ -39,8 +44,9 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
     if (filterName && !p.memberName.toLowerCase().includes(filterName.toLowerCase())) return false;
     if (filterClass !== 'all' && p.classNumber !== filterClass) return false;
     if (filterGroup !== 'all' && p.groupName !== filterGroup) return false;
-    return !p.deleted;
-  }), [pledges, filterName, filterClass, filterGroup]);
+    if (p.deleted && !showDeleted) return false;
+    return true;
+  }), [pledges, filterName, filterClass, filterGroup, showDeleted]);
 
   // Group by date
   const pledgesByDate = useMemo(() => {
@@ -122,6 +128,51 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
     setShowPayment(null);
     setPaymentAmount('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const handleDelete = (pledgeId: string) => {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'finance-chair')) {
+      alert('Only admins or finance chairs can delete pledges.');
+      return;
+    }
+    setDeleteError('');
+    setDeleteId(pledgeId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    const pledge = pledges.find(p => p.id === deleteId);
+    if (!pledge) {
+      setDeleteError('Pledge not found');
+      return;
+    }
+    if (!settings.supabaseUrl || !settings.supabaseKey) {
+      setDeleteError('Supabase not configured');
+      return;
+    }
+
+    try {
+      const updatedPledge: HarvestPledge = {
+        ...pledge,
+        deleted: true,
+        updatedBy: pledge.updatedBy || pledge.createdBy || 'Unknown',
+        lastUpdated: new Date().toISOString()
+      };
+
+      await saveHarvestPledgeToSupabase(settings.supabaseUrl, settings.supabaseKey, updatedPledge);
+      setPledges(prev => prev.map(p => p.id === deleteId ? updatedPledge : p));
+      setShowDeleteModal(false);
+      setDeleteId(null);
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete pledge');
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setDeleteId(null);
+    setDeleteError('');
   };
 
   return (
@@ -206,6 +257,14 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
 
       {/* Pledges by Date */}
       <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
+        {(currentUser?.role === 'admin' || currentUser?.role === 'finance-chair' || currentUser?.role === 'finance-team' || currentUser?.role === 'pastor') && (
+          <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 border-b-2 border-red-300 flex justify-end">
+            <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer">
+              <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
+              🗑️ Show Deleted Records
+            </label>
+          </div>
+        )}
         <div className="max-h-[60vh] overflow-y-auto p-6 space-y-4">
           {sortedDates.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
@@ -264,12 +323,15 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
             
             <div className="flex-1 overflow-y-auto p-6">
               <div className="space-y-3">
-                {pledgesByDate[selectedDateForModal].map(pledge => (
-                  <div key={pledge.id} className="rounded-xl border-2 p-5 bg-gradient-to-r from-slate-50 to-purple-50 border-purple-200 hover:shadow-md transition-all">
+                {pledgesByDate[selectedDateForModal].map(pledge => {
+                  const canDelete = !pledge.deleted && currentUser && (currentUser.role === 'admin' || currentUser.role === 'finance-chair');
+                  return (
+                  <div key={pledge.id} className={`rounded-xl border-2 p-5 transition-all ${pledge.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-purple-50 border-purple-200 hover:shadow-md'}`}>
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-bold text-slate-800">{pledge.memberName}</h3>
+                          {pledge.deleted && <span className="text-xs bg-red-200 text-red-800 px-3 py-1 rounded-full font-bold">DELETED</span>}
                           {pledge.groupName && <span className="text-xs bg-purple-200 text-purple-800 px-3 py-1 rounded-full font-bold">{pledge.groupName}</span>}
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -291,8 +353,8 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        {(pledge.remaining || 0) > 0 ? (
+                      <div className="ml-4 flex flex-col items-end gap-2">
+                        {(pledge.remaining || 0) > 0 && !pledge.deleted ? (
                           showPayment === pledge.id ? (
                             <div className="flex flex-col gap-2">
                               <div className="flex items-center gap-2">
@@ -310,10 +372,13 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
                         ) : (
                           <span className="text-green-700 font-bold text-lg">✓ Paid</span>
                         )}
+                        {canDelete && (
+                          <button onClick={() => handleDelete(pledge.id)} className="text-sm font-bold text-red-600 hover:text-red-800">Delete</button>
+                        )}
                       </div>
                     </div>
                   </div>
-                ))}
+                );})}
               </div>
             </div>
             
@@ -405,6 +470,25 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
                 <button type="button" onClick={() => setShowBulkModal(false)} className="bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-lg transition-all">Cancel</button>
                 <button type="button" onClick={handleBulkSave} disabled={bulkEntries.filter(e => e.memberID && e.amount).length === 0} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">Save All</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-red-700 mb-4">Delete Pledge</h2>
+            <p className="text-slate-600 mb-4">Are you sure you want to delete this harvest pledge? This action is permanent.</p>
+            {deleteError && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3 mb-4">
+                <p className="text-red-700 text-sm font-semibold">{deleteError}</p>
+              </div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button onClick={cancelDelete} className="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition">Cancel</button>
+              <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition">Delete</button>
             </div>
           </div>
         </div>
