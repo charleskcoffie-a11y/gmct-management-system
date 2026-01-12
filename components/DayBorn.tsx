@@ -387,7 +387,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                                             key={entry.id}
                                             onClick={() => canClickToEdit && handleEditEntry(entry)}
                                             className={`p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-100 transition-all ${canClickToEdit ? 'hover:border-green-400 hover:shadow-md cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
-                                            title={!canClickToEdit ? (currentUser?.role === 'data-entry' ? 'Data Entry cannot edit' : `Editing locked. ${windowStatus.reason}`) : undefined}
+                                            title={!canClickToEdit ? (currentUser?.role === 'data-entry' ? 'Data Entry cannot edit' : `Editing locked. ${windowStatus.reason || 'Window closed'}`) : undefined}
                                         >
                                             <div className="flex justify-between items-start">
                                                 <div>
