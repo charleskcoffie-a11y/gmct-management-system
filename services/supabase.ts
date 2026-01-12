@@ -293,6 +293,11 @@ const mapSettingsToDB = (s: Settings) => ({
     etransfer_notification_email: s.etransferNotificationEmail,
     etransfer_provider: s.etransferProvider,
     class_access_codes: s.classAccessCodes ? JSON.stringify(s.classAccessCodes) : null,
+    // Entry Window Restrictions (persisted for multi-user consistency)
+    entry_window_enabled: s.entryWindow ? !!s.entryWindow.enabled : false,
+    entry_window_days: s.entryWindow?.days ? JSON.stringify(s.entryWindow.days) : null,
+    entry_window_start_time: s.entryWindow?.startTime || null,
+    entry_window_end_time: s.entryWindow?.endTime || null,
 });
 
 const mapSettingsFromDB = (s: any): Settings => ({
@@ -313,6 +318,14 @@ const mapSettingsFromDB = (s: any): Settings => ({
     etransferInboundSecret: undefined, // never pull secrets from database
     etransferProvider: s.etransfer_provider,
     classAccessCodes: s.class_access_codes ? JSON.parse(s.class_access_codes) : undefined,
+    entryWindow: typeof s.entry_window_enabled === 'boolean' || s.entry_window_days || s.entry_window_start_time || s.entry_window_end_time
+        ? {
+            enabled: !!s.entry_window_enabled,
+            days: s.entry_window_days ? JSON.parse(s.entry_window_days) : [],
+            startTime: s.entry_window_start_time || '06:00',
+            endTime: s.entry_window_end_time || '18:00',
+        }
+        : undefined,
 });
 
 // --- Sync Functions ---
