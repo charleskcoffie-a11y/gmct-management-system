@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, EntryType, Method, Member, Settings, User, MonthLock } from '../types';
-import { sanitizeEntry, isMonthLocked, getNowEST } from '../utils';
+import { sanitizeEntry, isMonthLocked, getNowEST, isEntryWindowOpen } from '../utils';
 import { logEntryDeletionToSupabase, markEntryAsDeletedInSupabase } from '../services/supabase';
 
 interface EntryModalProps {
@@ -162,6 +162,20 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
         }
 
         const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+        
+        // Check entry window restriction
+        const entryWindowStatus = isEntryWindowOpen(settings.entryWindow);
+        if (!entryWindowStatus.isOpen && !canOverrideLock) {
+            showToast(`${entryWindowStatus.reason}\n${entryWindowStatus.nextOpenTime}`, 'error');
+            return false;
+        }
+
+        // If admin overrides entry window, log it
+        if (!entryWindowStatus.isOpen && canOverrideLock && entry) {
+            const overrideNote = `[ADMIN OVERRIDE - Outside entry window] ${formData.note || ''}`;
+            formData.note = overrideNote.trim();
+        }
+
         if (isMonthLocked(formData.date, monthLocks) && !canOverrideLock) {
             showToast(`The financial month for ${formData.date} is LOCKED. You cannot add or edit entries for this period.`, 'error');
             return false;

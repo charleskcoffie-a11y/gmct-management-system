@@ -492,3 +492,85 @@ export function calculateInsights(entries: Entry[]) {
         trend
     };
 }
+
+// --- Entry Window Restrictions ---
+
+/**
+ * Check if current time is within the configured entry window
+ * @param entryWindow Configuration with enabled flag, days, start/end times
+ * @returns Object with isOpen, reason (if closed), and nextOpenTime
+ */
+export function isEntryWindowOpen(entryWindow?: any) {
+    if (!entryWindow || !entryWindow.enabled) {
+        return { isOpen: true, reason: null, nextOpenTime: null };
+    }
+
+    const now = new Date();
+    
+    // Get current day name and time in EST
+    const estFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Toronto',
+        weekday: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+    
+    const parts = estFormatter.formatToParts(now);
+    const dayName = parts.find(p => p.type === 'weekday')?.value || '';
+    const hour = parts.find(p => p.type === 'hour')?.value || '00';
+    const minute = parts.find(p => p.type === 'minute')?.value || '00';
+    const currentTime = `${hour}:${minute}`;
+
+    // Check if today is in allowed days
+    const isAllowedDay = entryWindow.days && entryWindow.days.includes(dayName);
+    if (!isAllowedDay) {
+        const nextDay = findNextAllowedDay(entryWindow.days);
+        return {
+            isOpen: false,
+            reason: `Entries only allowed on: ${entryWindow.days.join(', ')}. Today is ${dayName}.`,
+            nextOpenTime: `Next: ${nextDay} at ${entryWindow.startTime}`
+        };
+    }
+
+    // Check if current time is within window
+    const isWithinTime = currentTime >= entryWindow.startTime && currentTime < entryWindow.endTime;
+    if (!isWithinTime) {
+        const isBeforeStart = currentTime < entryWindow.startTime;
+        const nextOpen = isBeforeStart 
+            ? `Today at ${entryWindow.startTime}`
+            : `Next ${entryWindow.days[0]} at ${entryWindow.startTime}`;
+        
+        return {
+            isOpen: false,
+            reason: `Entry window closed. Open: ${entryWindow.startTime} - ${entryWindow.endTime} EST only.`,
+            nextOpenTime: nextOpen
+        };
+    }
+
+    return { isOpen: true, reason: null, nextOpenTime: null };
+}
+
+/**
+ * Find the next allowed day for entries
+ */
+function findNextAllowedDay(allowedDays: string[]): string {
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const now = new Date();
+    
+    const estFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Toronto',
+        weekday: 'long'
+    });
+    const currentDay = estFormatter.format(now);
+    const currentIndex = daysOfWeek.indexOf(currentDay);
+
+    for (let i = 1; i <= 7; i++) {
+        const nextIndex = (currentIndex + i) % 7;
+        if (allowedDays.includes(daysOfWeek[nextIndex])) {
+            return daysOfWeek[nextIndex];
+        }
+    }
+    
+    return allowedDays[0] || 'Sunday';
+}

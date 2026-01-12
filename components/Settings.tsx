@@ -325,6 +325,125 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                     🔒 Only Administrators can modify Class Access Codes.
                 </div>
             )}
+
+            {/* Entry Window Restrictions - Admin Only */}
+            {currentUser.role === 'admin' && (
+                <div className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-xl shadow-lg border-2 border-red-200">
+                    <h3 className="text-xl font-bold text-red-800 border-b-2 border-red-100 pb-3 mb-4">🕐 Entry Window Restrictions</h3>
+                    <p className="text-sm text-red-700 mb-4">Control when financial entries can be created or edited. Admins can always override these restrictions.</p>
+                    
+                    <div className="space-y-4">
+                        {/* Enable/Disable */}
+                        <div className="bg-white rounded-lg p-4 border-2 border-red-200">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={localSettings.entryWindow?.enabled || false}
+                                    onChange={(e) => {
+                                        setLocalSettings(prev => ({
+                                            ...prev,
+                                            entryWindow: {
+                                                ...(prev.entryWindow || { days: ['Sunday'], startTime: '06:00', endTime: '18:00' }),
+                                                enabled: e.target.checked
+                                            }
+                                        }));
+                                    }}
+                                    className="h-6 w-6 text-red-600 border-2 border-red-300 rounded focus:ring-red-500"
+                                />
+                                <span className="font-bold text-red-800">Enable Entry Window Restrictions</span>
+                            </label>
+                        </div>
+
+                        {localSettings.entryWindow?.enabled && (
+                            <>
+                                {/* Days Selection */}
+                                <div className="bg-white rounded-lg p-4 border-2 border-red-200">
+                                    <label className="block font-bold text-red-800 text-sm uppercase mb-3">📅 Allowed Days</label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                                            <label key={day} className="flex items-center gap-2 cursor-pointer">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={localSettings.entryWindow?.days?.includes(day) || false}
+                                                    onChange={(e) => {
+                                                        const days = localSettings.entryWindow?.days || [];
+                                                        const newDays = e.target.checked 
+                                                            ? [...days, day] 
+                                                            : days.filter(d => d !== day);
+                                                        setLocalSettings(prev => ({
+                                                            ...prev,
+                                                            entryWindow: {
+                                                                ...prev.entryWindow,
+                                                                days: newDays
+                                                            }
+                                                        }));
+                                                    }}
+                                                    className="h-4 w-4 text-red-600 border-2 border-red-300 rounded"
+                                                />
+                                                <span className="text-sm font-medium text-red-700">{day}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Time Range */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-white rounded-lg p-4 border-2 border-red-200">
+                                        <label className="block font-bold text-red-800 text-sm uppercase mb-2">⏰ Start Time (EST)</label>
+                                        <input 
+                                            type="time"
+                                            value={localSettings.entryWindow?.startTime || '06:00'}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    entryWindow: {
+                                                        ...prev.entryWindow,
+                                                        startTime: e.target.value
+                                                    }
+                                                }));
+                                            }}
+                                            className="w-full border-2 border-red-300 rounded-lg py-2 px-3 text-lg focus:ring-2 focus:ring-red-400 focus:border-red-400"
+                                        />
+                                    </div>
+                                    <div className="bg-white rounded-lg p-4 border-2 border-red-200">
+                                        <label className="block font-bold text-red-800 text-sm uppercase mb-2">⏰ End Time (EST)</label>
+                                        <input 
+                                            type="time"
+                                            value={localSettings.entryWindow?.endTime || '18:00'}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    entryWindow: {
+                                                        ...prev.entryWindow,
+                                                        endTime: e.target.value
+                                                    }
+                                                }));
+                                            }}
+                                            className="w-full border-2 border-red-300 rounded-lg py-2 px-3 text-lg focus:ring-2 focus:ring-red-400 focus:border-red-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Info Box */}
+                                <div className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
+                                    <p className="text-sm text-red-900 font-medium">
+                                        <strong>Current settings:</strong> Entries allowed on {localSettings.entryWindow?.days?.join(', ') || 'No days selected'} from {localSettings.entryWindow?.startTime} to {localSettings.entryWindow?.endTime} EST.
+                                    </p>
+                                    <p className="text-xs text-red-800 mt-2">
+                                        ✓ Admins and Finance Chairs can always add/edit entries and will be logged as overrides outside the window.
+                                    </p>
+                                </div>
+                            </>
+                        )}
+
+                        <div className="flex justify-end pt-4">
+                            <button onClick={handleSave} className="bg-gradient-to-br from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-red-300">
+                                ✓ Save Entry Window Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             
              {/* 3. Cloud Sync (Supabase) - Admin Only */}
              {currentUser.role === 'admin' && (

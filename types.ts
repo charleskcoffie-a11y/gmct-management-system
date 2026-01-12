@@ -84,6 +84,13 @@ export interface Member {
     devFundPledgeAmount?: number; // Amount pledged to development fund
 }
 
+export interface EntryWindowConfig {
+    enabled: boolean; // Whether to enforce entry window restrictions
+    days: string[]; // Array of day names: ['Sunday', 'Monday', etc.]
+    startTime: string; // HH:MM format, e.g. "06:00"
+    endTime: string; // HH:MM format, e.g. "18:00"
+}
+
 export interface Settings {
     currency: string;
     maxClasses: number;
@@ -103,6 +110,8 @@ export interface Settings {
     etransferProvider?: 'sendgrid' | 'mailgun' | 'resend' | 'generic';
     // Class Leader Access Codes
     classAccessCodes?: Record<string, string>; // Map of class number to access code, e.g. {"1": "alpha", "2": "beta"}
+    // Entry Window Restrictions
+    entryWindow?: EntryWindowConfig; // Controls when entries can be created/edited
 }
 
 export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader';
