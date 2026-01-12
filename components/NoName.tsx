@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { NoNameEntry, Settings, User, SyncStatus } from '../types';
-import { formatCurrency } from '../utils';
+import { formatCurrency, getTodayEST } from '../utils';
 
 interface NoNameProps {
     entries: NoNameEntry[];
