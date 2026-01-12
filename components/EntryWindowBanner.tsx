@@ -45,7 +45,7 @@ const EntryWindowBanner: React.FC<EntryWindowBannerProps> = ({ settings, current
                     </p>
                     {canOverride && (
                         <p className="text-xs text-yellow-700 mt-2 italic">
-                            💡 As an admin, you can still add/edit entries. This will be logged as an override.
+                            💡 As an admin or finance chair, you can still add/edit entries. This will be logged as an override.
                         </p>
                     )}
                 </div>

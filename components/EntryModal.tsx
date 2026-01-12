@@ -170,16 +170,17 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
 
         const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
         
-        // Check entry window restriction - applies to all non-admin users
+        // Check entry window restriction - applies to all except Admin & Finance Chair
         const entryWindowStatus = isEntryWindowOpen(settings.entryWindow);
-        if (!entryWindowStatus.isOpen && currentUser?.role !== 'admin') {
+        if (!entryWindowStatus.isOpen && currentUser?.role !== 'admin' && currentUser?.role !== 'finance-chair') {
             showToast(`${entryWindowStatus.reason}\n${entryWindowStatus.nextOpenTime}`, 'error');
             return false;
         }
 
-        // If admin overrides entry window, log it
-        if (!entryWindowStatus.isOpen && currentUser?.role === 'admin' && entry) {
-            const overrideNote = `[ADMIN OVERRIDE - Outside entry window] ${formData.note || ''}`;
+        // If Admin or Finance Chair overrides entry window, log it
+        if (!entryWindowStatus.isOpen && (currentUser?.role === 'admin' || currentUser?.role === 'finance-chair') && entry) {
+            const actor = (currentUser?.role || 'admin').toUpperCase();
+            const overrideNote = `[OVERRIDE (${actor}) - Outside entry window] ${formData.note || ''}`;
             formData.note = overrideNote.trim();
         }
 
