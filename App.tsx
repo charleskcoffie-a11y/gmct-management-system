@@ -359,48 +359,53 @@ const App: React.FC = () => {
             return;
         }
 
-        // Special handling for class leaders: validate access codes from Settings
+        // Special handling for class leaders: authenticate using class_leaders table (preferred)
         if (user.role === 'class-leader') {
             const raw = (password || '').trim();
-            const classAccessCodes = settings.classAccessCodes || {};
+            const lower = normalize(raw);
 
-            const resolveClassFromPassword = (): string | null => {
-                const lower = normalize(raw);
-
-                // 1) Match admin-configured access codes (case-insensitive)
-                for (const [classNum, code] of Object.entries(classAccessCodes)) {
-                    if (normalize(code) === lower) {
-                        const clsNum = parseInt(classNum, 10);
-                        if (clsNum >= 1 && clsNum <= settings.maxClasses) {
-                            return String(clsNum);
-                        }
-                    }
+            // 0) If the username matches a specific class leader, validate their password and use their class
+            const matchedLeaderByUsername = classLeaders.find(cl => (cl.username || '').toLowerCase() === username.trim().toLowerCase());
+            if (matchedLeaderByUsername) {
+                if (!matchedLeaderByUsername.password || matchedLeaderByUsername.password !== raw) {
+                    setLoginError('Invalid password for class leader account.');
+                    return;
                 }
-
-                // 2) Accept patterns like "class1", "class 3", "class-7"
-                const classMatch = lower.match(/class\s*-?\s*(\d{1,2})/);
-                if (classMatch) {
-                    const clsNum = parseInt(classMatch[1], 10);
-                    if (clsNum >= 1 && clsNum <= settings.maxClasses) return String(clsNum);
+                const assignedClass = matchedLeaderByUsername.classNumber;
+                if (!assignedClass) {
+                    setLoginError('Class leader has no assigned class. Contact admin.');
+                    return;
                 }
+                const sessionUser = { username: matchedLeaderByUsername.username, role: 'class-leader' as UserRole, assignedClass } as User;
+                setCurrentUser(sessionUser);
+                setLoginError(null);
+                setActiveTab('attendance');
+                return;
+            }
 
-                // 3) Accept direct numeric passwords (e.g., "1", "07")
-                const numMatch = lower.match(/^(\d{1,2})$/);
-                if (numMatch) {
-                    const clsNum = parseInt(numMatch[1], 10);
-                    if (clsNum >= 1 && clsNum <= settings.maxClasses) return String(clsNum);
-                }
-
-                return null;
-            };
+            // 1) Shared "ClassLeader" login: resolve class by matching an access code from class_leaders table
+            const matchedLeaderByAccessCode = classLeaders.find(cl => normalize(cl.accessCode) === lower);
 
             let assignedClass = (user as User).assignedClass || (user as User).classLed;
 
-            // Admin override: exact password match on stored user password keeps assigned class
-            if (!(user as User).password || (user as User).password !== password) {
-                const matchedClass = resolveClassFromPassword();
-                if (matchedClass) {
-                    assignedClass = matchedClass;
+            // Admin override: exact password match on stored app user keeps assigned class
+            if (!(user as User).password || (user as User).password !== raw) {
+                if (matchedLeaderByAccessCode?.classNumber) {
+                    assignedClass = matchedLeaderByAccessCode.classNumber;
+                } else {
+                    // 2) Fallback patterns like "class1", "class 3", "class-7"
+                    const classMatch = lower.match(/class\s*-?\s*(\d{1,2})/);
+                    if (classMatch) {
+                        const clsNum = parseInt(classMatch[1], 10);
+                        if (clsNum >= 1 && clsNum <= settings.maxClasses) assignedClass = String(clsNum);
+                    } else {
+                        // 3) Accept direct numeric passwords (e.g., "1", "07")
+                        const numMatch = lower.match(/^(\d{1,2})$/);
+                        if (numMatch) {
+                            const clsNum = parseInt(numMatch[1], 10);
+                            if (clsNum >= 1 && clsNum <= settings.maxClasses) assignedClass = String(clsNum);
+                        }
+                    }
                 }
             }
 
