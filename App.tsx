@@ -10,6 +10,7 @@ import Login from './components/Login';
 import EntryWindowBanner from './components/EntryWindowBanner';
 import { ToastProvider } from './components/ToastProvider';
 import PasswordChangeModal from './components/PasswordChangeModal';
+import BulkChildrenMinistryModal from './components/BulkChildrenMinistryModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
@@ -102,6 +103,7 @@ const App: React.FC = () => {
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
     const [showProfileModal, setShowProfileModal] = useState(false);
+    const [showChildrenMinistryModal, setShowChildrenMinistryModal] = useState(false);
     const [userNotes, setUserNotes] = useLocalStorage<Record<string, string>>('gmct-user-notes', {});
     
     // -- Sorting & Filtering State for Financial Records --
@@ -587,7 +589,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "covenant", "development-fund", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
         // Class leaders are restricted to attendance only
@@ -741,6 +743,12 @@ const App: React.FC = () => {
                                         </button>
                                     ) : null;
                                 })()}
+                                <button onClick={() => setShowChildrenMinistryModal(true)} disabled={!canWrite} title={!canWrite ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-br from-yellow-500 to-amber-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!canWrite ? 'opacity-60 cursor-not-allowed' : 'hover:from-yellow-600 hover:to-amber-600 hover:scale-105'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-12 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.5 1.5H5.75A2.75 2.75 0 003 4.25v11.5A2.75 2.75 0 005.75 18.5h8.5A2.75 2.75 0 0017 15.75V8M10.5 1.5v4.5M10.5 1.5L17 8M6 10h5M6 13h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                </svg>
+                                Children's Ministry Collection
+                                </button>
                             </div>
                         </div>
 
@@ -1467,6 +1475,13 @@ const App: React.FC = () => {
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />
+                {showChildrenMinistryModal && (
+                    <BulkChildrenMinistryModal
+                        settings={settings}
+                        onSave={handleSaveEntry}
+                        onClose={() => setShowChildrenMinistryModal(false)}
+                    />
+                )}
                 {isPasswordModalOpen && currentUser && (
                     <PasswordChangeModal 
                         currentUser={currentUser}
