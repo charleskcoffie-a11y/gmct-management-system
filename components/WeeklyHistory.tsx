@@ -56,6 +56,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     const [isFullEditorOpen, setIsFullEditorOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+    const [attendanceDateFilter, setAttendanceDateFilter] = useState<string>('');
     
     // Temporary state for new donor/visitor input
     const [newDonor, setNewDonor] = useState({ donor: '', amount: 0, description: '' });
@@ -240,6 +241,31 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     const canSave = completionStatus.completed === completionStatus.total;
 
     const archiveCount = history.length;
+
+    const historyDates = useMemo(() => {
+        return Array.from(new Set(history.map(h => h.dateOfService))).filter(Boolean).sort((a, b) => b.localeCompare(a));
+    }, [history]);
+
+    const latestHistoryDate = useMemo(() => historyDates[0] || '', [historyDates]);
+
+    useEffect(() => {
+        if (!attendanceDateFilter && latestHistoryDate) {
+            setAttendanceDateFilter(latestHistoryDate);
+        }
+    }, [attendanceDateFilter, latestHistoryDate]);
+
+    const announcementRecord = useMemo(() => {
+        if (history.length === 0) return null;
+        const targetDate = attendanceDateFilter || latestHistoryDate;
+        return history.find(h => h.dateOfService === targetDate) || null;
+    }, [attendanceDateFilter, history, latestHistoryDate]);
+
+    const announcementTotals = useMemo(() => {
+        if (!announcementRecord) return null;
+        const att = announcementRecord.attendance || { men: 0, women: 0, junior: 0, children: 0, visitors: 0, catechumens: 0 };
+        const total = att.men + att.women + att.junior + att.children + att.visitors + att.catechumens;
+        return { ...att, total };
+    }, [announcementRecord]);
 
     const monthlyAttendance = useMemo(() => {
         const aggregates: Record<string, any> = {};
@@ -476,6 +502,66 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                 </div>
             ) : (
                 <>
+
+            <div className="bg-gradient-to-br from-amber-50 via-white to-lime-50 border-2 border-amber-200 rounded-xl p-5 mb-6 shadow-lg">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                    <div>
+                        <h3 className="text-base font-bold text-amber-800 flex items-center gap-2">
+                            📣 Attendance Snapshot for Announcements
+                        </h3>
+                        <p className="text-xs text-amber-600 mt-1">Shows the most recent attendance (or pick a date below).</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                        <div>
+                            <label className="block text-xs font-bold text-amber-700 mb-1">Select Date</label>
+                            <select
+                                value={attendanceDateFilter}
+                                onChange={e => setAttendanceDateFilter(e.target.value)}
+                                className="border-2 border-amber-200 rounded-lg px-3 py-2 text-sm font-semibold text-amber-800 bg-white focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
+                            >
+                                {historyDates.length === 0 && <option value="">No attendance recorded</option>}
+                                {historyDates.map(date => (
+                                    <option key={date} value={date}>{date}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setAttendanceDateFilter(latestHistoryDate || '')}
+                            disabled={!latestHistoryDate}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-all ${latestHistoryDate ? 'border-amber-300 text-amber-800 hover:bg-amber-100' : 'border-slate-200 text-slate-400 cursor-not-allowed bg-slate-50'}`}
+                        >
+                            Jump to Latest
+                        </button>
+                    </div>
+                </div>
+
+                {announcementTotals ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-white/80 border-2 border-amber-100 rounded-lg p-3">
+                            <div className="text-xs uppercase font-bold text-amber-700">Total</div>
+                            <div className="text-2xl font-extrabold text-amber-900">{announcementTotals.total.toLocaleString()}</div>
+                            {announcementRecord?.officiant && <div className="text-[11px] text-amber-600">Officiant: {announcementRecord.officiant}</div>}
+                        </div>
+                        <div className="bg-white/80 border-2 border-amber-100 rounded-lg p-3">
+                            <div className="text-xs uppercase font-bold text-amber-700">Men / Women</div>
+                            <div className="text-xl font-bold text-amber-900">{announcementTotals.men} / {announcementTotals.women}</div>
+                        </div>
+                        <div className="bg-white/80 border-2 border-amber-100 rounded-lg p-3">
+                            <div className="text-xs uppercase font-bold text-amber-700">Junior / Children</div>
+                            <div className="text-xl font-bold text-amber-900">{announcementTotals.junior} / {announcementTotals.children}</div>
+                        </div>
+                        <div className="bg-white/80 border-2 border-amber-100 rounded-lg p-3">
+                            <div className="text-xs uppercase font-bold text-amber-700">Visitors / Catechumens</div>
+                            <div className="text-xl font-bold text-amber-900">{announcementTotals.visitors} / {announcementTotals.catechumens}</div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-sm text-amber-700 bg-white/70 border-2 border-amber-100 rounded-lg p-4 text-center">
+                        No attendance recorded for the selected date yet.
+                    </div>
+                )}
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <button 
