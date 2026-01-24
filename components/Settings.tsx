@@ -1,8 +1,9 @@
 
 // components/Settings.tsx
-import React, { useState } from 'react';
-import type { Settings, CloudState, Entry, Member, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock } from '../types';
-import { testSupabaseConnection, uploadDataToSupabase, downloadDataFromSupabase, saveSettingsToSupabase } from '../services/supabase';
+import React, { useState, useEffect } from 'react';
+import type { Settings, CloudState, Entry, Member, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, ClassLeader } from '../types';
+import { testSupabaseConnection, uploadDataToSupabase, downloadDataFromSupabase, saveSettingsToSupabase, saveClassLeaderToSupabase, deleteClassLeaderFromSupabase } from '../services/supabase';
+import { useToast } from './ToastProvider';
 
 interface SettingsProps {
     settings: Settings;
@@ -12,6 +13,8 @@ interface SettingsProps {
     onExport: (format: 'json_all') => void;
     onImport: (file: File) => void;
     currentUser: User;
+    classLeaders: ClassLeader[];
+    setClassLeaders: React.Dispatch<React.SetStateAction<ClassLeader[]>>;
     // Data props needed for sync and locking
     allData?: {
         entries: Entry[];
@@ -29,12 +32,27 @@ interface SettingsProps {
     };
 }
 
-const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser }) => {
+const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser, classLeaders, setClassLeaders }) => {
+    const { showToast } = useToast();
     const [localSettings, setLocalSettings] = useState<Settings>(settings);
     const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{type: 'success'|'error'|'info', message: string} | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
+    
+    // Class Leaders Management State
+    const [isAddingLeader, setIsAddingLeader] = useState(false);
+    const [editingLeader, setEditingLeader] = useState<ClassLeader | null>(null);
+    const [newLeader, setNewLeader] = useState<Partial<ClassLeader>>({
+        username: '',
+        password: '',
+        classNumber: '1',
+        accessCode: '',
+        fullName: '',
+        phone: '',
+        email: '',
+        active: true,
+    });
 
     // Month Lock State removed - moved to Financial Control tab
 
@@ -323,6 +341,261 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             ) : (
                 <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
                     🔒 Only Administrators can modify Class Access Codes.
+                </div>
+            )}
+
+            {/* 2c. Class Leaders Management - Admin Only */}
+            {currentUser.role === 'admin' ? (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl shadow-lg border-2 border-indigo-200">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 className="text-xl font-bold text-indigo-800 border-b-2 border-indigo-100 pb-2">👥 Class Leaders Management</h3>
+                            <p className="text-sm text-indigo-700 mt-2">Manage individual class leader accounts with unique credentials for accountability.</p>
+                        </div>
+                        <button 
+                            onClick={() => {
+                                setIsAddingLeader(true);
+                                setNewLeader({
+                                    username: '',
+                                    password: '',
+                                    classNumber: '1',
+                                    accessCode: '',
+                                    fullName: '',
+                                    phone: '',
+                                    email: '',
+                                    active: true,
+                                });
+                            }}
+                            className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all hover:scale-105"
+                        >
+                            + Add Class Leader
+                        </button>
+                    </div>
+
+                    {/* Add/Edit Form */}
+                    {(isAddingLeader || editingLeader) && (
+                        <div className="bg-white rounded-xl p-6 border-2 border-indigo-300 mb-6 shadow-lg">
+                            <h4 className="text-lg font-bold text-indigo-800 mb-4">{editingLeader ? 'Edit Class Leader' : 'New Class Leader'}</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-indigo-800 mb-1">Username *</label>
+                                    <input
+                                        type="text"
+                                        value={editingLeader?.username || newLeader.username || ''}
+                                        onChange={(e) => editingLeader 
+                                            ? setEditingLeader({...editingLeader, username: e.target.value})
+                                            : setNewLeader({...newLeader, username: e.target.value})
+                                        }
+                                        placeholder="e.g., jdoe"
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-indigo-800 mb-1">Password *</label>
+                                    <input
+                                        type="password"
+                                        value={editingLeader?.password || newLeader.password || ''}
+                                        onChange={(e) => editingLeader 
+                                            ? setEditingLeader({...editingLeader, password: e.target.value})
+                                            : setNewLeader({...newLeader, password: e.target.value})
+                                        }
+                                        placeholder="Secure password"
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-indigo-800 mb-1">Class Number *</label>
+                                    <select
+                                        value={editingLeader?.classNumber || newLeader.classNumber || '1'}
+                                        onChange={(e) => editingLeader 
+                                            ? setEditingLeader({...editingLeader, classNumber: e.target.value})
+                                            : setNewLeader({...newLeader, classNumber: e.target.value})
+                                        }
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm"
+                                    >
+                                        {Array.from({ length: localSettings.maxClasses }, (_, i) => (
+                                            <option key={i+1} value={String(i+1)}>Class {i+1}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-indigo-800 mb-1">Access Code *</label>
+                                    <input
+                                        type="text"
+                                        value={editingLeader?.accessCode || newLeader.accessCode || ''}
+                                        onChange={(e) => editingLeader 
+                                            ? setEditingLeader({...editingLeader, accessCode: e.target.value})
+                                            : setNewLeader({...newLeader, accessCode: e.target.value})
+                                        }
+                                        placeholder="e.g., alpha, beta"
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-indigo-800 mb-1">Full Name</label>
+                                    <input
+                                        type="text"
+                                        value={editingLeader?.fullName || newLeader.fullName || ''}
+                                        onChange={(e) => editingLeader 
+                                            ? setEditingLeader({...editingLeader, fullName: e.target.value})
+                                            : setNewLeader({...newLeader, fullName: e.target.value})
+                                        }
+                                        placeholder="John Doe"
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-indigo-800 mb-1">Phone</label>
+                                    <input
+                                        type="tel"
+                                        value={editingLeader?.phone || newLeader.phone || ''}
+                                        onChange={(e) => editingLeader 
+                                            ? setEditingLeader({...editingLeader, phone: e.target.value})
+                                            : setNewLeader({...newLeader, phone: e.target.value})
+                                        }
+                                        placeholder="123-456-7890"
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-indigo-800 mb-1">Email</label>
+                                    <input
+                                        type="email"
+                                        value={editingLeader?.email || newLeader.email || ''}
+                                        onChange={(e) => editingLeader 
+                                            ? setEditingLeader({...editingLeader, email: e.target.value})
+                                            : setNewLeader({...newLeader, email: e.target.value})
+                                        }
+                                        placeholder="leader@example.com"
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2 px-3 text-sm"
+                                    />
+                                </div>
+                                <div className="flex items-center">
+                                    <label className="flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={editingLeader?.active ?? newLeader.active ?? true}
+                                            onChange={(e) => editingLeader 
+                                                ? setEditingLeader({...editingLeader, active: e.target.checked})
+                                                : setNewLeader({...newLeader, active: e.target.checked})
+                                            }
+                                            className="mr-2 w-5 h-5"
+                                        />
+                                        <span className="text-sm font-bold text-indigo-800">Active</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 mt-6">
+                                <button
+                                    onClick={async () => {
+                                        const leader = editingLeader || newLeader;
+                                        if (!leader.username || !leader.password || !leader.classNumber || !leader.accessCode) {
+                                            showToast('Please fill all required fields', 'error', 3000);
+                                            return;
+                                        }
+                                        try {
+                                            const leaderToSave: ClassLeader = {
+                                                id: editingLeader?.id,
+                                                username: leader.username!,
+                                                password: leader.password!,
+                                                classNumber: leader.classNumber!,
+                                                accessCode: leader.accessCode!,
+                                                fullName: leader.fullName,
+                                                phone: leader.phone,
+                                                email: leader.email,
+                                                active: leader.active ?? true,
+                                                createdBy: currentUser.username,
+                                                updatedBy: currentUser.username,
+                                                lastUpdated: new Date().toISOString(),
+                                            };
+                                            await saveClassLeaderToSupabase(localSettings.supabaseUrl, localSettings.supabaseKey, leaderToSave);
+                                            
+                                            // Reload class leaders
+                                            const { downloadDataFromSupabase } = await import('../services/supabase');
+                                            const cloudData = await downloadDataFromSupabase(localSettings.supabaseUrl, localSettings.supabaseKey);
+                                            setClassLeaders(cloudData.classLeaders || []);
+                                            
+                                            showToast(editingLeader ? 'Class leader updated!' : 'Class leader added!', 'success', 3000);
+                                            setIsAddingLeader(false);
+                                            setEditingLeader(null);
+                                        } catch (e: any) {
+                                            showToast(`Failed: ${e.message}`, 'error', 4000);
+                                        }
+                                    }}
+                                    className="flex-1 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg"
+                                >
+                                    ✓ Save
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsAddingLeader(false);
+                                        setEditingLeader(null);
+                                    }}
+                                    className="flex-1 bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Leaders List */}
+                    <div className="space-y-3">
+                        {classLeaders.filter(cl => cl.active).length === 0 ? (
+                            <div className="bg-white rounded-xl p-8 border-2 border-indigo-200 text-center text-slate-500">
+                                No class leaders configured. Click "Add Class Leader" to create one.
+                            </div>
+                        ) : (
+                            classLeaders.filter(cl => cl.active).map(leader => (
+                                <div key={leader.id} className="bg-white rounded-xl p-4 border-2 border-indigo-200 hover:border-indigo-300 transition-all shadow-sm">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className="font-bold text-indigo-900 text-lg">{leader.username}</span>
+                                                <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">Class {leader.classNumber}</span>
+                                                <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-mono">Code: {leader.accessCode}</span>
+                                            </div>
+                                            {leader.fullName && <div className="text-sm text-slate-600">👤 {leader.fullName}</div>}
+                                            <div className="flex gap-4 text-sm text-slate-600 mt-1">
+                                                {leader.phone && <span>📱 {leader.phone}</span>}
+                                                {leader.email && <span>✉️ {leader.email}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setEditingLeader(leader);
+                                                    setIsAddingLeader(false);
+                                                }}
+                                                className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-4 rounded-lg transition-all"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    if (!confirm(`Remove ${leader.username}? This cannot be undone.`)) return;
+                                                    try {
+                                                        await deleteClassLeaderFromSupabase(localSettings.supabaseUrl, localSettings.supabaseKey, leader.id!);
+                                                        setClassLeaders(prev => prev.filter(cl => cl.id !== leader.id));
+                                                        showToast('Class leader removed', 'success', 3000);
+                                                    } catch (e: any) {
+                                                        showToast(`Failed: ${e.message}`, 'error', 4000);
+                                                    }
+                                                }}
+                                                className="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition-all"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
+                    🔒 Only Administrators can manage Class Leaders.
                 </div>
             )}
 
