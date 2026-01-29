@@ -317,82 +317,158 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                 <p className="text-slate-500 text-sm mt-3">Tip: Lists include members with no "present" for the period.</p>
             </div>
 
-            {/* Member List */}
-            <div className="bg-white rounded-2xl shadow-lg border-2 border-slate-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white">
-                    <h3 className="text-xl font-bold">Mark Attendance</h3>
+            {/* Actions */}
+            <div className="bg-white rounded-2xl shadow-lg border-2 border-slate-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-slate-800">Actions</h3>
+                    <div className="text-sm text-slate-500">Manage attendance & members</div>
                 </div>
-                <div className="p-6">
-                    {classMembers.length === 0 ? (
-                        <div className="text-center text-slate-400 p-12">
-                            <p className="text-lg">No members found in Class {currentUser.assignedClass || currentUser.classLed}</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {classMembers.map(member => (
-                                <div key={member.id} className="bg-gradient-to-br from-slate-50 to-blue-50 p-5 rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="font-bold text-lg text-slate-800">{member.name}</div>
-                                        {member.phone && <div className="text-sm text-slate-500">{member.phone}</div>}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {(['present', 'absent'] as AttendanceStatus[]).map(status => (
-                                            <button
-                                                key={status}
-                                                onClick={() => handleStatusChange(member.id, status)}
-                                                disabled={!isCurrentWeek}
-                                                className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-all capitalize ${
-                                                    attendance.get(member.id) === status
-                                                        ? status === 'present' ? 'bg-green-500 text-white shadow-lg'
-                                                        : 'bg-red-500 text-white shadow-lg'
-                                                        : (!isCurrentWeek ? 'bg-white border-2 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border-2 border-slate-300 text-slate-700 hover:border-slate-400')
-                                                }`}
-                                            >
-                                                {status}
-                                            </button>
-                                        ))}
-                                        <button
-                                            onClick={() => {
-                                                setEditMember(member);
-                                                setIsEditModalOpen(true);
-                                            }}
-                                            className="py-2 px-3 rounded-lg font-bold text-sm bg-white border-2 border-indigo-300 text-indigo-700 hover:border-indigo-400"
-                                        >
-                                            Edit Contact
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                <div className="flex flex-wrap gap-3">
+                    {isCurrentWeek && (
+                        <button
+                            onClick={() => setIsMobileMarkingOpen(true)}
+                            disabled={!isConnected || classMembers.length === 0}
+                            className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                                <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                            </svg>
+                            📱 Quick Mark
+                        </button>
                     )}
-                </div>
-                <div className="p-6 bg-slate-50 border-t-2 border-slate-200 flex justify-end">
                     <button
-                        onClick={handleSave}
-                        disabled={!isConnected || isSaving || classMembers.length === 0 || !isCurrentWeek}
-                        className={`bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center gap-3 ${
-                            (!isConnected || isSaving || !isCurrentWeek) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
-                        }`}
+                        onClick={() => setIsMembersEditorOpen(true)}
+                        className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-6 py-3 rounded-xl font-bold shadow hover:scale-105 flex items-center gap-2"
                     >
-                        {isSaving ? (
-                            <>
-                                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Saving...
-                            </>
-                        ) : (
-                            <>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                                Save Weekly Attendance
-                            </>
-                        )}
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                        👥 Edit Members
                     </button>
                 </div>
             </div>
+
+            {/* Member List - Collapsible */}
+            <div className="bg-white rounded-2xl shadow-lg border-2 border-slate-200 overflow-hidden">
+                <div 
+                    onClick={() => setIsAttendanceExpanded(!isAttendanceExpanded)}
+                    className="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white cursor-pointer hover:from-indigo-700 hover:to-blue-700 transition-all flex justify-between items-center"
+                >
+                    <h3 className="text-xl font-bold">Mark Attendance</h3>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm bg-white/20 px-3 py-1 rounded-full font-semibold">
+                            {attendance.size}/{classMembers.length} marked
+                        </span>
+                        <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            className={`h-6 w-6 transition-transform ${isAttendanceExpanded ? 'rotate-180' : ''}`} 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                        </svg>
+                    </div>
+                </div>
+                {isAttendanceExpanded && (
+                    <>
+                        <div className="p-6">
+                            {classMembers.length === 0 ? (
+                                <div className="text-center text-slate-400 p-12">
+                                    <p className="text-lg">No members found in Class {currentUser.assignedClass || currentUser.classLed}</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {classMembers.map(member => (
+                                        <div key={member.id} className="bg-gradient-to-br from-slate-50 to-blue-50 p-5 rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="font-bold text-lg text-slate-800">{member.name}</div>
+                                                {member.phone && <div className="text-sm text-slate-500">{member.phone}</div>}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {(['present', 'absent'] as AttendanceStatus[]).map(status => (
+                                                    <button
+                                                        key={status}
+                                                        onClick={() => handleStatusChange(member.id, status)}
+                                                        disabled={!isCurrentWeek}
+                                                        className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-all capitalize ${
+                                                            attendance.get(member.id) === status
+                                                                ? status === 'present' ? 'bg-green-500 text-white shadow-lg'
+                                                                : 'bg-red-500 text-white shadow-lg'
+                                                                : (!isCurrentWeek ? 'bg-white border-2 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border-2 border-slate-300 text-slate-700 hover:border-slate-400')
+                                                        }`}
+                                                    >
+                                                        {status}
+                                                    </button>
+                                                ))}
+                                                <button
+                                                    onClick={() => {
+                                                        setEditMember(member);
+                                                        setIsEditModalOpen(true);
+                                                    }}
+                                                    className="py-2 px-3 rounded-lg font-bold text-sm bg-white border-2 border-indigo-300 text-indigo-700 hover:border-indigo-400"
+                                                >
+                                                    Edit Contact
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 bg-slate-50 border-t-2 border-slate-200 flex justify-end">
+                        <button
+                            onClick={handleSave}
+                            disabled={!isConnected || isSaving || classMembers.length === 0 || !isCurrentWeek}
+                            className={`bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center gap-3 ${
+                                (!isConnected || isSaving || !isCurrentWeek) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
+                            }`}
+                        >
+                            {isSaving ? (
+                                <>
+                                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    Save Weekly Attendance
+                                </>
+                            )}
+                        </button>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* Mobile Quick Mark Modal */}
+            {isMobileMarkingOpen && (
+                <MobileAttendanceMarking 
+                    classMembers={classMembers}
+                    attendance={attendance}
+                    onClose={() => setIsMobileMarkingOpen(false)}
+                    onMark={(memberId, status) => setAttendance(new Map(attendance).set(memberId, status))}
+                />
+            )}
+
+            {/* Edit Members Modal */}
+            {isMembersEditorOpen && (
+                <ClassLeaderMembersEditor
+                    onClose={() => setIsMembersEditorOpen(false)}
+                    onUpdate={() => {
+                        // Refetch members
+                        setClassMembers([]);
+                        setIsMembersEditorOpen(false);
+                    }}
+                />
+            )}
+
             {/* Alert Modal */}
             {isAlertOpen && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsAlertOpen(false)}>
