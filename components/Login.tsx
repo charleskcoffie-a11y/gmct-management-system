@@ -25,7 +25,7 @@ const roleNotes: Partial<Record<UserRole, string>> = {
     'finance-team': 'Select finance team member to continue',
     'finance-chair': 'Finance leadership access',
     'data-entry': 'Auto-login enabled',
-    'class-leader': 'Use class access code',
+    'class-leader': 'Sign in with your class leader account',
 };
 
 const financeRoles: UserRole[] = ['finance-team'];
@@ -113,13 +113,9 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
             return;
         }
 
-        if (role === 'class-leader') {
-            setSelectedClass('1');
-            setSelectedUser('ClassLeader');
-        } else {
-            const roleUsers = getUsersForRole(role);
-            setSelectedUser(roleUsers[0]?.username || '');
-        }
+        // For class leaders, show username/password form like other roles
+        const roleUsers = getUsersForRole(role);
+        setSelectedUser(roleUsers[0]?.username || '');
         setShowUserModal(true);
     };
 
@@ -129,27 +125,12 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
             setLocalError('Select a role to continue.');
             return;
         }
-        if (selectedRole === 'class-leader') {
-            if (!selectedClass) {
-                setLocalError('Select a class.');
-                return;
-            }
-            const classAccessCodes = settings.classAccessCodes || {};
-            const expectedPassword = classAccessCodes[selectedClass];
-            if (!expectedPassword || password !== expectedPassword) {
-                setLocalError('Invalid class access code.');
-                return;
-            }
-            setLocalError(null);
-            onLogin({ username: 'ClassLeader', password, role: selectedRole });
-        } else {
-            if (!selectedUser) {
-                setLocalError('Choose a user for this role.');
-                return;
-            }
-            setLocalError(null);
-            onLogin({ username: selectedUser, password, role: selectedRole });
+        if (!selectedUser) {
+            setLocalError('Choose a user for this role.');
+            return;
         }
+        setLocalError(null);
+        onLogin({ username: selectedUser, password, role: selectedRole });
     };
 
     const displayedError = localError || error;
@@ -303,40 +284,25 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
                                 )}
                                 <div>
                                     <h3 className="text-lg font-bold text-white">{selectedRole ? roleLabels[selectedRole] : 'Sign in'}</h3>
-                                    <p className="text-sm text-slate-300">Enter your {selectedRole === 'class-leader' ? 'class and access code' : 'credentials'}</p>
+                                    <p className="text-sm text-slate-300">Enter your credentials</p>
                                 </div>
                             </div>
                             <button onClick={() => setShowUserModal(false)} className="text-slate-300 hover:text-white" aria-label="Close">×</button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            {selectedRole === 'class-leader' ? (
-                                <div>
-                                    <label className="block text-sm font-semibold text-indigo-100/90 mb-1">Class</label>
-                                    <select
-                                        value={selectedClass}
-                                        onChange={(e) => setSelectedClass(e.target.value)}
-                                        className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
-                                    >
-                                        {Array.from({ length: settings.maxClasses || 14 }, (_, i) => i + 1).map(num => (
-                                            <option key={num} value={String(num)}>Class {num}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-semibold text-indigo-100/90 mb-1">User</label>
-                                    <select
-                                        value={selectedUser}
-                                        onChange={(e) => setSelectedUser(e.target.value)}
-                                        className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
-                                    >
-                                        <option value="" disabled>Select user</option>
-                                        {getUsersForRole(selectedRole).map(user => (
-                                            <option key={user.username} value={user.username}>{user.username}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+                            <div>
+                                <label className="block text-sm font-semibold text-indigo-100/90 mb-1">User</label>
+                                <select
+                                    value={selectedUser}
+                                    onChange={(e) => setSelectedUser(e.target.value)}
+                                    className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
+                                >
+                                    <option value="" disabled>Select user</option>
+                                    {getUsersForRole(selectedRole).map(user => (
+                                        <option key={user.username} value={user.username}>{user.username}</option>
+                                    ))}
+                                </select>
+                            </div>
 
                             <div>
                                 <label className="block text-sm font-semibold text-indigo-100/90 mb-1">Password / Access Code</label>

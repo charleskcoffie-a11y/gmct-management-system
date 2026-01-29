@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { Member, Settings, User, AttendanceStatus, SyncStatus } from '../types';
 import { saveAttendanceToSupabase, loadAttendanceForDate, loadAttendanceReport, saveMemberToSupabase as saveMemberToSupabaseFn } from '../services/supabase';
 import MemberModal from './MemberModal';
-import { useToast } from './ToastProvider';import { getTodayEST, getWeekStart } from '../utils';
+import { useToast } from './ToastProvider';
+import MobileAttendanceMarking from './MobileAttendanceMarking';
+import ClassLeaderMembersEditor from './ClassLeaderMembersEditor';
+import { getTodayEST, getWeekStart } from '../utils';
 interface ClassAttendanceProps {
     members: Member[];
     setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
@@ -22,6 +25,9 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
     const [alertList, setAlertList] = useState<Array<{ memberId: string; name: string; phone?: string; weeksAbsent: number; selected: boolean }>>([]);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editMember, setEditMember] = useState<Member | null>(null);
+    const [isMobileMarkingOpen, setIsMobileMarkingOpen] = useState(false);
+    const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(true);
+    const [isMembersEditorOpen, setIsMembersEditorOpen] = useState(false);
 
     const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
@@ -110,6 +116,7 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
             await saveAttendanceToSupabase(settings.supabaseUrl, settings.supabaseKey, records);
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3000);
+            setIsAttendanceExpanded(false);
         } catch (e: any) {
             alert(`Failed to save attendance: ${e.message}`);
         } finally {

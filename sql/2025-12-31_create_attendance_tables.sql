@@ -1,11 +1,12 @@
 -- SQL for Supabase: Create attendance tables
 -- This stores class attendance records and member attendance details
 
--- Main attendance table (one record per class per date)
+-- Main attendance table (one record per class per date per service type)
 create table if not exists attendance (
   id uuid primary key default gen_random_uuid(),
   class_number text not null,
   attendance_date date not null,
+  service_type text not null default 'sunday' check (service_type in ('sunday', 'bible-study')),
   class_leader_id uuid references class_leaders(id),
   class_leader_name text,
   total_members_present integer,
@@ -17,7 +18,7 @@ create table if not exists attendance (
   last_updated timestamptz default now(),
   deleted boolean default false,
   created_at timestamptz default now(),
-  unique(class_number, attendance_date)
+  unique(class_number, attendance_date, service_type)
 );
 
 -- Individual member attendance records
@@ -48,9 +49,10 @@ create table if not exists visitor_attendance (
 );
 
 -- Add comments for clarity
-comment on table attendance is 'Stores weekly class attendance summaries';
+comment on table attendance is 'Stores class attendance summaries for Sunday service and Tuesday Bible study';
 comment on column attendance.class_number is 'The class number (1-14 or more)';
 comment on column attendance.attendance_date is 'Date of the attendance (ISO format YYYY-MM-DD)';
+comment on column attendance.service_type is 'Type of service: sunday or bible-study';
 comment on column attendance.class_leader_id is 'Reference to the class leader who recorded attendance';
 
 comment on table member_attendance is 'Individual member attendance details for each class date';

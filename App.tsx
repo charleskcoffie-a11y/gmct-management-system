@@ -38,6 +38,7 @@ const Reports = lazy(() => import('./components/Reports'));
 const DevelopmentFund = lazy(() => import('./components/DevelopmentFund'));
 const NoName = lazy(() => import('./components/NoName'));
 const FinancialControl = lazy(() => import('./components/FinancialControl'));
+const BibleClassAttendanceSummary = lazy(() => import('./components/BibleClassAttendanceSummary'));
 const HarvestPledges = lazy(() => import('./components/HarvestPledges'));
 const Harvest = lazy(() => import('./components/Harvest'));
 const TaxReceipts = lazy(() => import('./components/TaxReceipts'));
@@ -347,6 +348,8 @@ const App: React.FC = () => {
 
     // --- Handlers ---
     const handleLogin = ({ username, password = '', skipPassword = false }: LoginRequest) => {
+        console.log('🔐 Login attempt:', { username, role: 'checking...' });
+        console.log('  classLeaders in state:', classLeaders.length, classLeaders);
         const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
         const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
         const classLeaderFallback = username.trim().toLowerCase() === 'classleader'
@@ -1235,6 +1238,12 @@ const App: React.FC = () => {
                         <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
                     </div>
                 );
+            case 'bible-class-attendance':
+                return (
+                    <Suspense fallback={<div className="p-8 text-slate-500">Loading Bible Class Attendance...</div>}>
+                        <BibleClassAttendanceSummary settings={settings} syncStatus={syncStatus} />
+                    </Suspense>
+                );
             case 'upcoming-birthdays':
                 return (
                     <UpcomingBirthdays members={members} />
@@ -1338,6 +1347,7 @@ const App: React.FC = () => {
             items: [
                 { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'history', targetSection: 'financial-report-section' },
                 { id: 'reports-weekly', label: 'Weekly History', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'weekly-history' },
+                { id: 'reports-bible-class', label: 'Bible Class Attendance', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'bible-class-attendance' },
                 { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'upcoming-birthdays' },
                 { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'e-transfers' },
             ]

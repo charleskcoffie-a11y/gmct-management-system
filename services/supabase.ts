@@ -38,6 +38,32 @@ export const getSupabaseClient = (url: string, key: string): SupabaseClient | nu
     }
 };
 
+// Generate RFC4122 UUID v4 reliably (browser or Node)
+const generateUUIDv4 = (): string => {
+    try {
+        // Prefer Web Crypto when available
+        if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+            const buf = new Uint8Array(16);
+            crypto.getRandomValues(buf);
+            buf[6] = (buf[6] & 0x0f) | 0x40; // version 4
+            buf[8] = (buf[8] & 0x3f) | 0x80; // variant 10
+            const hex = Array.from(buf).map(b => b.toString(16).padStart(2, '0'));
+            return `${hex[0]}${hex[1]}${hex[2]}${hex[3]}-${hex[4]}${hex[5]}-${hex[6]}${hex[7]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
+        }
+    } catch {}
+    // Fallback (not cryptographically strong, but valid format)
+    const rnd = () => Math.floor(Math.random() * 0xffffffff);
+    const s = (n: number) => n.toString(16).padStart(8, '0');
+    const a = s(rnd());
+    const b = s(rnd());
+    const c = s(rnd());
+    const d = s(rnd());
+    // Force version/variant bits
+    const ver = (parseInt(b.slice(0, 2), 16) & 0x0f) | 0x40;
+    const varb = (parseInt(c.slice(0, 2), 16) & 0x3f) | 0x80;
+    return `${a.slice(0,8)}-${b.slice(0,4)}${ver.toString(16)}${b.slice(6,8)}-${varb.toString(16)}${c.slice(3,8)}-${d.slice(0,4)}-${d.slice(4,12)}`;
+};
+
 // --- Connection Test ---
 export const testSupabaseConnection = async (url: string, key: string) => {
     try {
@@ -203,20 +229,26 @@ const mapUserFromDB = (u: any): User => ({
     classLed: u.class_led
 });
 
-const mapClassLeaderToDB = (cl: ClassLeader) => ({
-    id: cl.id,
-    username: cl.username,
-    password: cl.password,
-    class_number: cl.classNumber,
-    access_code: cl.accessCode,
-    full_name: cl.fullName || null,
-    phone: cl.phone || null,
-    email: cl.email || null,
-    active: cl.active,
-    created_by: cl.createdBy || null,
-    updated_by: cl.updatedBy || null,
-    last_updated: cl.lastUpdated || null,
-});
+const mapClassLeaderToDB = (cl: ClassLeader) => {
+    const base: Record<string, any> = {
+        username: cl.username,
+        password: cl.password,
+        class_number: cl.classNumber,
+        access_code: cl.accessCode,
+        full_name: cl.fullName || null,
+        phone: cl.phone || null,
+        email: cl.email || null,
+        active: cl.active,
+        created_by: cl.createdBy || null,
+        updated_by: cl.updatedBy || null,
+        last_updated: cl.lastUpdated || null,
+    };
+
+    // Only include id when updating an existing row so inserts can use the default UUID
+    if (cl.id) base.id = cl.id;
+
+    return base;
+};
 
 const mapClassLeaderFromDB = (cl: any): ClassLeader => ({
     id: cl.id,
@@ -863,7 +895,7 @@ export const saveClassLeaderToSupabase = async (url: string, key: string, classL
         const { error } = await supabase.from('class_leaders').update(dbData).eq('id', classLeader.id);
         if (error) throw new Error(`Update class leader failed: ${error.message}`);
     } else {
-        // Insert new
+        // Insert new (let DB generate UUID via default)
         const { error } = await supabase.from('class_leaders').insert([dbData]);
         if (error) throw new Error(`Insert class leader failed: ${error.message}`);
     }
@@ -1211,31 +1243,94 @@ export const deleteWesleyHallReceipt = async (url: string, key: string, id: stri
 };
 
 // --- Attendance Functions ---
-export const loadAttendanceForDate = async (url: string, key: string, date: string) => {
+export const loadAttendanceForDate = async (url: string, key: string, date: string, serviceType: 'sunday' | 'bible-study' = 'sunday') => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
-    const { data, error } = await supabase
+    
+    // First, get the attendance record for this date and service type to get attendance_id
+    const { data: attendanceRecords, error: attendanceError } = await supabase
         .from('attendance')
-        .select('*')
-        .eq('date', date);
-    if (error) {
-        console.warn('Load attendance failed:', error.message);
+        .select('id, attendance_date, class_number, service_type')
+        .eq('attendance_date', date)
+        .eq('service_type', serviceType);
+    
+    if (attendanceError) {
+        console.warn('Load attendance failed:', attendanceError.message);
         return [];
     }
+    
+    if (!attendanceRecords || attendanceRecords.length === 0) {
+        return [];
+    }
+    
+    // Get all attendance IDs for this date and service type
+    const attendanceIds = attendanceRecords.map(r => r.id);
+    
+    // Query member_attendance table for individual member records
+    const { data, error } = await supabase
+        .from('member_attendance')
+        .select('member_id, status, attendance_id')
+        .in('attendance_id', attendanceIds);
+    
+    if (error) {
+        console.warn('Load member attendance failed:', error.message);
+        return [];
+    }
+    
     return data || [];
 };
 
 export const saveAttendanceToSupabase = async (
     url: string,
     key: string,
-    records: Array<{ date: string; member_id: string; status: string }>
+    records: Array<{ date: string; member_id: string; status: string; class_number?: string; class_leader_name?: string; service_type?: 'sunday' | 'bible-study' }>
 ) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase
+    
+    if (records.length === 0) return { success: true };
+    
+    const date = records[0].date;
+    const class_number = records[0].class_number || '1';
+    const class_leader_name = records[0].class_leader_name;
+    const service_type = records[0].service_type || 'sunday';
+    
+    // Calculate summary stats
+    const total_members_present = records.filter(r => r.status === 'present').length;
+    const total_members_absent = records.filter(r => r.status === 'absent').length;
+    
+    // First, upsert the attendance summary record
+    const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
-        .upsert(records, { onConflict: 'date,member_id' });
-    if (error) throw new Error(`Save attendance failed: ${error.message}`);
+        .upsert({
+            class_number,
+            attendance_date: date,
+            service_type,
+            class_leader_name,
+            total_members_present,
+            total_members_absent,
+            total_visitors: 0,
+        }, { onConflict: 'class_number,attendance_date,service_type' })
+        .select()
+        .single();
+    
+    if (attendanceError) throw new Error(`Save attendance failed: ${attendanceError.message}`);
+    
+    // Then, upsert member attendance records
+    const memberRecords = records.map(r => ({
+        attendance_id: attendanceData.id,
+        member_id: r.member_id,
+        member_name: '', // Will be filled by trigger or app
+        class_number,
+        status: r.status,
+    }));
+    
+    const { error: memberError } = await supabase
+        .from('member_attendance')
+        .upsert(memberRecords, { onConflict: 'attendance_id,member_id', ignoreDuplicates: false });
+    
+    if (memberError) throw new Error(`Save member attendance failed: ${memberError.message}`);
+    
     return { success: true };
 };
 
@@ -1245,9 +1340,9 @@ export const loadAttendanceReport = async (url: string, key: string, startDate: 
     const { data, error } = await supabase
         .from('attendance')
         .select('*')
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: false });
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
+        .order('attendance_date', { ascending: false });
     if (error) {
         console.warn('Load attendance report failed:', error.message);
         return [];

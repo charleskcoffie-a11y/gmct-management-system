@@ -141,6 +141,7 @@ export interface ClassLeader {
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
+export type ServiceType = 'sunday' | 'bible-study';
 
 export interface MemberAttendance {
     memberId: string;
@@ -149,6 +150,7 @@ export interface MemberAttendance {
 
 export interface AttendanceRecord {
     date: string; // ISO format YYYY-MM-DD
+    serviceType?: ServiceType;
     records: MemberAttendance[];
 }
 
