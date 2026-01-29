@@ -232,6 +232,30 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                         </div>
                     </div>
 
+                    {/* Helper Instructions */}
+                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl border-2 border-amber-200 p-5 shadow-md">
+                        <div className="flex items-start gap-3">
+                            <div className="text-3xl">💡</div>
+                            <div className="flex-1">
+                                <h3 className="font-bold text-amber-900 text-lg mb-2">How to Mark Attendance</h3>
+                                <ul className="space-y-2 text-sm text-amber-800">
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold">1️⃣</span>
+                                        <span><strong>Main Attendance:</strong> Mark members on <strong>Tuesday Bible Study</strong> first.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold">2️⃣</span>
+                                        <span><strong>Catch-Up:</strong> If someone missed Tuesday, you can mark them on <strong>Sunday Service</strong> instead.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold">3️⃣</span>
+                                        <span><strong>Important:</strong> Each member should be marked <strong>only once per week</strong> (either Tuesday or Sunday, not both).</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Week navigation: previous/next week */}
                     <div className="flex items-center gap-3">
                         <button
