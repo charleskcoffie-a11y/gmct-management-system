@@ -28,6 +28,7 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
     const [isMobileMarkingOpen, setIsMobileMarkingOpen] = useState(false);
     const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(true);
     const [isMembersEditorOpen, setIsMembersEditorOpen] = useState(false);
+    const [serviceType, setServiceType] = useState<'sunday' | 'bible-study'>('sunday');
 
     const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
@@ -74,14 +75,14 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
     // Load existing attendance for selected week (store as a single record per member using date = weekStart)
     useEffect(() => {
         if (!isConnected || !selectedWeekStart) return;
-        loadAttendanceForDate(settings.supabaseUrl, settings.supabaseKey, selectedWeekStart)
+        loadAttendanceForDate(settings.supabaseUrl, settings.supabaseKey, selectedWeekStart, serviceType)
             .then(records => {
                 const map = new Map<string, AttendanceStatus>();
                 records.forEach(r => map.set(r.member_id, (r.status as AttendanceStatus) || 'absent'));
                 setAttendance(map);
             })
             .catch(err => console.error('Load attendance failed:', err));
-    }, [selectedWeekStart, isConnected, settings.supabaseUrl, settings.supabaseKey]);
+    }, [selectedWeekStart, isConnected, settings.supabaseUrl, settings.supabaseKey, serviceType]);
 
     // Default all members to 'absent' for the selected week (fills gaps for new members or no prior data)
     useEffect(() => {
@@ -112,6 +113,8 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                 date: selectedWeekStart,
                 member_id,
                 status,
+                service_type: serviceType,
+                class_number: currentUser.assignedClass || currentUser.classLed,
             }));
             await saveAttendanceToSupabase(settings.supabaseUrl, settings.supabaseKey, records);
             setShowSuccess(true);
@@ -202,6 +205,33 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                             </p>
                         </div>
                     </div>
+                    
+                    {/* Service Type Toggle */}
+                    <div className="bg-white rounded-2xl shadow-lg border-2 border-slate-200 p-4">
+                        <div className="flex items-center justify-center gap-2">
+                            <button
+                                onClick={() => setServiceType('sunday')}
+                                className={`px-6 py-3 rounded-xl font-bold text-base transition-all ${
+                                    serviceType === 'sunday'
+                                        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                            >
+                                ⛪ Sunday Service
+                            </button>
+                            <button
+                                onClick={() => setServiceType('bible-study')}
+                                className={`px-6 py-3 rounded-xl font-bold text-base transition-all ${
+                                    serviceType === 'bible-study'
+                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                            >
+                                📖 Tuesday Bible Study
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Week navigation: previous/next week */}
                     <div className="flex items-center gap-3">
                         <button
