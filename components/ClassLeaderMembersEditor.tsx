@@ -63,7 +63,7 @@ const ClassLeaderMembersEditor: React.FC<ClassLeaderMembersEditorProps> = ({
 
         try {
             if (isConnected) {
-                await saveMemberToSupabaseFn(newMember, settings.supabaseUrl, settings.supabaseKey);
+                await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, newMember);
             }
             setMembers(prev => [...prev, newMember]);
             setNewMemberName('');
@@ -253,8 +253,6 @@ const ClassLeaderMembersEditor: React.FC<ClassLeaderMembersEditorProps> = ({
                                 setSelectedMember(null);
                                 showToast(`✅ Updated ${updatedMember.name}`, 'success', 2000);
                             }}
-                            currentUser={{ id: '', email: '', name: '', role: 'class-leader', classLed: classNumber }}
-                            settings={settings}
                         />
                     </div>
                 </div>
