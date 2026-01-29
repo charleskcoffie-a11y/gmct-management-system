@@ -448,26 +448,27 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
             </div>
 
             {/* Mobile Quick Mark Modal */}
-            {isMobileMarkingOpen && (
-                <MobileAttendanceMarking 
-                    classMembers={classMembers}
-                    attendance={attendance}
-                    onClose={() => setIsMobileMarkingOpen(false)}
-                    onMark={(memberId, status) => setAttendance(new Map(attendance).set(memberId, status))}
-                />
-            )}
+            <MobileAttendanceMarking 
+                isOpen={isMobileMarkingOpen}
+                members={classMembers}
+                currentAttendance={attendance}
+                onClose={() => setIsMobileMarkingOpen(false)}
+                onSave={(newAttendance) => {
+                    setAttendance(newAttendance);
+                    setIsMobileMarkingOpen(false);
+                }}
+            />
 
             {/* Edit Members Modal */}
-            {isMembersEditorOpen && (
-                <ClassLeaderMembersEditor
-                    onClose={() => setIsMembersEditorOpen(false)}
-                    onUpdate={() => {
-                        // Refetch members
-                        setClassMembers([]);
-                        setIsMembersEditorOpen(false);
-                    }}
-                />
-            )}
+            <ClassLeaderMembersEditor
+                isOpen={isMembersEditorOpen}
+                onClose={() => setIsMembersEditorOpen(false)}
+                members={members}
+                setMembers={setMembers}
+                classNumber={currentUser.assignedClass || currentUser.classLed}
+                settings={settings}
+                syncStatus={syncStatus}
+            />
 
             {/* Alert Modal */}
             {isAlertOpen && (
