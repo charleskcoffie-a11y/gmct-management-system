@@ -1,5 +1,5 @@
 
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "day-born" | "development-fund" | "covenant" | "childrens-ministry" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "day-born" | "development-fund" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {
@@ -23,9 +23,6 @@ export interface Entry {
     updatedBy?: string;
     lastUpdated?: string; // ISO Timestamp
     deleted?: boolean;
-    deletedBy?: string;
-    deletedReason?: string;
-    deletedAt?: string;
     createdAt?: string; // ISO Timestamp (creation time)
 }
 
@@ -84,13 +81,6 @@ export interface Member {
     devFundPledgeAmount?: number; // Amount pledged to development fund
 }
 
-export interface EntryWindowConfig {
-    enabled: boolean; // Whether to enforce entry window restrictions
-    days: string[]; // Array of day names: ['Sunday', 'Monday', etc.]
-    startTime: string; // HH:MM format, e.g. "06:00"
-    endTime: string; // HH:MM format, e.g. "18:00"
-}
-
 export interface Settings {
     currency: string;
     maxClasses: number;
@@ -110,8 +100,6 @@ export interface Settings {
     etransferProvider?: 'sendgrid' | 'mailgun' | 'resend' | 'generic';
     // Class Leader Access Codes
     classAccessCodes?: Record<string, string>; // Map of class number to access code, e.g. {"1": "alpha", "2": "beta"}
-    // Entry Window Restrictions
-    entryWindow?: EntryWindowConfig; // Controls when entries can be created/edited
 }
 
 export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader';
@@ -124,24 +112,7 @@ export interface User {
     assignedClass?: string; // Alias for classLed (more semantic)
 }
 
-export interface ClassLeader {
-    id?: string;
-    username: string;
-    password: string;
-    classNumber: string;
-    accessCode: string;
-    fullName?: string;
-    phone?: string;
-    email?: string;
-    active: boolean;
-    createdBy?: string;
-    updatedBy?: string;
-    lastUpdated?: string;
-    createdAt?: string;
-}
-
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
-export type ServiceType = 'sunday' | 'bible-study';
 
 export interface MemberAttendance {
     memberId: string;
@@ -150,7 +121,6 @@ export interface MemberAttendance {
 
 export interface AttendanceRecord {
     date: string; // ISO format YYYY-MM-DD
-    serviceType?: ServiceType;
     records: MemberAttendance[];
 }
 
@@ -176,7 +146,6 @@ export interface WeeklyHistoryRecord {
     serviceTypes: string[]; 
     serviceTypeOther: string;
     sermonTopic: string;
-    memoryVerse: string;
     worshipHighlights: string;
     announcementsBy: string;
     
@@ -193,8 +162,6 @@ export interface WeeklyHistoryRecord {
     // New Structured Data
     visitorsList: VisitorRecord[];
     donationsList: ServiceDonation[];
-    noDonation?: boolean;
-    noVisitors?: boolean;
 
     newMembersDetails: string;
     newMembersContact: string;
@@ -281,13 +248,6 @@ export interface SyncStatus {
 
 export interface MonthLock {
     month: string; // Format "YYYY-MM"
-    isLocked: boolean;
-    lockedBy?: string;
-    lockedAt?: string;
-}
-
-export interface SundayLock {
-    date: string; // Format "YYYY-MM-DD" - the Sunday date
     isLocked: boolean;
     lockedBy?: string;
     lockedAt?: string;

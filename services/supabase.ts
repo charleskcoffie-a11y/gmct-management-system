@@ -1,18 +1,11 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, SundayLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, ClassLeader } from '../types';
-import { getNowEST } from '../utils';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
 let currentUrl = '';
 let currentKey = '';
-
-// Wrap async work with a short timeout so UI is not blocked by slow networks
-const withTimeout = async <T>(label: string, promise: Promise<T>, ms = 8000): Promise<T> => {
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} request timed out after ${ms}ms`)), ms));
-    return Promise.race([promise, timeout]);
-};
 
 export const getSupabaseClient = (url: string, key: string): SupabaseClient | null => {
     if (!url || !key) return null;
@@ -36,32 +29,6 @@ export const getSupabaseClient = (url: string, key: string): SupabaseClient | nu
         console.error("Invalid Supabase URL/Key", e);
         return null;
     }
-};
-
-// Generate RFC4122 UUID v4 reliably (browser or Node)
-const generateUUIDv4 = (): string => {
-    try {
-        // Prefer Web Crypto when available
-        if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
-            const buf = new Uint8Array(16);
-            crypto.getRandomValues(buf);
-            buf[6] = (buf[6] & 0x0f) | 0x40; // version 4
-            buf[8] = (buf[8] & 0x3f) | 0x80; // variant 10
-            const hex = Array.from(buf).map(b => b.toString(16).padStart(2, '0'));
-            return `${hex[0]}${hex[1]}${hex[2]}${hex[3]}-${hex[4]}${hex[5]}-${hex[6]}${hex[7]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
-        }
-    } catch {}
-    // Fallback (not cryptographically strong, but valid format)
-    const rnd = () => Math.floor(Math.random() * 0xffffffff);
-    const s = (n: number) => n.toString(16).padStart(8, '0');
-    const a = s(rnd());
-    const b = s(rnd());
-    const c = s(rnd());
-    const d = s(rnd());
-    // Force version/variant bits
-    const ver = (parseInt(b.slice(0, 2), 16) & 0x0f) | 0x40;
-    const varb = (parseInt(c.slice(0, 2), 16) & 0x3f) | 0x80;
-    return `${a.slice(0,8)}-${b.slice(0,4)}${ver.toString(16)}${b.slice(6,8)}-${varb.toString(16)}${c.slice(3,8)}-${d.slice(0,4)}-${d.slice(4,12)}`;
 };
 
 // --- Connection Test ---
@@ -123,7 +90,7 @@ const mapMemberToDB = (m: Member) => ({
     dev_fund_pledge: m.devFundPledge || false,
     dev_fund_pledge_amount: typeof m.devFundPledgeAmount === 'number' ? m.devFundPledgeAmount : null,
     active: typeof m.active === 'boolean' ? m.active : true,
-    created_at: m.createdAt || getNowEST() // Ensure never empty
+    created_at: m.createdAt || new Date().toISOString() // Ensure never empty
 });
 
 const mapMemberFromDB = (m: any): Member => {
@@ -171,7 +138,7 @@ const mapEntryToDB = (e: Entry) => ({
     updated_by: e.updatedBy,
     last_updated: toTimestamp(e.lastUpdated),
     deleted: e.deleted,
-    created_at: e.createdAt || getNowEST()
+    created_at: e.createdAt || new Date().toISOString()
 });
 
 const mapEntryFromDB = (e: any): Entry => ({
@@ -191,9 +158,6 @@ const mapEntryFromDB = (e: any): Entry => ({
     updatedBy: e.updated_by,
     lastUpdated: e.last_updated,
     deleted: e.deleted,
-    deletedBy: e.deleted_by,
-    deletedReason: e.deleted_reason,
-    deletedAt: e.deleted_at,
     createdAt: e.created_at
 });
 
@@ -229,43 +193,6 @@ const mapUserFromDB = (u: any): User => ({
     classLed: u.class_led
 });
 
-const mapClassLeaderToDB = (cl: ClassLeader) => {
-    const base: Record<string, any> = {
-        username: cl.username,
-        password: cl.password,
-        class_number: cl.classNumber,
-        access_code: cl.accessCode,
-        full_name: cl.fullName || null,
-        phone: cl.phone || null,
-        email: cl.email || null,
-        active: cl.active,
-        created_by: cl.createdBy || null,
-        updated_by: cl.updatedBy || null,
-        last_updated: cl.lastUpdated || null,
-    };
-
-    // Only include id when updating an existing row so inserts can use the default UUID
-    if (cl.id) base.id = cl.id;
-
-    return base;
-};
-
-const mapClassLeaderFromDB = (cl: any): ClassLeader => ({
-    id: cl.id,
-    username: cl.username,
-    password: cl.password,
-    classNumber: cl.class_number,
-    accessCode: cl.access_code,
-    fullName: cl.full_name || undefined,
-    phone: cl.phone || undefined,
-    email: cl.email || undefined,
-    active: cl.active ?? true,
-    createdBy: cl.created_by || undefined,
-    updatedBy: cl.updated_by || undefined,
-    lastUpdated: cl.last_updated || undefined,
-    createdAt: cl.created_at || undefined,
-});
-
 const mapHistoryToDB = (h: WeeklyHistoryRecord) => ({
     id: h.id,
     date_of_service: h.dateOfService,
@@ -294,26 +221,13 @@ const mapLockFromDB = (l: any): MonthLock => ({
     lockedAt: l.locked_at
 });
 
-const mapSundayLockToDB = (l: SundayLock) => ({
-    date: l.date,
-    is_locked: l.isLocked,
-    locked_by: l.lockedBy,
-    locked_at: toTimestamp(l.lockedAt)
-});
-
-const mapSundayLockFromDB = (l: any): SundayLock => ({
-    date: l.date,
-    isLocked: l.is_locked,
-    lockedBy: l.locked_by,
-    lockedAt: l.locked_at
-});
-
 const mapSettingsToDB = (s: Settings) => ({
     id: 'app_settings', // Single row for app-wide settings
     currency: s.currency,
     max_classes: s.maxClasses,
     enforce_directory: s.enforceDirectory,
     supabase_url: s.supabaseUrl,
+    supabase_key: s.supabaseKey,
     logo_url: s.logoUrl,
     org_name: s.orgName,
     org_address: s.orgAddress,
@@ -323,13 +237,9 @@ const mapSettingsToDB = (s: Settings) => ({
     signature_image: s.signatureImage,
     annual_levy_amount: s.annualLevyAmount,
     etransfer_notification_email: s.etransferNotificationEmail,
+    etransfer_inbound_secret: s.etransferInboundSecret,
     etransfer_provider: s.etransferProvider,
     class_access_codes: s.classAccessCodes ? JSON.stringify(s.classAccessCodes) : null,
-    // Entry Window Restrictions (persisted for multi-user consistency)
-    entry_window_enabled: s.entryWindow ? !!s.entryWindow.enabled : false,
-    entry_window_days: s.entryWindow?.days ? JSON.stringify(s.entryWindow.days) : null,
-    entry_window_start_time: s.entryWindow?.startTime || null,
-    entry_window_end_time: s.entryWindow?.endTime || null,
 });
 
 const mapSettingsFromDB = (s: any): Settings => ({
@@ -337,7 +247,7 @@ const mapSettingsFromDB = (s: any): Settings => ({
     maxClasses: s.max_classes || 14,
     enforceDirectory: s.enforce_directory !== false,
     supabaseUrl: s.supabase_url || '',
-    supabaseKey: '', // never pull keys from database
+    supabaseKey: s.supabase_key || '',
     logoUrl: s.logo_url,
     orgName: s.org_name,
     orgAddress: s.org_address,
@@ -347,17 +257,9 @@ const mapSettingsFromDB = (s: any): Settings => ({
     signatureImage: s.signature_image,
     annualLevyAmount: s.annual_levy_amount,
     etransferNotificationEmail: s.etransfer_notification_email,
-    etransferInboundSecret: undefined, // never pull secrets from database
+    etransferInboundSecret: s.etransfer_inbound_secret,
     etransferProvider: s.etransfer_provider,
     classAccessCodes: s.class_access_codes ? JSON.parse(s.class_access_codes) : undefined,
-    entryWindow: typeof s.entry_window_enabled === 'boolean' || s.entry_window_days || s.entry_window_start_time || s.entry_window_end_time
-        ? {
-            enabled: !!s.entry_window_enabled,
-            days: s.entry_window_days ? JSON.parse(s.entry_window_days) : [],
-            startTime: s.entry_window_start_time || '06:00',
-            endTime: s.entry_window_end_time || '18:00',
-        }
-        : undefined,
 });
 
 // --- Sync Functions ---
@@ -423,66 +325,46 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const [members, entries, users, history, monthLocks, sundayLocks, settings, classLeaders] = await Promise.all([
-        withTimeout('members fetch', (async () => {
-            const { data, error } = await supabase.from('members').select('*');
-            if (error) throw new Error(`Fetch Members failed: ${error.message}`);
-            return data?.map(mapMemberFromDB) || [];
-        })()),
-        withTimeout('entries fetch', (async () => {
-            const { data, error } = await supabase.from('entries').select('*');
-            if (error) throw new Error(`Fetch Entries failed: ${error.message}`);
-            return data?.map(mapEntryFromDB) || [];
-        })()),
-        withTimeout('users fetch', (async () => {
-            const { data, error } = await supabase.from('app_users').select('*');
-            if (error) throw new Error(`Fetch Users failed: ${error.message}`);
-            return data?.map(mapUserFromDB) || [];
-        })()),
-        withTimeout('history fetch', (async () => {
-            const { data, error } = await supabase.from('weekly_history').select('*');
-            if (error) throw new Error(`Fetch History failed: ${error.message}`);
-            return data?.map(mapHistoryFromDB) || [];
-        })()),
-        withTimeout('month locks fetch', (async () => {
-            try {
-                const { data } = await supabase.from('month_locks').select('*');
-                return data ? data.map(mapLockFromDB) : [];
-            } catch (e) {
-                console.log("Month locks table may not exist yet.");
-                return [] as MonthLock[];
-            }
-        })()),
-        withTimeout('sunday locks fetch', (async () => {
-            try {
-                const { data } = await supabase.from('sunday_locks').select('*');
-                return data ? data.map(mapSundayLockFromDB) : [];
-            } catch (e) {
-                console.log("Sunday locks table may not exist yet.");
-                return [] as SundayLock[];
-            }
-        })()),
-        withTimeout('settings fetch', (async () => {
-            try {
-                const { data } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
-                return data ? mapSettingsFromDB(data) : undefined;
-            } catch (e) {
-                console.log("Settings table may not exist yet.");
-                return undefined as Settings | undefined;
-            }
-        })()),
-        withTimeout('class_leaders fetch', (async () => {
-            try {
-                const { data } = await supabase.from('class_leaders').select('*').eq('active', true);
-                return data ? data.map(mapClassLeaderFromDB) : [];
-            } catch (e) {
-                console.log("Class leaders table may not exist yet.");
-                return [] as ClassLeader[];
-            }
-        })())
-    ]);
+    const { data: membersDB, error: memErr } = await supabase.from('members').select('*');
+    if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
+    const members = membersDB?.map(mapMemberFromDB) || [];
 
-    return { members, entries, users, history, monthLocks, sundayLocks, settings, classLeaders };
+    const { data: entriesDB, error: entErr } = await supabase.from('entries').select('*');
+    if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
+    const entries = entriesDB?.map(mapEntryFromDB) || [];
+
+    const { data: usersDB, error: userErr } = await supabase.from('app_users').select('*');
+    if (userErr) throw new Error(`Fetch Users failed: ${userErr.message}`);
+    const users = usersDB?.map(mapUserFromDB) || [];
+
+    const { data: historyDB, error: histErr } = await supabase.from('weekly_history').select('*');
+    if (histErr) throw new Error(`Fetch History failed: ${histErr.message}`);
+    const history = historyDB?.map(mapHistoryFromDB) || [];
+    
+    let monthLocks: MonthLock[] = [];
+    try {
+        const { data: locksDB } = await supabase.from('month_locks').select('*');
+        if (locksDB) monthLocks = locksDB.map(mapLockFromDB);
+    } catch (e) {
+        console.log("Month locks table may not exist yet.");
+    }
+
+    let settings: Settings | undefined;
+    try {
+        const { data: settingsDB } = await supabase.from('app_settings').select('*').eq('id', 'app_settings').single();
+        if (settingsDB) settings = mapSettingsFromDB(settingsDB);
+    } catch (e) {
+        console.log("Settings table may not exist yet.");
+    }
+
+    return {
+        members,
+        entries,
+        users,
+        history,
+        monthLocks,
+        settings
+    };
 };
 
 // --- E-Transfers ---
@@ -618,7 +500,7 @@ export const saveRequisition = async (url: string, key: string, req: Requisition
 export const submitRequisition = async (url: string, key: string, id: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: getNowEST() }).eq('id', id);
+    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: new Date().toISOString() }).eq('id', id);
     if (error) throw new Error(error.message);
 };
 
@@ -627,7 +509,7 @@ export const decideRequisition = async (url: string, key: string, approval: Requ
     if (!supabase) throw new Error('Invalid Supabase configuration');
     const { error: insErr } = await supabase.from('requisition_approvals').insert([mapApprovalToDB(approval)]);
     if (insErr) throw new Error(insErr.message);
-    const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: getNowEST() }).eq('id', approval.requisitionId);
+    const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: new Date().toISOString() }).eq('id', approval.requisitionId);
     if (updErr) throw new Error(updErr.message);
 };
 
@@ -664,54 +546,12 @@ export const saveEntryToSupabase = async (url: string, key: string, entry: Entry
     return { success: true };
 };
 
-export const markEntryAsDeletedInSupabase = async (
-    url: string, 
-    key: string, 
-    entryId: string,
-    deletedBy: string,
-    deletedReason: string
-) => {
+export const deleteEntryFromSupabase = async (url: string, key: string, entryId: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
     
-    const { error } = await supabase
-        .from('entries')
-        .update({ 
-            deleted: true,
-            deleted_by: deletedBy,
-            deleted_reason: deletedReason,
-            deleted_at: getNowEST()
-        })
-        .eq('id', entryId);
-    if (error) throw new Error(`Mark entry as deleted failed: ${error.message}`);
-    return { success: true };
-};
-
-export const logEntryDeletionToSupabase = async (
-    url: string, 
-    key: string, 
-    entry: Entry, 
-    reason: string, 
-    deletedBy: string
-) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error("Invalid Supabase configuration");
-    
-    const deletionRecord = {
-        entry_id: entry.id,
-        entry_type: entry.type,
-        member_id: entry.memberID || null,
-        member_name: entry.memberName || null,
-        amount: entry.amount,
-        original_date: entry.date,
-        deletion_reason: reason,
-        deleted_by: deletedBy,
-        deleted_at: getNowEST(),
-        original_entry_data: entry
-    };
-    
-    const { error } = await supabase.from('entry_deletions').insert(deletionRecord);
-    if (error) throw new Error(`Failed to log deletion: ${error.message}`);
+    const { error } = await supabase.from('entries').delete().eq('id', entryId);
+    if (error) throw new Error(`Delete entry failed: ${error.message}`);
     return { success: true };
 };
 
@@ -795,27 +635,21 @@ export const saveMonthLockToSupabase = async (url: string, key: string, lock: Mo
     return { success: true };
 };
 
-export const saveSundayLockToSupabase = async (url: string, key: string, lock: SundayLock) => {
+export const saveSundayLockToSupabase = async (url: string, key: string, lock: any) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const { error } = await supabase.from('sunday_locks').upsert([mapSundayLockToDB(lock)]);
+    const lockData = {
+        id: lock.id,
+        date: lock.date,
+        locked: lock.locked,
+        locked_by: lock.lockedBy,
+        locked_at: lock.lockedAt,
+    };
+
+    const { error } = await supabase.from('sunday_locks').upsert([lockData]);
     if (error) throw new Error(`Save Sunday lock failed: ${error.message}`);
     return { success: true };
-};
-
-export const loadSundayLocksFromSupabase = async (url: string, key: string): Promise<SundayLock[]> => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error("Invalid Supabase configuration");
-
-    try {
-        const { data, error } = await supabase.from('sunday_locks').select('*');
-        if (error) throw error;
-        return data ? data.map(mapSundayLockFromDB) : [];
-    } catch (e) {
-        console.log("Sunday locks table may not exist yet.");
-        return [];
-    }
 };
 
 export const saveSettingsToSupabase = async (url: string, key: string, settings: Settings) => {
@@ -832,13 +666,6 @@ export const saveUserToSupabase = async (url: string, key: string, user: User, o
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    // Hard guard: never allow editing or recreating the default Admin user
-    const isOriginalAdmin = !!originalUsername && originalUsername.toLowerCase() === 'admin';
-    const isTargetAdmin = user.username.toLowerCase() === 'admin';
-    if (isOriginalAdmin || (!originalUsername && isTargetAdmin)) {
-        throw new Error('Admin user cannot be edited or recreated');
-    }
-
     const { error } = await supabase.from('app_users').upsert([mapUserToDB(user)]);
     if (error) throw new Error(`Save user failed: ${error.message}`);
 
@@ -853,62 +680,8 @@ export const deleteUserFromSupabase = async (url: string, key: string, username:
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    // Hard guard: never allow deleting Admin user
-    if (username.toLowerCase() === 'admin') {
-        throw new Error('Admin user cannot be deleted');
-    }
-
     const { error } = await supabase.from('app_users').delete().eq('username', username);
     if (error) throw new Error(`Delete user failed: ${error.message}`);
-    return { success: true };
-};
-
-// --- Weekly History Operations ---
-export const saveWeeklyHistoryToSupabase = async (url: string, key: string, record: WeeklyHistoryRecord) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error("Invalid Supabase configuration");
-
-    const dbData = mapHistoryToDB(record);
-    const { error } = await supabase.from('weekly_history').upsert([dbData]);
-    if (error) throw new Error(`Save weekly history failed: ${error.message}`);
-    return { success: true };
-};
-
-export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, recordId: string) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error("Invalid Supabase configuration");
-
-    const { error } = await supabase.from('weekly_history').delete().eq('id', recordId);
-    if (error) throw new Error(`Delete weekly history failed: ${error.message}`);
-    return { success: true };
-};
-
-// --- Class Leader CRUD ---
-export const saveClassLeaderToSupabase = async (url: string, key: string, classLeader: ClassLeader) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error("Invalid Supabase configuration");
-
-    const dbData = mapClassLeaderToDB(classLeader);
-    
-    if (classLeader.id) {
-        // Update existing
-        const { error } = await supabase.from('class_leaders').update(dbData).eq('id', classLeader.id);
-        if (error) throw new Error(`Update class leader failed: ${error.message}`);
-    } else {
-        // Insert new (let DB generate UUID via default)
-        const { error } = await supabase.from('class_leaders').insert([dbData]);
-        if (error) throw new Error(`Insert class leader failed: ${error.message}`);
-    }
-    
-    return { success: true };
-};
-
-export const deleteClassLeaderFromSupabase = async (url: string, key: string, id: string) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error("Invalid Supabase configuration");
-
-    const { error } = await supabase.from('class_leaders').delete().eq('id', id);
-    if (error) throw new Error(`Delete class leader failed: ${error.message}`);
     return { success: true };
 };
 
@@ -974,7 +747,7 @@ const mapHarvestPledgeToDB = (p: HarvestPledge): HarvestPledgeDB => ({
     updated_by: p.updatedBy,
     last_updated: toTimestamp(p.lastUpdated),
     deleted: p.deleted,
-    created_at: p.createdAt || getNowEST()
+    created_at: p.createdAt || new Date().toISOString()
 });
 
 const mapHarvestPledgeFromDB = (p: any): HarvestPledge => ({
@@ -1029,7 +802,7 @@ export const saveHarvestPledgePayment = async (
             payment_date: paymentDate,
             amount: amount,
             paid_by: paidBy,
-            created_at: getNowEST()
+            created_at: new Date().toISOString()
         }]);
     
     if (error) throw new Error(`Save harvest pledge payment failed: ${error.message}`);
@@ -1089,7 +862,7 @@ const mapMemberLevyToDB = (l: MemberLevy): MemberLevyDB => ({
     remaining: l.remaining,
     class_number: l.classNumber,
     group_name: l.groupName,
-    created_at: l.createdAt || getNowEST(),
+    created_at: l.createdAt || new Date().toISOString(),
 });
 
 const mapMemberLevyFromDB = (l: any): MemberLevy => ({
@@ -1192,7 +965,7 @@ const mapWesleyHallToDB = (r: WesleyHallReceipt) => ({
     updated_by: r.updatedBy,
     last_updated: toTimestamp(r.lastUpdated),
     deleted: r.deleted,
-    created_at: r.createdAt || getNowEST(),
+    created_at: r.createdAt || new Date().toISOString(),
 });
 
 const mapWesleyHallFromDB = (r: any): WesleyHallReceipt => ({
@@ -1243,94 +1016,31 @@ export const deleteWesleyHallReceipt = async (url: string, key: string, id: stri
 };
 
 // --- Attendance Functions ---
-export const loadAttendanceForDate = async (url: string, key: string, date: string, serviceType: 'sunday' | 'bible-study' = 'sunday') => {
+export const loadAttendanceForDate = async (url: string, key: string, date: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
-    
-    // First, get the attendance record for this date and service type to get attendance_id
-    const { data: attendanceRecords, error: attendanceError } = await supabase
-        .from('attendance')
-        .select('id, attendance_date, class_number, service_type')
-        .eq('attendance_date', date)
-        .eq('service_type', serviceType);
-    
-    if (attendanceError) {
-        console.warn('Load attendance failed:', attendanceError.message);
-        return [];
-    }
-    
-    if (!attendanceRecords || attendanceRecords.length === 0) {
-        return [];
-    }
-    
-    // Get all attendance IDs for this date and service type
-    const attendanceIds = attendanceRecords.map(r => r.id);
-    
-    // Query member_attendance table for individual member records
     const { data, error } = await supabase
-        .from('member_attendance')
-        .select('member_id, status, attendance_id')
-        .in('attendance_id', attendanceIds);
-    
+        .from('attendance')
+        .select('*')
+        .eq('date', date);
     if (error) {
-        console.warn('Load member attendance failed:', error.message);
+        console.warn('Load attendance failed:', error.message);
         return [];
     }
-    
     return data || [];
 };
 
 export const saveAttendanceToSupabase = async (
     url: string,
     key: string,
-    records: Array<{ date: string; member_id: string; status: string; class_number?: string; class_leader_name?: string; service_type?: 'sunday' | 'bible-study' }>
+    records: Array<{ date: string; member_id: string; status: string }>
 ) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    
-    if (records.length === 0) return { success: true };
-    
-    const date = records[0].date;
-    const class_number = records[0].class_number || '1';
-    const class_leader_name = records[0].class_leader_name;
-    const service_type = records[0].service_type || 'sunday';
-    
-    // Calculate summary stats
-    const total_members_present = records.filter(r => r.status === 'present').length;
-    const total_members_absent = records.filter(r => r.status === 'absent').length;
-    
-    // First, upsert the attendance summary record
-    const { data: attendanceData, error: attendanceError } = await supabase
+    const { error } = await supabase
         .from('attendance')
-        .upsert({
-            class_number,
-            attendance_date: date,
-            service_type,
-            class_leader_name,
-            total_members_present,
-            total_members_absent,
-            total_visitors: 0,
-        }, { onConflict: 'class_number,attendance_date,service_type' })
-        .select()
-        .single();
-    
-    if (attendanceError) throw new Error(`Save attendance failed: ${attendanceError.message}`);
-    
-    // Then, upsert member attendance records
-    const memberRecords = records.map(r => ({
-        attendance_id: attendanceData.id,
-        member_id: r.member_id,
-        member_name: '', // Will be filled by trigger or app
-        class_number,
-        status: r.status,
-    }));
-    
-    const { error: memberError } = await supabase
-        .from('member_attendance')
-        .upsert(memberRecords, { onConflict: 'attendance_id,member_id', ignoreDuplicates: false });
-    
-    if (memberError) throw new Error(`Save member attendance failed: ${memberError.message}`);
-    
+        .upsert(records, { onConflict: 'date,member_id' });
+    if (error) throw new Error(`Save attendance failed: ${error.message}`);
     return { success: true };
 };
 
@@ -1340,9 +1050,9 @@ export const loadAttendanceReport = async (url: string, key: string, startDate: 
     const { data, error } = await supabase
         .from('attendance')
         .select('*')
-        .gte('attendance_date', startDate)
-        .lte('attendance_date', endDate)
-        .order('attendance_date', { ascending: false });
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false });
     if (error) {
         console.warn('Load attendance report failed:', error.message);
         return [];
@@ -1445,7 +1155,7 @@ export const deleteAssetFromSupabase = async (url: string, key: string, id: stri
     // Soft delete
     const { error } = await supabase
         .from('assets')
-        .update({ deleted: true, updated_at: getNowEST() })
+        .update({ deleted: true, updated_at: new Date().toISOString() })
         .eq('id', id);
     if (error) throw new Error(`Delete asset failed: ${error.message}`);
     return { success: true };
@@ -1536,7 +1246,7 @@ export const saveUtilityValue = async (
             value,
             description: description || null,
             updated_by: updatedBy || null,
-            updated_at: getNowEST(),
+            updated_at: new Date().toISOString(),
         }]);
     if (error) throw new Error(`Save utility ${utilityKey} failed: ${error.message}`);
     return { success: true };
@@ -1561,4 +1271,119 @@ export const saveAnnualLevyAmount = async (
         'Annual harvest levy amount per member',
         updatedBy
     );
+};
+
+// Class Leader Management
+export const saveClassLeaderToSupabase = async (url: string, key: string, leader: any) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    
+    const leaderData = {
+        id: leader.id,
+        username: leader.username,
+        password: leader.password,
+        class_number: leader.classNumber,
+        access_code: leader.accessCode,
+        full_name: leader.fullName,
+        phone: leader.phone,
+        email: leader.email,
+        active: leader.active,
+        created_by: leader.createdBy,
+        updated_by: leader.updatedBy,
+        last_updated: leader.lastUpdated,
+    };
+    
+    const { error } = await supabase
+        .from('class_leaders')
+        .upsert([leaderData]);
+    
+    if (error) throw new Error(`Save class leader failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteClassLeaderFromSupabase = async (url: string, key: string, leaderId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    
+    const { error } = await supabase
+        .from('class_leaders')
+        .delete()
+        .eq('id', leaderId);
+    
+    if (error) throw new Error(`Delete class leader failed: ${error.message}`);
+    return { success: true };
+};
+
+// Entry Deletion Logging
+export const logEntryDeletionToSupabase = async (
+    url: string,
+    key: string,
+    entry: any,
+    deletedBy: string,
+    reason?: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    
+    const logEntry = {
+        entry_id: entry.id,
+        entry_type: entry.type,
+        member_id: entry.memberID,
+        member_name: entry.memberName,
+        amount: entry.type === 'count' ? null : entry.amount,
+        count_value: entry.type === 'count' ? entry.amount : null,
+        fund: entry.fund,
+        method: entry.method,
+        date: entry.date,
+        note: entry.note,
+        deleted_by: deletedBy,
+        deleted_at: new Date().toISOString(),
+        deletion_reason: reason || null,
+    };
+    
+    const { error } = await supabase
+        .from('deletion_log')
+        .insert([logEntry]);
+    
+    if (error) throw new Error(`Log entry deletion failed: ${error.message}`);
+    return { success: true };
+};
+
+export const markEntryAsDeletedInSupabase = async (url: string, key: string, entryId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    
+    const { error } = await supabase
+        .from('entries')
+        .update({ deleted: true, deleted_at: new Date().toISOString() })
+        .eq('id', entryId);
+    
+    if (error) throw new Error(`Mark entry as deleted failed: ${error.message}`);
+    return { success: true };
+};
+
+// Weekly History Management
+export const saveWeeklyHistoryToSupabase = async (url: string, key: string, record: any) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    
+    const { error } = await supabase
+        .from('weekly_history')
+        .upsert([mapHistoryToDB(record)]);
+    
+    if (error) throw new Error(`Save weekly history failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, historyId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    
+    const { error } = await supabase
+        .from('weekly_history')
+        .delete()
+        .eq('id', historyId);
+    
+    if (error) throw new Error(`Delete weekly history failed: ${error.message}`);
+    return { success: true };
 };
