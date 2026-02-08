@@ -1,0 +1,174 @@
+GMCT Class Attendance – Implementation Notes (for separate Class Leader app)
+Date: 2026-02-03
+
+PURPOSE
+This document explains how class attendance works in the current app so you can reproduce the same behavior (same tables, same queries, same UI flow) in a separate Class Leader app without exposing the full church management system.
+
+KEY SOURCE FILES (reference in this workspace)
+- components/ClassAttendance.tsx
+- services/supabase.ts (attendance functions)
+- sql/2025-12-31_create_attendance_tables.sql
+
+DATA MODEL (Supabase)
+1) attendance (summary per class per date per service type)
+- id uuid PK
+- class_number text
+- attendance_date date (YYYY-MM-DD)
+- service_type text: 'sunday' | 'bible-study'
+- class_leader_id uuid (optional)
+- class_leader_name text (optional)
+- total_members_present integer
+- total_members_absent integer
+- total_visitors integer
+- notes text
+- unique(class_number, attendance_date, service_type)
+
+2) member_attendance (per member per attendance_id)
+- id uuid PK
+- attendance_id uuid FK -> attendance.id
+- member_id uuid FK -> members.id
+- member_name text (often filled by trigger or app)
+- class_number text
+- status text: 'present' | 'absent' | 'sick' | 'travel' | 'catechumen'
+
+3) visitor_attendance (not used in ClassAttendance.tsx, but exists)
+- id uuid PK
+- attendance_id uuid FK -> attendance.id
+- visitor_name text
+- visitor_from text
+- visitor_position text
+- class_number text
+
+RLS (current SQL) – all allow authenticated/anon for now
+See sql/2025-12-31_create_attendance_tables.sql
+
+FRONTEND FLOW (Class Leader screen)
+Component: ClassAttendance.tsx
+1) Class filter
+- Class leader sees only members with member.classNumber === assignedClass or classLed.
+- Active-only: member.active !== false.
+
+2) Date handling
+- The UI uses “week start” (Sunday) as the attendance date.
+- selectedDate is any date; selectedWeekStart = week Sunday (UTC) and used for database date.
+- Weeks are navigated by +/- 7 days.
+
+3) Service type
+- Toggle between 'sunday' and 'bible-study'.
+- This changes which attendance records are loaded/saved.
+
+4) Loading attendance (per week)
+Function: loadAttendanceForDate(url, key, date, serviceType)
+- Query attendance table by attendance_date = selectedWeekStart and service_type.
+- Collect attendance_id(s)
+- Query member_attendance where attendance_id IN those ids.
+- Returns member_id + status.
+
+5) Default attendance
+- All class members default to 'absent' if no record exists.
+
+6) Editing rules
+- Only current week is editable (selectedWeekStart === currentWeekStart).
+- Past/future weeks are read-only.
+
+7) Save attendance
+- Collect Map<member_id, status> for class members.
+- Save using saveAttendanceToSupabase(url, key, records)
+
+QUERY DETAILS (Supabase)
+A) Load attendance for date
+File: services/supabase.ts
+-----------------------------------
+SELECT id, attendance_date, class_number, service_type
+FROM attendance
+WHERE attendance_date = :date
+  AND service_type = :serviceType;
+
+SELECT member_id, status, attendance_id
+FROM member_attendance
+WHERE attendance_id IN (:attendanceIds);
+-----------------------------------
+
+B) Save attendance
+File: services/supabase.ts
+-----------------------------------
+1) Upsert summary in attendance
+- onConflict: class_number, attendance_date, service_type
+- total_members_present = count(status == 'present')
+- total_members_absent = count(status == 'absent')
+
+UPSERT INTO attendance:
+{
+  class_number,
+  attendance_date: date,
+  service_type,
+  class_leader_name,
+  total_members_present,
+  total_members_absent,
+  total_visitors: 0
+}
+RETURNING id;
+
+2) Upsert member records
+- onConflict: attendance_id, member_id
+
+UPSERT member_attendance rows:
+{
+  attendance_id,
+  member_id,
+  member_name: '',
+  class_number,
+  status
+}
+-----------------------------------
+
+C) Attendance report (used for alerts)
+File: services/supabase.ts
+-----------------------------------
+SELECT *
+FROM attendance
+WHERE attendance_date >= :startDate
+  AND attendance_date <= :endDate
+ORDER BY attendance_date DESC;
+-----------------------------------
+
+ALERTS (Absentees Lists)
+- Monthly: range from month start to current week end.
+- Quarterly: range from quarter start to current week end.
+- Logic: build map of member_id -> statuses from loadAttendanceReport
+- Members with NO 'present' in the period are listed.
+
+MOBILE QUICK MARK
+Component: MobileAttendanceMarking.tsx
+- Allows quick selection of statuses in a modal.
+- Returns Map<member_id, status> to main component.
+
+MEMBER EDITS (Class Leader limited)
+- Class leader can edit only contact fields (name, email, phone, address)
+- Only for members in their assigned class.
+- Save with saveMemberToSupabase (not detailed here).
+
+ROLE / ACCESS NOTES
+- Class leader role should see only class attendance features.
+- Do NOT show admin modules (finance, assets, settings, etc).
+- In the current app, class leader access is enforced in UI filtering and role-based view routing.
+
+RECOMMENDED SPLIT-APP APPROACH
+1) Create a new app that ONLY includes:
+- ClassAttendance.tsx (or simplified version)
+- MobileAttendanceMarking.tsx
+- ClassLeaderMembersEditor.tsx (if you want contact edits)
+- Supabase attendance functions above
+2) Keep the same Supabase tables and queries.
+3) Use class leader login (classLed/assignedClass) to filter members.
+4) Hide all other modules and routes.
+
+FILES TO COPY / REUSE (Minimal)
+- components/ClassAttendance.tsx
+- components/MobileAttendanceMarking.tsx
+- components/ClassLeaderMembersEditor.tsx (optional)
+- services/supabase.ts (only attendance + member save functions)
+- utils.ts (getTodayEST, getWeekStart, sanitize helpers)
+- types.ts (Member, AttendanceStatus, User, Settings)
+
+If you want, I can also prepare a stripped-down mini-app for class leaders only (same UI and queries) using these files and the same database.
