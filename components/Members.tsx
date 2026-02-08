@@ -377,6 +377,15 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                     {member.memberNumber && (
                                         <p className="text-xs text-white/90 font-medium">#{sanitizeString(member.memberNumber)}</p>
                                     )}
+                                    {member.email && (
+                                        <p className="text-[10px] text-white/90 truncate">📧 {sanitizeString(member.email)}</p>
+                                    )}
+                                    {member.profession && (
+                                        <p className="text-[10px] text-white/90 truncate">💼 {sanitizeString(member.profession)}</p>
+                                    )}
+                                    {member.dayBorn && (
+                                        <p className="text-[10px] text-white/90">📅 {sanitizeString(member.dayBorn)}</p>
+                                    )}
                                     <p className="text-[10px] text-white/70 font-mono">ID: {member.id.substring(0, 6)}</p>
                                 </div>
 
@@ -506,18 +515,25 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                                         <td className="px-8 py-5 text-slate-800 text-base">{sanitizeString(member.email) || '-'}</td>
                                         <td className="px-8 py-5 text-slate-800 text-base">{sanitizeString(member.phone) || '-'}</td>
                                         <td className="px-8 py-5 text-slate-800 text-base">{sanitizeString(member.profession) || '-'}</td>
+                                        <td className="px-8 py-5 text-slate-800 text-base">
+                                            <div>
+                                                <div className="font-semibold">
+                                                    {(() => {
+                                                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                                        const m = member.dobMonth;
+                                                        const d = member.dobDay;
+                                                        return m && d ? `${months[m-1]} ${d}` : '-';
+                                                    })()}
+                                                </div>
+                                                {member.dayBorn && (
+                                                    <div className="text-xs text-slate-500">({sanitizeString(member.dayBorn)})</div>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="px-8 py-5">
                                             <span className={`px-3 py-1 rounded-full text-sm font-bold ${member.active === false ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                 {member.active === false ? 'Inactive' : 'Active'}
                                             </span>
-                                        </td>
-                                        <td className="px-8 py-5 text-slate-800 text-base">
-                                            {(() => {
-                                                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                                                const m = member.dobMonth;
-                                                const d = member.dobDay;
-                                                return m && d ? `${months[m-1]} ${d}` : '-';
-                                            })()}
                                         </td>
                                         <td className="px-8 py-5 text-right">
                                             <div className="flex justify-end gap-2">
