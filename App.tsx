@@ -1,48 +1,57 @@
 
 // App.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import Members from './components/Members';
-import Insights from './components/Insights';
-import SettingsTab from './components/Settings';
-import Login from './components/Login';
-import UsersTab from './components/Users';
-import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
-import WeeklyHistory from './components/WeeklyHistory';
-import UpcomingBirthdays from './components/UpcomingBirthdays';
-import ETransfers from './components/ETransfers';
-import Requisitions from './components/Requisitions';
-import MyApprovals from './components/MyApprovals';
-import Reports from './components/Reports';
 import ConfirmationModal from './components/ConfirmationModal';
-import DevelopmentFund from './components/DevelopmentFund';
-import NoName from './components/NoName';
-import FinancialControl from './components/FinancialControl';
-import HarvestPledges from './components/HarvestPledges';
-import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
-import TaxReceipts from './components/TaxReceipts';
-import WesleyHall from './components/WesleyHall';
-import ClassAttendance from './components/ClassAttendance';
-import Assets from './components/Assets';
-import DayBorn from './components/DayBorn';
+import Login from './components/Login';
+import EntryWindowBanner from './components/EntryWindowBanner';
 import { ToastProvider } from './components/ToastProvider';
+import PasswordChangeModal from './components/PasswordChangeModal';
+import BulkChildrenMinistryModal from './components/BulkChildrenMinistryModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
-import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST, isEntryWindowOpen, formatMethod } from './utils';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
+import ProfileModal from './components/ProfileModal';
+
+// Lazy-load heavier pages to keep the initial bundle smaller
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Members = lazy(() => import('./components/Members'));
+const Insights = lazy(() => import('./components/Insights'));
+const SettingsTab = lazy(() => import('./components/Settings'));
+const UsersTab = lazy(() => import('./components/Users'));
+const Utilities = lazy(() => import('./components/Utilities'));
+const WeeklyHistory = lazy(() => import('./components/WeeklyHistory'));
+const UpcomingBirthdays = lazy(() => import('./components/UpcomingBirthdays'));
+const ETransfers = lazy(() => import('./components/ETransfers'));
+const Requisitions = lazy(() => import('./components/Requisitions'));
+const MyApprovals = lazy(() => import('./components/MyApprovals'));
+const Reports = lazy(() => import('./components/Reports'));
+const DevelopmentFund = lazy(() => import('./components/DevelopmentFund'));
+const NoName = lazy(() => import('./components/NoName'));
+const FinancialControl = lazy(() => import('./components/FinancialControl'));
+const BibleClassAttendanceSummary = lazy(() => import('./components/BibleClassAttendanceSummary'));
+const HarvestPledges = lazy(() => import('./components/HarvestPledges'));
+const Harvest = lazy(() => import('./components/Harvest'));
+const TaxReceipts = lazy(() => import('./components/TaxReceipts'));
+const WesleyHall = lazy(() => import('./components/WesleyHall'));
+const ClassAttendance = lazy(() => import('./components/ClassAttendance'));
+const Assets = lazy(() => import('./components/Assets'));
+const DayBorn = lazy(() => import('./components/DayBorn'));
 
 // Initial Data
 const INITIAL_USERS: User[] = [
     { username: 'Admin', password: 'GMCT', role: 'admin' },
+    // Shared class-leader account (uses class access codes as password)
+    { username: 'ClassLeader', role: 'class-leader' },
 ];
 const INITIAL_SETTINGS: Settings = {
     currency: DEFAULT_CURRENCY,
@@ -60,12 +69,14 @@ const INITIAL_SETTINGS: Settings = {
 };
 
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
+type LoginRequest = { username: string; password?: string; skipPassword?: boolean; role?: UserRole };
 
 const App: React.FC = () => {
     // --- State Management (Database-Driven - No localStorage for data) ---
     const [entries, setEntries] = useState<Entry[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+    const [classLeaders, setClassLeaders] = useState<ClassLeader[]>([]);
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
 
     const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
@@ -76,6 +87,7 @@ const App: React.FC = () => {
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useState<MonthLock[]>([]);
+    const [sundayLocks, setSundayLocks] = useState<SundayLock[]>([]);
 
 
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -91,6 +103,9 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [showChildrenMinistryModal, setShowChildrenMinistryModal] = useState(false);
+    const [userNotes, setUserNotes] = useLocalStorage<Record<string, string>>('gmct-user-notes', {});
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -104,17 +119,28 @@ const App: React.FC = () => {
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
+    const [modalDeletedFilter, setModalDeletedFilter] = useState<'all' | 'active' | 'deleted'>('all');
 
     // Navigation collapse state
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
+    // Password change modal state
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
+
+    // Restrict statistician accounts to Weekly History only
+    useEffect(() => {
+        if (currentUser?.role === 'statistician' && activeTab !== 'weekly-history') {
+            setActiveTab('weekly-history');
+        }
+    }, [currentUser?.role, activeTab]);
 
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, history: weeklyHistory, users, monthLocks
+        entries, members, history: weeklyHistory, users, monthLocks, sundayLocks, classLeaders
     }, {
-        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSundayLocks, setSettings, setClassLeaders
     });
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);
@@ -124,27 +150,15 @@ const App: React.FC = () => {
     
     // --- Load All Data from Database on mount or when connection is ready ---
     useEffect(() => {
-        if (!settings.supabaseUrl || !settings.supabaseKey) {
-            console.log('⚠️ Supabase not configured');
-            return;
-        }
-        if (syncStatus.state !== 'synced') {
-            console.log('⏳ Waiting for sync... Current state:', syncStatus.state);
-            return; // Wait until synced
-        }
+        if (!settings.supabaseUrl || !settings.supabaseKey) return;
+        if (syncStatus.state !== 'synced') return; // Wait until synced
         
-        console.log('📥 Loading data from Supabase...');
         // Load all data from database in parallel
         Promise.all([
             loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey),
             loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey),
             loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey)
         ]).then(([loadedMembers, loadedEntries, loadedPledges]) => {
-            console.log('✅ Data loaded:', {
-                members: loadedMembers?.length || 0,
-                entries: loadedEntries?.length || 0,
-                pledges: loadedPledges?.length || 0
-            });
             if (loadedMembers && loadedMembers.length > 0) {
                 setMembers(loadedMembers);
             }
@@ -154,10 +168,31 @@ const App: React.FC = () => {
             if (loadedPledges && loadedPledges.length > 0) {
                 setHarvestPledges(loadedPledges);
             }
-        }).catch(err => {
-            console.error('❌ Failed to load data from database:', err);
-        });
+        }).catch(err => console.error('Failed to load data from database:', err));
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+
+    // --- Seed ClassLeader user to database if it doesn't exist ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+        if (users.length === 0) return; // Wait for users to load
+        
+        const hasClassLeader = users.some(u => u.username.toLowerCase() === 'classleader');
+        if (!hasClassLeader) {
+            const classLeaderUser: User = {
+                username: 'ClassLeader',
+                password: '',
+                role: 'class-leader'
+            };
+            import('./services/supabase').then(({ saveUserToSupabase }) => {
+                saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, classLeaderUser)
+                    .then(() => {
+                        setUsers(prev => [...prev, classLeaderUser]);
+                        console.log('ClassLeader user seeded to database');
+                    })
+                    .catch(err => console.warn('Failed to seed ClassLeader:', err));
+            });
+        }
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, users]);
     
     // --- Safe Close Protection ---
     useEffect(() => {
@@ -312,45 +347,77 @@ const App: React.FC = () => {
     const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#8b5cf6'];
 
     // --- Handlers ---
-    const handleLogin = (username: string, password: string) => {
+    const handleLogin = ({ username, password = '', skipPassword = false }: LoginRequest) => {
+        console.log('🔐 Login attempt:', { username, role: 'checking...' });
+        console.log('  classLeaders in state:', classLeaders.length, classLeaders);
+        const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
         const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (!foundUser) {
+        const classLeaderFallback = username.trim().toLowerCase() === 'classleader'
+            ? ({ username: 'ClassLeader', role: 'class-leader' as UserRole })
+            : null;
+        const user = foundUser || classLeaderFallback;
+
+        if (!user) {
             setLoginError('Invalid username or password.');
             return;
         }
 
-        // Special handling for class leaders: validate access codes from Settings
-        if (foundUser.role === 'class-leader') {
+        // Special handling for class leaders: authenticate using class_leaders table (preferred)
+        if (user.role === 'class-leader') {
             const raw = (password || '').trim();
-            let assignedClass = foundUser.assignedClass || foundUser.classLed;
+            const lower = normalize(raw);
 
-            // If exact password matches stored user password, accept as-is (admin override)
-            if (foundUser.password && password === foundUser.password) {
-                // keep assignedClass as stored (if any)
-            } else {
-                // Check if password matches any class access code
-                const classAccessCodes = settings.classAccessCodes || {};
-                let matchedClass: string | null = null;
+            // 0) If the username matches a specific class leader, validate their password and use their class
+            const matchedLeaderByUsername = classLeaders.find(cl => (cl.username || '').toLowerCase() === username.trim().toLowerCase());
+            if (matchedLeaderByUsername) {
+                if (!matchedLeaderByUsername.password || matchedLeaderByUsername.password !== raw) {
+                    setLoginError('Invalid password for class leader account.');
+                    return;
+                }
+                const assignedClass = matchedLeaderByUsername.classNumber;
+                if (!assignedClass) {
+                    setLoginError('Class leader has no assigned class. Contact admin.');
+                    return;
+                }
+                const sessionUser = { username: matchedLeaderByUsername.username, role: 'class-leader' as UserRole, assignedClass } as User;
+                setCurrentUser(sessionUser);
+                setLoginError(null);
+                setActiveTab('attendance');
+                return;
+            }
 
-                for (const [classNum, code] of Object.entries(classAccessCodes)) {
-                    if (code && raw === code) {
-                        const clsNum = parseInt(classNum, 10);
-                        if (clsNum >= 1 && clsNum <= settings.maxClasses) {
-                            matchedClass = String(clsNum);
-                            break;
+            // 1) Shared "ClassLeader" login: resolve class by matching an access code from class_leaders table
+            const matchedLeaderByAccessCode = classLeaders.find(cl => normalize(cl.accessCode) === lower);
+
+            let assignedClass = (user as User).assignedClass || (user as User).classLed;
+
+            // Admin override: exact password match on stored app user keeps assigned class
+            if (!(user as User).password || (user as User).password !== raw) {
+                if (matchedLeaderByAccessCode?.classNumber) {
+                    assignedClass = matchedLeaderByAccessCode.classNumber;
+                } else {
+                    // 2) Fallback patterns like "class1", "class 3", "class-7"
+                    const classMatch = lower.match(/class\s*-?\s*(\d{1,2})/);
+                    if (classMatch) {
+                        const clsNum = parseInt(classMatch[1], 10);
+                        if (clsNum >= 1 && clsNum <= settings.maxClasses) assignedClass = String(clsNum);
+                    } else {
+                        // 3) Accept direct numeric passwords (e.g., "1", "07")
+                        const numMatch = lower.match(/^(\d{1,2})$/);
+                        if (numMatch) {
+                            const clsNum = parseInt(numMatch[1], 10);
+                            if (clsNum >= 1 && clsNum <= settings.maxClasses) assignedClass = String(clsNum);
                         }
                     }
                 }
-
-                if (matchedClass) {
-                    assignedClass = matchedClass;
-                } else {
-                    setLoginError('Invalid class access code. Contact admin for your class code.');
-                    return;
-                }
             }
 
-            const sessionUser = { ...foundUser, assignedClass } as typeof foundUser;
+            if (!assignedClass) {
+                setLoginError('Invalid class access code. Contact admin for your class code.');
+                return;
+            }
+
+            const sessionUser = { ...user, assignedClass, role: 'class-leader' as UserRole } as User;
             setCurrentUser(sessionUser);
             setLoginError(null);
             setActiveTab('attendance');
@@ -358,21 +425,37 @@ const App: React.FC = () => {
         }
 
         // All other roles: require exact password match
-        if (foundUser.password !== password) {
+        if (!foundUser) {
             setLoginError('Invalid username or password.');
+            return;
+        }
+
+        const skipAllowed = foundUser.role === 'data-entry';
+        if (!skipPassword && foundUser.password !== password) {
+            setLoginError('Invalid username or password.');
+            return;
+        }
+        if (skipPassword && !skipAllowed) {
+            setLoginError('Password required for this role.');
             return;
         }
 
         setCurrentUser(foundUser);
         setLoginError(null);
         // Intelligent Redirect based on Role
-        if (foundUser.role === 'admin' || foundUser.role === 'finance-chair') setActiveTab('home');
+        if (foundUser.role === 'admin' || foundUser.role === 'finance-chair' || foundUser.role === 'pastor') setActiveTab('home');
         else if (foundUser.role === 'finance-team') setActiveTab('records');
         else if (foundUser.role === 'data-entry') setActiveTab('records');
-        else if (foundUser.role === 'pastor') setActiveTab('insights');
-        else if (foundUser.role === 'statistician') setActiveTab('history');
+        else if (foundUser.role === 'statistician') setActiveTab('weekly-history');
         else setActiveTab('home');
     };
+
+    // Show profile modal automatically for finance-team and class-leader roles
+    useEffect(() => {
+        if (currentUser && (currentUser.role === 'finance-team' || currentUser.role === 'class-leader')) {
+            setShowProfileModal(true);
+        }
+    }, [currentUser]);
 
     const handleLogout = () => setCurrentUser(null);
 
@@ -443,7 +526,7 @@ const App: React.FC = () => {
                     ...entries[entryIndex],
                     deleted: true,
                     updatedBy: currentUser?.username || 'Unknown',
-                    lastUpdated: new Date().toISOString()
+                    lastUpdated: getNowEST()
                 };
 
                 try {
@@ -511,12 +594,16 @@ const App: React.FC = () => {
     }
 
     if (!currentUser) {
-        return <Login users={users} onLogin={handleLogin} error={loginError} />;
+        return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "development-fund", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
+        // Class leaders are restricted to attendance only
+        if (currentUser.role === 'class-leader' && activeTab !== 'attendance') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Class Leaders can only take attendance for their class.</div>;
+        }
         // Double check access before rendering restrictive tabs
         if (activeTab === 'utilities' && currentUser.role !== 'admin') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
@@ -524,8 +611,17 @@ const App: React.FC = () => {
         if (activeTab === 'users' && currentUser.role !== 'admin') {
              return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
         }
+        if (activeTab === 'settings' && currentUser.role !== 'admin') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin can access Settings.</div>;
+        }
         if (activeTab === 'tax-receipts' && !(currentUser.role === 'admin' || currentUser.role === 'finance-chair')) {
             return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin and Finance Chair can issue receipts.</div>;
+        }
+        if (activeTab === 'requisitions' && currentUser.role === 'data-entry') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Requisitions are not available for Data Entry role.</div>;
+        }
+        if (activeTab === 'wesley-hall' && currentUser.role === 'data-entry') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Wesley Hall is not available for Data Entry role.</div>;
         }
 
         const canWrite = syncStatus.state === 'synced';
@@ -550,7 +646,7 @@ const App: React.FC = () => {
                 amount: amount,
                 note: `Harvest pledge payment (Pledge ID: ${pledge.id.substring(0, 8)})`,
                 createdBy: currentUser?.username,
-                createdAt: new Date().toISOString(),
+                createdAt: getNowEST(),
             };
 
             // Update pledge remaining amount
@@ -558,7 +654,7 @@ const App: React.FC = () => {
                 ...pledge,
                 remaining: Math.max(0, pledge.remaining - amount),
                 updatedBy: currentUser?.username,
-                lastUpdated: new Date().toISOString()
+                lastUpdated: getNowEST()
             };
 
             // Save to Supabase and reload data
@@ -580,7 +676,7 @@ const App: React.FC = () => {
             }
         };
         switch (activeTab) {
-            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
+            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks}/>;
             case 'harvest':
                 return (
                     <Harvest 
@@ -639,14 +735,28 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                                 {/* Hide Create Button for Pastor */}
-                                {currentUser.role !== 'pastor' && (
-                                    <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} disabled={!canWrite} title={!canWrite ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!canWrite ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}>
+                                {(() => {
+                                    const allowedRoles = ['admin','finance-chair','finance-team','data-entry'];
+                                    const canSee = currentUser && allowedRoles.includes(currentUser.role);
+                                    const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                    const disabled = !canWrite || (!windowStatus.isOpen && !canOverride);
+                                    const title = !canWrite ? 'Requires cloud connection' : (!windowStatus.isOpen && !canOverride ? `${windowStatus.reason}. ${windowStatus.nextOpenTime}` : undefined);
+                                    return canSee ? (
+                                        <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} disabled={disabled} title={title} className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                                         </svg>
                                         Record Contribution
-                                    </button>
-                                )}
+                                        </button>
+                                    ) : null;
+                                })()}
+                                <button onClick={() => setShowChildrenMinistryModal(true)} disabled={!canWrite} title={!canWrite ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-br from-yellow-500 to-amber-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!canWrite ? 'opacity-60 cursor-not-allowed' : 'hover:from-yellow-600 hover:to-amber-600 hover:scale-105'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-12 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.5 1.5H5.75A2.75 2.75 0 003 4.25v11.5A2.75 2.75 0 005.75 18.5h8.5A2.75 2.75 0 0017 15.75V8M10.5 1.5v4.5M10.5 1.5L17 8M6 10h5M6 13h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                </svg>
+                                Children's Ministry Collection
+                                </button>
                             </div>
                         </div>
 
@@ -733,7 +843,7 @@ const App: React.FC = () => {
                         )}
 
                         <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
-                            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && (
+                            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team') && (
                                 <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 border-b-2 border-red-300 flex justify-end">
                                     <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer">
                                         <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
@@ -751,8 +861,10 @@ const App: React.FC = () => {
                                ) : (
                                    sortedDates.map(date => {
                                        const dateEntries = entriesByDate[date];
-                                       const dateTotal = dateEntries.reduce((sum, e) => sum + e.amount, 0);
-                                       const hasDeleted = dateEntries.some(e => e.deleted);
+                                       const activeEntries = dateEntries.filter(e => !e.deleted);
+                                       const deletedEntries = dateEntries.filter(e => e.deleted);
+                                       const activeTotal = activeEntries.reduce((sum, e) => sum + e.amount, 0);
+                                       const deletedTotal = deletedEntries.reduce((sum, e) => sum + e.amount, 0);
                                        
                                        return (
                                            <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
@@ -773,13 +885,18 @@ const App: React.FC = () => {
                                                        <div>
                                                            <div className="flex items-center gap-3">
                                                                <h3 className="text-xl font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
-                                                               {hasDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">Has Deleted</span>}
+                                                               {deletedEntries.length > 0 && showDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">{deletedEntries.length} Deleted</span>}
                                                            </div>
-                                                           <p className="text-sm text-slate-600 mt-1 font-medium">{dateEntries.length} contribution{dateEntries.length !== 1 ? 's' : ''}</p>
+                                                           <p className="text-sm text-slate-600 mt-1 font-medium">
+                                                               {activeEntries.length} active{deletedEntries.length > 0 && showDeleted ? ` + ${deletedEntries.length} deleted` : ''}
+                                                           </p>
                                                        </div>
                                                    </div>
                                                    <div className="text-right">
-                                                       <div className="text-2xl font-bold text-green-600">{formatCurrency(dateTotal, settings.currency)}</div>
+                                                       <div className="text-2xl font-bold text-green-600">{formatCurrency(activeTotal, settings.currency)}</div>
+                                                       {deletedEntries.length > 0 && showDeleted && (
+                                                           <div className="text-sm text-red-600 font-semibold line-through">{formatCurrency(deletedTotal, settings.currency)} deleted</div>
+                                                       )}
                                                        <div className="text-sm text-blue-600 font-semibold mt-1 flex items-center gap-1">
                                                            Click to view details
                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -835,13 +952,27 @@ const App: React.FC = () => {
                                                     {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>)}
                                                 </select>
                                             </div>
+                                            {showDeleted && (
+                                                <div className="flex items-center gap-3">
+                                                    <label className="text-sm font-bold text-blue-100">Show:</label>
+                                                    <select 
+                                                        value={modalDeletedFilter} 
+                                                        onChange={e => setModalDeletedFilter(e.target.value as 'all' | 'active' | 'deleted')}
+                                                        className="border-2 border-blue-400 bg-white/95 text-slate-800 rounded-lg px-4 py-2 font-semibold focus:ring-2 focus:ring-white focus:border-white transition-all"
+                                                    >
+                                                        <option value="all">All Entries</option>
+                                                        <option value="active">Active Only</option>
+                                                        <option value="deleted">Deleted Only</option>
+                                                    </select>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     
                                     {/* Modal Body - Scrollable */}
                                     <div className="flex-1 overflow-y-auto p-6">
-                                        <div className="space-y-3">
-                                            {entriesByDate[selectedDateForModal]
+                                        {(() => {
+                                            const modalEntries = entriesByDate[selectedDateForModal]
                                                 .filter(entry => {
                                                     // Filter by class
                                                     if (modalClassFilter !== 'all') {
@@ -851,69 +982,166 @@ const App: React.FC = () => {
                                                     }
                                                     // Filter by type
                                                     if (modalTypeFilter !== 'all' && entry.type !== modalTypeFilter) return false;
+                                                    // Filter by deleted status
+                                                    if (modalDeletedFilter === 'active' && entry.deleted) return false;
+                                                    if (modalDeletedFilter === 'deleted' && !entry.deleted) return false;
                                                     return true;
-                                                })
-                                                .map((entry, idx) => {
-                                                const member = membersMap.get(entry.memberID);
-                                                const displayClass = entry.classNumber || member?.classNumber || '-';
-                                                const isLocked = isMonthLocked(entry.date, monthLocks);
-                                                const canEdit = !entry.deleted && currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair') && canWrite;
-                                                
-                                                return (
-                                                    <div key={entry.id} className={`rounded-xl border-2 p-5 transition-all ${entry.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md'}`}>
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center gap-3 mb-2">
-                                                                    <h3 className="text-lg font-bold text-slate-800">{entry.memberName}</h3>
-                                                                    {entry.deleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">DELETED</span>}
-                                                                    {isLocked && <span title="Month Locked">🔒</span>}
-                                                                </div>
-                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Member #:</span>
-                                                                        <span className="ml-1 font-bold text-slate-700">{member?.memberNumber || '-'}</span>
+                                                });
+                                            const filteredTotal = modalEntries.reduce((sum, e) => sum + e.amount, 0);
+                                            const filteredCount = modalEntries.length;
+                                            
+                                            const activeEntries = modalEntries.filter(e => !e.deleted);
+                                            const deletedEntries = modalEntries.filter(e => e.deleted);
+                                            
+                                            return (
+                                                <>
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs font-bold uppercase text-slate-500">Filtered Total</span>
+                                                            <span className="text-2xl font-extrabold text-green-600">{formatCurrency(filteredTotal, settings.currency)}</span>
+                                                        </div>
+                                                        <span className="text-sm font-semibold text-slate-600">{filteredCount} entr{filteredCount === 1 ? 'y' : 'ies'}</span>
+                                                    </div>
+                                                    {/* Active Entries Section */}
+                                                    {activeEntries.length > 0 && (
+                                                        <div className="space-y-3 mb-6">
+                                                            {activeEntries.map((entry, idx) => {
+                                                                const member = membersMap.get(entry.memberID);
+                                                                const displayClass = entry.classNumber || member?.classNumber || '-';
+                                                                const isLocked = isMonthLocked(entry.date, monthLocks);
+                                                                const canEdit = currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair') && canWrite;
+                                                                
+                                                                return (
+                                                                    <div key={entry.id} className="rounded-xl border-2 p-5 transition-all bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md">
+                                                                        <div className="flex justify-between items-start">
+                                                                            <div className="flex-1">
+                                                                                <div className="flex items-center gap-3 mb-2">
+                                                                                    <h3 className="text-lg font-bold text-slate-800">{entry.memberName}</h3>
+                                                                                    {isLocked && <span title="Month Locked">🔒</span>}
+                                                                                </div>
+                                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Member #:</span>
+                                                                                        <span className="ml-1 font-bold text-slate-700">{member?.memberNumber || '-'}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Class:</span>
+                                                                                        <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Type:</span>
+                                                                                        <span className="ml-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold capitalize">{entry.type.replace(/-/g, ' ')}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Method:</span>
+                                                                                        <span className="ml-1 font-semibold text-slate-700 capitalize">{formatMethod(entry.method)}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                {entry.note && (
+                                                                                    <div className="mt-2 text-sm text-slate-600 italic">
+                                                                                        <span className="font-medium">Note:</span> {entry.note}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="text-right ml-4">
+                                                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
+                                                                                {(() => {
+                                                                                    if (!canEdit) return null;
+                                                                                    // Data-entry cannot edit at all
+                                                                                    if (currentUser?.role === 'data-entry') return null;
+                                                                                    // Check window status for edits
+                                                                                    const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                                                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                                                                    const disabled = !canWrite || (!windowStatus.isOpen && !canOverride);
+                                                                                    const title = !canWrite ? 'Requires cloud connection' : (!windowStatus.isOpen && !canOverride ? `Editing is locked. ${windowStatus.reason}` : undefined);
+                                                                                    return (
+                                                                                        <button 
+                                                                                            onClick={() => { 
+                                                                                                setSelectedEntry(entry); 
+                                                                                                setIsModalOpen(true); 
+                                                                                                setSelectedDateForModal(null);
+                                                                                            }} 
+                                                                                            disabled={disabled}
+                                                                                            title={title}
+                                                                                            className={`mt-2 font-bold text-sm ${disabled ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
+                                                                                        >
+                                                                                            Edit
+                                                                                        </button>
+                                                                                    );
+                                                                                })()}
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Class:</span>
-                                                                        <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Type:</span>
-                                                                        <span className="ml-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold capitalize">{entry.type.replace(/-/g, ' ')}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Method:</span>
-                                                                        <span className="ml-1 font-semibold text-slate-700 capitalize">{entry.method}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {entry.note && (
-                                                                    <div className="mt-2 text-sm text-slate-600 italic">
-                                                                        <span className="font-medium">Note:</span> {entry.note}
-                                                                    </div>
-                                                                )}
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Deleted Entries Section */}
+                                                    {deletedEntries.length > 0 && showDeleted && (
+                                                        <div className="border-t-4 border-red-300 pt-4">
+                                                            <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-3 rounded-lg mb-3 flex items-center justify-between">
+                                                                <span className="text-red-700 font-bold text-sm uppercase flex items-center gap-2">
+                                                                    🗑️ Deleted Entries ({deletedEntries.length})
+                                                                </span>
+                                                                <span className="text-red-600 text-sm font-semibold">
+                                                                    Total: {formatCurrency(deletedEntries.reduce((s,e)=>s+e.amount,0), settings.currency)}
+                                                                </span>
                                                             </div>
-                                                            <div className="text-right ml-4">
-                                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
-                                                                {canEdit && (
-                                                                    <button 
-                                                                        onClick={() => { 
-                                                                            setSelectedEntry(entry); 
-                                                                            setIsModalOpen(true); 
-                                                                            setSelectedDateForModal(null);
-                                                                        }} 
-                                                                        disabled={!canWrite}
-                                                                        title={!canWrite ? 'Requires cloud connection' : undefined}
-                                                                        className={`mt-2 font-bold text-sm ${!canWrite ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
-                                                                    >
-                                                                        Edit
-                                                                    </button>
-                                                                )}
+                                                            <div className="space-y-3">
+                                                                {deletedEntries.map((entry) => {
+                                                                    const member = membersMap.get(entry.memberID);
+                                                                    const displayClass = entry.classNumber || member?.classNumber || '-';
+                                                                    
+                                                                    return (
+                                                                        <div key={entry.id} className="rounded-xl border-2 p-5 transition-all bg-red-50 border-red-200 opacity-75">
+                                                                            <div className="flex justify-between items-start">
+                                                                                <div className="flex-1">
+                                                                                    <div className="flex items-center gap-3 mb-2">
+                                                                                        <h3 className="text-lg font-bold text-red-500 line-through">{entry.memberName}</h3>
+                                                                                        <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">DELETED</span>
+                                                                                    </div>
+                                                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Member #:</span>
+                                                                                            <span className="ml-1 font-bold text-red-500 line-through">{member?.memberNumber || '-'}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Class:</span>
+                                                                                            <span className="ml-1 font-bold text-red-500 line-through">{displayClass}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Type:</span>
+                                                                                            <span className="ml-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold capitalize line-through">{entry.type.replace(/-/g, ' ')}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Method:</span>
+                                                                                            <span className="ml-1 font-semibold text-red-500 capitalize line-through">{formatMethod(entry.method)}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {entry.note && (
+                                                                                        <div className="mt-2 text-sm text-red-600 italic line-through">
+                                                                                            <span className="font-medium">Note:</span> {entry.note}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="mt-3 text-xs text-red-700 bg-red-100 p-2 rounded">
+                                                                                        <div className="font-semibold">Deleted by: {entry.deletedBy || 'Unknown'}</div>
+                                                                                        <div className="italic">Reason: "{entry.deletedReason || 'No reason provided'}"</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="text-right ml-4">
+                                                                                    <div className="text-2xl font-bold text-red-500 line-through">{formatCurrency(entry.amount, settings.currency)}</div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                     
                                     {/* Modal Footer */}
@@ -930,7 +1158,7 @@ const App: React.FC = () => {
                         )}
                     </div>
                 );
-            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} />;
+            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} currentUser={currentUser} />;
             case 'harvest-pledges':
                 return (
                     <HarvestPledges 
@@ -939,10 +1167,11 @@ const App: React.FC = () => {
                         setPledges={setHarvestPledges}
                         settings={settings}
                         onPayPledge={handlePayPledge}
+                        currentUser={currentUser}
                     />
                 );
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
-            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
+            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} sundayLocks={sundayLocks} setSundayLocks={setSundayLocks} currentUser={currentUser} settings={settings} />;
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} />;
             case 'day-born':
                 return (
@@ -1006,8 +1235,14 @@ const App: React.FC = () => {
                         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
                             <h3 className="text-lg font-bold">📅 Weekly History</h3>
                         </div>
-                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />
+                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
                     </div>
+                );
+            case 'bible-class-attendance':
+                return (
+                    <Suspense fallback={<div className="p-8 text-slate-500">Loading Bible Class Attendance...</div>}>
+                        <BibleClassAttendanceSummary settings={settings} syncStatus={syncStatus} />
+                    </Suspense>
                 );
             case 'upcoming-birthdays':
                 return (
@@ -1020,7 +1255,7 @@ const App: React.FC = () => {
             // 'history' moved under Reports tab
             case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} targetSection={reportsTarget} onConsumeTarget={() => setReportsTarget(null)} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} syncStatus={syncStatus} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} classLeaders={classLeaders} setClassLeaders={setClassLeaders} allData={{
                 entries,
                 members,
                 weeklyHistory,
@@ -1086,20 +1321,21 @@ const App: React.FC = () => {
                 { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
                 { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
-                { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-                { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team'] },
+                { id: 'settings', label: 'Settings', roles: ['admin'] },
             ]
         },
         {
             id: 'members',
             label: 'Members & Attendance',
             icon: '👥',
-            roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor', 'class-leader'],
+            roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'class-leader'],
             items: [
-                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
+                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'attendance', label: 'Class Attendance', roles: ['admin', 'pastor', 'class-leader'] },
             ]
         },
@@ -1109,10 +1345,11 @@ const App: React.FC = () => {
             icon: '📊',
             roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'],
             items: [
-                { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'history', targetSection: 'financial-report-section' },
+                { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'history', targetSection: 'financial-report-section' },
                 { id: 'reports-weekly', label: 'Weekly History', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'weekly-history' },
-                { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'upcoming-birthdays' },
-                { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'e-transfers' },
+                { id: 'reports-bible-class', label: 'Bible Class Attendance', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'bible-class-attendance' },
+                { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'upcoming-birthdays' },
+                { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'e-transfers' },
             ]
         },
         {
@@ -1149,7 +1386,7 @@ const App: React.FC = () => {
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
             <div className="w-full px-4 sm:px-6 lg:px-8">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
+                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings} onPasswordChange={() => setIsPasswordModalOpen(true)}/>
                 {syncStatus.state !== 'synced' && (
                     <div className="no-print mt-2 mb-4 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-sm flex items-center gap-2"
                         style={{
@@ -1242,10 +1479,42 @@ const App: React.FC = () => {
                             </div>
                         </nav>
                     </aside>
-                    <section className="lg:col-span-4">{renderTabContent()}</section>
+                    <section className="lg:col-span-4">
+                        <Suspense fallback={<div className="p-10 text-center text-slate-500">Loading page...</div>}>
+                                <div className="px-6 pt-4">
+                                    <EntryWindowBanner settings={settings} currentUser={currentUser} />
+                                </div>
+                            {renderTabContent()}
+                        </Suspense>
+                    </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />
+                {showChildrenMinistryModal && (
+                    <BulkChildrenMinistryModal
+                        settings={settings}
+                        onSave={handleSaveEntry}
+                        onClose={() => setShowChildrenMinistryModal(false)}
+                    />
+                )}
+                {isPasswordModalOpen && currentUser && (
+                    <PasswordChangeModal 
+                        currentUser={currentUser}
+                        users={users}
+                        setUsers={setUsers}
+                        settings={settings}
+                        onClose={() => setIsPasswordModalOpen(false)}
+                    />
+                )}
+                {showProfileModal && currentUser && (
+                    <ProfileModal
+                        currentUser={currentUser}
+                        note={userNotes[currentUser.username.toLowerCase()] || ''}
+                        onSaveNote={(val) => setUserNotes(prev => ({ ...prev, [currentUser.username.toLowerCase()]: val }))}
+                        onChangePassword={() => { setShowProfileModal(false); setIsPasswordModalOpen(true); }}
+                        onClose={() => setShowProfileModal(false)}
+                    />
+                )}
                 <KeyboardShortcuts onNavigate={handleNavigate} />
             </div>
         </div>

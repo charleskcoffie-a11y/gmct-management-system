@@ -1,7 +1,7 @@
 // components/Reports.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Entry, Member, Settings, WeeklyHistoryRecord, EntryType, HarvestEntry } from '../types';
-import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeEntryType } from '../utils';
+import { toCsv, sanitizeString, fromCsv, sanitizeEntry, sanitizeEntryType, formatMethod } from '../utils';
 import WeeklyHistory from './WeeklyHistory';
 import { DownloadIcon, UploadIcon } from './icons';
 
@@ -189,7 +189,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, harvestEntries, members, set
         Class: member ? sanitizeString(member.classNumber) : 'N/A',
         Type: entry.type,
         Amount: entry.amount.toFixed(2),
-        Method: entry.method || 'other',
+        Method: formatMethod(entry.method || 'other'),
         Note: sanitizeString(entry.note),
       };
     });

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings, SyncStatus, Method } from '../types';
-import { formatCurrency, getTodayEST, getNowEST, isEntryWindowOpen } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST, isEntryWindowOpen, formatMethod } from '../utils';
 import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
 import { downloadReceipt, shareViaWhatsApp } from '../utils/receiptGenerator';
 
@@ -748,7 +748,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                                 <p className="text-slate-600 text-sm mb-2">{entry.description}</p>
                                                                 <div className="flex items-center gap-3 flex-wrap">
                                                                     <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
-                                                                        {originalEntry?.method?.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Cash'}
+                                                                        {formatMethod(originalEntry?.method || 'cash')}
                                                                     </span>
                                                                     {originalEntry?.createdBy && (
                                                                         <span className="text-slate-500 text-xs">By {originalEntry.createdBy}</span>
@@ -1025,10 +1025,10 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                         <div className="bg-white rounded-xl p-4 shadow-md border-2 border-blue-100">
                                             <label className="block text-xs font-bold text-blue-600 uppercase mb-2">Payment Method</label>
                                             <select value={newMethod} onChange={e => setNewMethod(e.target.value as Method)} className="w-full border-2 border-blue-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all bg-white">
-                                                <option value="cash">Cash</option>
-                                                <option value="e-transfer">E-Transfer</option>
-                                                <option value="check">Check</option>
-                                                <option value="other">Other</option>
+                                                <option value="cash">{formatMethod('cash')}</option>
+                                                <option value="e-transfer">{formatMethod('e-transfer')}</option>
+                                                <option value="check">{formatMethod('check')}</option>
+                                                <option value="other">{formatMethod('other')}</option>
                                             </select>
                                         </div>
                                         <div></div>
@@ -1120,10 +1120,10 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                                                     onChange={e => updateBulkRow(row.id, { method: e.target.value as Method })}
                                                                     className="w-full border-2 border-slate-200 rounded-md p-2 text-sm focus:border-blue-400 focus:ring-blue-200"
                                                                 >
-                                                                    <option value="cash">Cash</option>
-                                                                    <option value="e-transfer">E-Transfer</option>
-                                                                    <option value="check">Check</option>
-                                                                    <option value="other">Other</option>
+                                                                    <option value="cash">{formatMethod('cash')}</option>
+                                                                    <option value="e-transfer">{formatMethod('e-transfer')}</option>
+                                                                    <option value="check">{formatMethod('check')}</option>
+                                                                    <option value="other">{formatMethod('other')}</option>
                                                                 </select>
                                                             </td>
                                                             <td className="px-3 py-2 align-top">
@@ -1237,10 +1237,10 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                                     onChange={e => setEditMethod(e.target.value as Method)} 
                                     className="w-full border-2 border-blue-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                                 >
-                                    <option value="cash">Cash</option>
-                                    <option value="e-transfer">E-Transfer</option>
-                                    <option value="check">Check</option>
-                                    <option value="other">Other</option>
+                                    <option value="cash">{formatMethod('cash')}</option>
+                                    <option value="e-transfer">{formatMethod('e-transfer')}</option>
+                                    <option value="check">{formatMethod('check')}</option>
+                                    <option value="other">{formatMethod('other')}</option>
                                 </select>
                             </div>
 

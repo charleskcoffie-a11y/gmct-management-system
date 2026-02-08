@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import type { Entry, Settings, Method } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { getTodayEST, getNowEST } from '../utils';
+import { getTodayEST, getNowEST, formatMethod } from '../utils';
 
 interface BulkChildrenMinistryModalProps {
   settings: Settings;
@@ -117,12 +117,12 @@ const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
               onChange={e => setMethod(e.target.value as Method)}
               className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
             >
-              <option value="cash">Cash</option>
-              <option value="check">Check</option>
-              <option value="card">Card</option>
-              <option value="e-transfer">E-Transfer</option>
-              <option value="mobile">Mobile</option>
-              <option value="other">Other</option>
+              <option value="cash">{formatMethod('cash')}</option>
+              <option value="check">{formatMethod('check')}</option>
+              <option value="card">{formatMethod('card')}</option>
+              <option value="e-transfer">{formatMethod('e-transfer')}</option>
+              <option value="mobile">{formatMethod('mobile')}</option>
+              <option value="other">{formatMethod('other')}</option>
             </select>
           </div>
 

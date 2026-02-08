@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import type { Entry, Member, Settings } from '../types';
+import { formatMethod } from '../utils';
 
 interface ReceiptData {
     entry: Entry;
@@ -118,8 +119,7 @@ export const generateReceipt = ({ entry, member, settings }: ReceiptData) => {
     doc.setFont('helvetica', 'bold');
     doc.text('Payment Method:', 20, yPos);
     doc.setFont('helvetica', 'normal');
-    const methodDisplay = entry.method.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
-    doc.text(methodDisplay, 80, yPos);
+    doc.text(formatMethod(entry.method), 80, yPos);
     
     // Footer
     yPos = doc.internal.pageSize.getHeight() - 40;

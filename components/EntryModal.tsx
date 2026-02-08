@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, EntryType, Method, Member, Settings, User, MonthLock } from '../types';
-import { sanitizeEntry, isMonthLocked, getNowEST, isEntryWindowOpen, isWeekdayEST } from '../utils';
+import { sanitizeEntry, isMonthLocked, getNowEST, isEntryWindowOpen, isWeekdayEST, formatMethod } from '../utils';
 import { logEntryDeletionToSupabase, markEntryAsDeletedInSupabase } from '../services/supabase';
 
 interface EntryModalProps {
@@ -396,7 +396,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                     <select name="method" value={formData.method} onChange={handleChange} className="w-full border-2 border-slate-300 rounded-lg p-3 capitalize font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all">
                                         {["cash", "check", "card", "e-transfer", "mobile", "other"].map(m => (
                                             <option key={m} value={m as Method}>
-                                                {m}
+                                                {formatMethod(m)}
                                             </option>
                                         ))}
                                     </select>

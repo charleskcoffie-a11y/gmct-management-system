@@ -6,7 +6,7 @@ import EntryModal from './EntryModal';
 import BulkDayBornModal from './BulkDayBornModal';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from './ToastProvider';
-import { getTodayEST, getNowEST, isEntryWindowOpen } from '../utils';
+import { getTodayEST, getNowEST, isEntryWindowOpen, formatMethod } from '../utils';
 
 interface DayBornProps {
     members: Member[];
@@ -399,7 +399,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                                                     <div className="font-bold text-green-700 text-lg">
                                                         {entry.amount.toFixed(2)}
                                                     </div>
-                                                    <div className="text-xs text-gray-500 capitalize mt-1">💳 {entry.method}</div>
+                                                    <div className="text-xs text-gray-500 capitalize mt-1">💳 {formatMethod(entry.method)}</div>
                                                 </div>
                                             </div>
                                             {entry.note && (

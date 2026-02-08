@@ -65,6 +65,21 @@ export function capitalize(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+export function formatMethod(method: string | null | undefined): string {
+    if (!method) return '';
+    const normalized = String(method).toLowerCase().trim();
+    const canonical = normalized === 'cheque' ? 'check' : normalized;
+    const labelMap: Record<string, string> = {
+        'check': 'Cheque',
+        'e-transfer': 'E-Transfer',
+        'mobile-money': 'Mobile Money',
+        'transfer': 'Transfer',
+        'mobile': 'Mobile',
+    };
+    if (labelMap[canonical]) return labelMap[canonical];
+    return canonical.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
 
 // --- Data Type Sanitizers ---
 
@@ -384,7 +399,10 @@ export function sanitizeEntryType(type: any): EntryType {
 
 export function sanitizeMethod(method: any): Method {
     const validMethods: Method[] = ["cash", "check", "card", "e-transfer", "mobile", "other"];
-    return validMethods.includes(method) ? method : "cash";
+    if (!method) return "cash";
+    const normalized = String(method).toLowerCase().trim();
+    const canonical = normalized === 'cheque' ? 'check' : normalized === 'etransfer' ? 'e-transfer' : normalized;
+    return validMethods.includes(canonical as Method) ? (canonical as Method) : "cash";
 }
 
 export function sanitizeUserRole(role: any): UserRole {
