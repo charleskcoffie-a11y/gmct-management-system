@@ -145,6 +145,9 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
     // State for expanded/collapsed groups
     const [expandedDates, setExpandedDates] = useState<{ [date: string]: boolean }>({});
+    const [devFundExpandedYears, setDevFundExpandedYears] = useState<Set<string>>(new Set());
+    const [devFundExpandedMonths, setDevFundExpandedMonths] = useState<Set<string>>(new Set());
+    
     useEffect(() => {
         // Expand the most recent date by default on first load
         if (groupedEntries.length > 0 && Object.keys(expandedDates).length === 0) {
@@ -154,6 +157,59 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
 
     const toggleDateGroup = (date: string) => {
         setExpandedDates(prev => ({ ...prev, [date]: !prev[date] }));
+    };
+
+    // Group dates by year and month for folder structure
+    const entriesByYearMonth = useMemo(() => {
+        const groups: { [year: string]: { [month: string]: typeof groupedEntries } } = {};
+        
+        groupedEntries.forEach(group => {
+            const dateObj = new Date(group.date + 'T00:00:00');
+            const year = dateObj.getFullYear().toString();
+            const month = dateObj.toLocaleString('default', { month: 'long' });
+            
+            if (!groups[year]) groups[year] = {};
+            if (!groups[year][month]) groups[year][month] = [];
+            groups[year][month].push(group);
+        });
+        
+        return groups;
+    }, [groupedEntries]);
+
+    // Auto-expand most recent year and month
+    useEffect(() => {
+        const years = Object.keys(entriesByYearMonth).sort((a, b) => parseInt(b) - parseInt(a));
+        if (years.length > 0 && devFundExpandedYears.size === 0) {
+            const mostRecentYear = years[0];
+            setDevFundExpandedYears(new Set([mostRecentYear]));
+            
+            const months = Object.keys(entriesByYearMonth[mostRecentYear]);
+            if (months.length > 0) {
+                const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const sortedMonths = months.sort((a, b) => monthOrder.indexOf(b) - monthOrder.indexOf(a));
+                setDevFundExpandedMonths(new Set([`${mostRecentYear}-${sortedMonths[0]}`]));
+            }
+        }
+    }, [entriesByYearMonth]);
+
+    const toggleDevFundYear = (year: string) => {
+        const newExpanded = new Set(devFundExpandedYears);
+        if (newExpanded.has(year)) {
+            newExpanded.delete(year);
+        } else {
+            newExpanded.add(year);
+        }
+        setDevFundExpandedYears(newExpanded);
+    };
+
+    const toggleDevFundMonth = (yearMonth: string) => {
+        const newExpanded = new Set(devFundExpandedMonths);
+        if (newExpanded.has(yearMonth)) {
+            newExpanded.delete(yearMonth);
+        } else {
+            newExpanded.add(yearMonth);
+        }
+        setDevFundExpandedMonths(newExpanded);
     };
 
     const totalContributions = displayEntries.reduce((sum, e) => sum + e.amount, 0);
@@ -702,35 +758,73 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 </div>
 
                 <div className="flex-1 overflow-hidden">
-                    <div className="overflow-y-auto max-h-[60vh] border-t-2 border-purple-200">
+                    <div className="overflow-y-auto max-h-[75vh] border-t-2 border-purple-200 p-4 space-y-4">
                         {groupedEntries.length === 0 && (
                             <div className="p-12 text-center text-slate-400 text-lg">No contributions found.</div>
                         )}
-                        {groupedEntries.map(group => {
-                            // Separate active and deleted entries within each group
-                            const activeEntries = group.entries.filter(e => {
-                                const orig = entries.find(orig => orig.id === e.id);
-                                return !orig?.deleted;
-                            });
-                            const deletedEntries = group.entries.filter(e => {
-                                const orig = entries.find(orig => orig.id === e.id);
-                                return orig?.deleted === true;
-                            });
-                            const activeTotal = activeEntries.reduce((s,e)=>s+e.amount,0);
-                            const deletedTotal = deletedEntries.reduce((s,e)=>s+e.amount,0);
-                            
-                            return (
-                            <div key={group.date} className="mb-4 border rounded-lg bg-gradient-to-r from-purple-50 to-pink-50">
-                                <div
-                                    className="flex items-center justify-between px-4 py-2 cursor-pointer bg-gradient-to-r from-purple-200 to-pink-200 border-b"
-                                    onClick={() => toggleDateGroup(group.date)}
+                        {Object.keys(entriesByYearMonth).sort((a, b) => parseInt(b) - parseInt(a)).map(year => (
+                            <div key={year} className="mb-4">
+                                {/* Year Folder */}
+                                <button
+                                    onClick={() => toggleDevFundYear(year)}
+                                    className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl px-6 py-3 shadow-lg hover:shadow-xl transition-all mb-3"
                                 >
-                                    <div className="font-bold text-purple-800 text-lg">{group.date}</div>
-                                    <div className="text-purple-600 font-semibold">
-                                        {expandedDates[group.date] ? '▼' : '►'} {activeEntries.length} active{deletedEntries.length > 0 ? ` + ${deletedEntries.length} deleted` : ''} | {formatCurrency(activeTotal, settings.currency)}
-                                    </div>
-                                </div>
-                                {expandedDates[group.date] && (
+                                    <span className="text-2xl">{devFundExpandedYears.has(year) ? '📂' : '📁'}</span>
+                                    <span className="text-xl font-bold">{year}</span>
+                                    <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full">
+                                        {Object.values(entriesByYearMonth[year]).flat().length} dates
+                                    </span>
+                                    <span className="text-xl">{devFundExpandedYears.has(year) ? '▼' : '▶'}</span>
+                                </button>
+
+                                {/* Months within Year */}
+                                {devFundExpandedYears.has(year) && Object.keys(entriesByYearMonth[year]).map(month => {
+                                    const monthKey = `${year}-${month}`;
+                                    const dateGroups = entriesByYearMonth[year][month];
+                                    
+                                    return (
+                                        <div key={monthKey} className="ml-8 mb-3">
+                                            {/* Month Folder */}
+                                            <button
+                                                onClick={() => toggleDevFundMonth(monthKey)}
+                                                className="w-full flex items-center gap-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl px-5 py-2.5 shadow-md hover:shadow-lg transition-all mb-2"
+                                            >
+                                                <span className="text-xl">{devFundExpandedMonths.has(monthKey) ? '📂' : '📁'}</span>
+                                                <span className="text-lg font-bold">{month}</span>
+                                                <span className="ml-auto text-sm font-semibold bg-white/20 px-2.5 py-0.5 rounded-full">
+                                                    {dateGroups.length} dates
+                                                </span>
+                                                <span className="text-lg">{devFundExpandedMonths.has(monthKey) ? '▼' : '▶'}</span>
+                                            </button>
+
+                                            {/* Dates in Month */}
+                                            {devFundExpandedMonths.has(monthKey) && (
+                                                <div className="ml-8 space-y-3">
+                                                    {dateGroups.map(group => {
+                                                        // Separate active and deleted entries within each group
+                                                        const activeEntries = group.entries.filter(e => {
+                                                            const orig = entries.find(orig => orig.id === e.id);
+                                                            return !orig?.deleted;
+                                                        });
+                                                        const deletedEntries = group.entries.filter(e => {
+                                                            const orig = entries.find(orig => orig.id === e.id);
+                                                            return orig?.deleted === true;
+                                                        });
+                                                        const activeTotal = activeEntries.reduce((s,e)=>s+e.amount,0);
+                                                        const deletedTotal = deletedEntries.reduce((s,e)=>s+e.amount,0);
+                                                        
+                                                        return (
+                                                        <div key={group.date} className="border rounded-lg bg-gradient-to-r from-purple-50 to-pink-50">
+                                                            <div
+                                                                className="flex items-center justify-between px-4 py-2 cursor-pointer bg-gradient-to-r from-purple-200 to-pink-200 border-b hover:from-purple-300 hover:to-pink-300 transition"
+                                                                onClick={() => toggleDateGroup(group.date)}
+                                                            >
+                                                                <div className="font-bold text-purple-800">{group.date}</div>
+                                                                <div className="text-purple-600 font-semibold text-sm">
+                                                                    {expandedDates[group.date] ? '▼' : '►'} {activeEntries.length} active{deletedEntries.length > 0 ? ` + ${deletedEntries.length} deleted` : ''} | {formatCurrency(activeTotal, settings.currency)}
+                                                                </div>
+                                                            </div>
+                                                            {expandedDates[group.date] && (
                                     <div className="max-h-[500px] overflow-y-auto">
                                         {/* Active Entries Section */}
                                         {activeEntries.length > 0 && (
@@ -888,6 +982,13 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                             </div>
                             );
                         })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

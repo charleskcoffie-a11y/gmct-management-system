@@ -15,10 +15,10 @@ import BulkChildrenMinistryModal from './components/BulkChildrenMinistryModal';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST, isEntryWindowOpen, formatMethod } from './utils';
-import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock } from './types';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 import ProfileModal from './components/ProfileModal';
 
@@ -66,6 +66,12 @@ const INITIAL_SETTINGS: Settings = {
     charityNumber: '',
     signatureImage: undefined,
     logoUrl: undefined,
+    requisitionApprovalLimits: {
+        pastor: { min: 0, max: 500 },
+        financeTeam: { min: 501, max: 2000 },
+    },
+    requisitionPastorLimits: [],
+    requisitionFinanceApprovers: [],
 };
 
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
@@ -84,6 +90,7 @@ const App: React.FC = () => {
     const [noNameEntries, setNoNameEntries] = useState<NoNameEntry[]>([]);
     const [harvestEntries, setHarvestEntries] = useState<HarvestEntry[]>([]);
     const [harvestPledges, setHarvestPledges] = useState<HarvestPledge[]>([]);
+    const [requisitions, setRequisitions] = useState<Requisition[]>([]);
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useState<MonthLock[]>([]);
@@ -120,6 +127,10 @@ const App: React.FC = () => {
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
     const [modalDeletedFilter, setModalDeletedFilter] = useState<'all' | 'active' | 'deleted'>('all');
+    
+    // Financial Records year/month folder state
+    const [finRecordsExpandedYears, setFinRecordsExpandedYears] = useState<Set<string>>(new Set());
+    const [finRecordsExpandedMonths, setFinRecordsExpandedMonths] = useState<Set<string>>(new Set());
 
     // Navigation collapse state
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -153,12 +164,13 @@ const App: React.FC = () => {
         if (!settings.supabaseUrl || !settings.supabaseKey) return;
         if (syncStatus.state !== 'synced') return; // Wait until synced
         
-        // Load all data from database in parallel
+        // Load all data from database in parallel with fallback error handling
         Promise.all([
-            loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey),
-            loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey),
-            loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey)
-        ]).then(([loadedMembers, loadedEntries, loadedPledges]) => {
+            loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Members load failed:', err); return []; }),
+            loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Entries load failed:', err); return []; }),
+            loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Harvest pledges load failed:', err); return []; }),
+            loadRequisitions(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Requisitions load failed:', err); return []; })
+        ]).then(([loadedMembers, loadedEntries, loadedPledges, loadedRequisitions]) => {
             if (loadedMembers && loadedMembers.length > 0) {
                 setMembers(loadedMembers);
             }
@@ -167,6 +179,9 @@ const App: React.FC = () => {
             }
             if (loadedPledges && loadedPledges.length > 0) {
                 setHarvestPledges(loadedPledges);
+            }
+            if (loadedRequisitions && loadedRequisitions.length > 0) {
+                setRequisitions(loadedRequisitions);
             }
         }).catch(err => console.error('Failed to load data from database:', err));
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
@@ -323,6 +338,59 @@ const App: React.FC = () => {
     const sortedDates = useMemo(() => {
         return Object.keys(entriesByDate).sort((a, b) => b.localeCompare(a)); // Descending order
     }, [entriesByDate]);
+
+    // Group dates by year and month for folder structure
+    const entriesByYearMonth = useMemo(() => {
+        const groups: { [year: string]: { [month: string]: string[] } } = {};
+        
+        sortedDates.forEach(date => {
+            const dateObj = new Date(date + 'T00:00:00');
+            const year = dateObj.getFullYear().toString();
+            const month = dateObj.toLocaleString('default', { month: 'long' });
+            
+            if (!groups[year]) groups[year] = {};
+            if (!groups[year][month]) groups[year][month] = [];
+            groups[year][month].push(date);
+        });
+        
+        return groups;
+    }, [sortedDates]);
+
+    // Auto-expand most recent year and month for financial records
+    useEffect(() => {
+        const years = Object.keys(entriesByYearMonth).sort((a, b) => parseInt(b) - parseInt(a));
+        if (years.length > 0 && finRecordsExpandedYears.size === 0) {
+            const mostRecentYear = years[0];
+            setFinRecordsExpandedYears(new Set([mostRecentYear]));
+            
+            const months = Object.keys(entriesByYearMonth[mostRecentYear]);
+            if (months.length > 0) {
+                const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const sortedMonths = months.sort((a, b) => monthOrder.indexOf(b) - monthOrder.indexOf(a));
+                setFinRecordsExpandedMonths(new Set([`${mostRecentYear}-${sortedMonths[0]}`]));
+            }
+        }
+    }, [entriesByYearMonth]);
+
+    const toggleFinRecordsYear = (year: string) => {
+        const newExpanded = new Set(finRecordsExpandedYears);
+        if (newExpanded.has(year)) {
+            newExpanded.delete(year);
+        } else {
+            newExpanded.add(year);
+        }
+        setFinRecordsExpandedYears(newExpanded);
+    };
+
+    const toggleFinRecordsMonth = (yearMonth: string) => {
+        const newExpanded = new Set(finRecordsExpandedMonths);
+        if (newExpanded.has(yearMonth)) {
+            newExpanded.delete(yearMonth);
+        } else {
+            newExpanded.add(yearMonth);
+        }
+        setFinRecordsExpandedMonths(newExpanded);
+    };
 
     // Financial Mini Dashboard Data
     const financialSummary = useMemo(() => {
@@ -676,7 +744,7 @@ const App: React.FC = () => {
             }
         };
         switch (activeTab) {
-            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks}/>;
+            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={requisitions}/>;
             case 'harvest':
                 return (
                     <Harvest 
@@ -851,7 +919,7 @@ const App: React.FC = () => {
                                     </label>
                                 </div>
                             )}
-                           <div className="max-h-[60vh] overflow-y-auto p-6 space-y-4">
+                           <div className="max-h-[75vh] overflow-y-auto p-6 space-y-4">
                                {sortedDates.length === 0 ? (
                                    <div className="text-center py-16 text-slate-400">
                                        <div className="text-6xl mb-4">📭</div>
@@ -859,55 +927,99 @@ const App: React.FC = () => {
                                        <p className="text-sm mt-2">Try adjusting your filters</p>
                                    </div>
                                ) : (
-                                   sortedDates.map(date => {
-                                       const dateEntries = entriesByDate[date];
-                                       const activeEntries = dateEntries.filter(e => !e.deleted);
-                                       const deletedEntries = dateEntries.filter(e => e.deleted);
-                                       const activeTotal = activeEntries.reduce((sum, e) => sum + e.amount, 0);
-                                       const deletedTotal = deletedEntries.reduce((sum, e) => sum + e.amount, 0);
-                                       
-                                       return (
-                                           <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
-                                               <button 
-                                                   onClick={() => {
-                                                       setSelectedDateForModal(date);
-                                                       setModalClassFilter('all');
-                                                       setModalTypeFilter('all');
-                                                   }}
-                                                   className="w-full p-5 flex items-center justify-between hover:bg-blue-100 transition-colors text-left"
-                                               >
-                                                   <div className="flex items-center gap-4">
-                                                       <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-xl p-4 shadow-md">
-                                                           <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
-                                                           <div className="text-2xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
-                                                           <div className="text-xs">{new Date(date + 'T00:00:00').getFullYear()}</div>
-                                                       </div>
-                                                       <div>
-                                                           <div className="flex items-center gap-3">
-                                                               <h3 className="text-xl font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
-                                                               {deletedEntries.length > 0 && showDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">{deletedEntries.length} Deleted</span>}
+                                   Object.keys(entriesByYearMonth).sort((a, b) => parseInt(b) - parseInt(a)).map(year => (
+                                       <div key={year} className="mb-4">
+                                           {/* Year Folder */}
+                                           <button
+                                               onClick={() => toggleFinRecordsYear(year)}
+                                               className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl px-6 py-3 shadow-lg hover:shadow-xl transition-all mb-3"
+                                           >
+                                               <span className="text-2xl">{finRecordsExpandedYears.has(year) ? '📂' : '📁'}</span>
+                                               <span className="text-xl font-bold">{year}</span>
+                                               <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full">
+                                                   {Object.values(entriesByYearMonth[year]).flat().length} dates
+                                               </span>
+                                               <span className="text-xl">{finRecordsExpandedYears.has(year) ? '▼' : '▶'}</span>
+                                           </button>
+
+                                           {/* Months within Year */}
+                                           {finRecordsExpandedYears.has(year) && Object.keys(entriesByYearMonth[year]).map(month => {
+                                               const monthKey = `${year}-${month}`;
+                                               const dates = entriesByYearMonth[year][month];
+                                               
+                                               return (
+                                                   <div key={monthKey} className="ml-8 mb-3">
+                                                       {/* Month Folder */}
+                                                       <button
+                                                           onClick={() => toggleFinRecordsMonth(monthKey)}
+                                                           className="w-full flex items-center gap-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl px-5 py-2.5 shadow-md hover:shadow-lg transition-all mb-2"
+                                                       >
+                                                           <span className="text-xl">{finRecordsExpandedMonths.has(monthKey) ? '📂' : '📁'}</span>
+                                                           <span className="text-lg font-bold">{month}</span>
+                                                           <span className="ml-auto text-sm font-semibold bg-white/20 px-2.5 py-0.5 rounded-full">
+                                                               {dates.length} dates
+                                                           </span>
+                                                           <span className="text-lg">{finRecordsExpandedMonths.has(monthKey) ? '▼' : '▶'}</span>
+                                                       </button>
+
+                                                       {/* Dates in Month */}
+                                                       {finRecordsExpandedMonths.has(monthKey) && (
+                                                           <div className="ml-8 space-y-3">
+                                                               {dates.map(date => {
+                                                                   const dateEntries = entriesByDate[date];
+                                                                   const activeEntries = dateEntries.filter(e => !e.deleted);
+                                                                   const deletedEntries = dateEntries.filter(e => e.deleted);
+                                                                   const activeTotal = activeEntries.reduce((sum, e) => sum + e.amount, 0);
+                                                                   const deletedTotal = deletedEntries.reduce((sum, e) => sum + e.amount, 0);
+                                                                   
+                                                                   return (
+                                                                       <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
+                                                                           <button 
+                                                                               onClick={() => {
+                                                                                   setSelectedDateForModal(date);
+                                                                                   setModalClassFilter('all');
+                                                                                   setModalTypeFilter('all');
+                                                                               }}
+                                                                               className="w-full p-4 flex items-center justify-between hover:bg-blue-100 transition-colors text-left"
+                                                                           >
+                                                                               <div className="flex items-center gap-3">
+                                                                                   <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg p-3 shadow-md">
+                                                                                       <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
+                                                                                       <div className="text-xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
+                                                                                   </div>
+                                                                                   <div>
+                                                                                       <div className="flex items-center gap-2">
+                                                                                           <h3 className="text-lg font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric' })}</h3>
+                                                                                           {deletedEntries.length > 0 && showDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold">{deletedEntries.length} Deleted</span>}
+                                                                                       </div>
+                                                                                       <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                                                                                           {activeEntries.length} active{deletedEntries.length > 0 && showDeleted ? ` + ${deletedEntries.length} deleted` : ''}
+                                                                                       </p>
+                                                                                   </div>
+                                                                               </div>
+                                                                               <div className="text-right">
+                                                                                   <div className="text-xl font-bold text-green-600">{formatCurrency(activeTotal, settings.currency)}</div>
+                                                                                   {deletedEntries.length > 0 && showDeleted && (
+                                                                                       <div className="text-xs text-red-600 font-semibold line-through">{formatCurrency(deletedTotal, settings.currency)} deleted</div>
+                                                                                   )}
+                                                                                   <div className="text-xs text-blue-600 font-semibold mt-1 flex items-center gap-1">
+                                                                                       Click to view
+                                                                                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                                                           <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                                                       </svg>
+                                                                                   </div>
+                                                                               </div>
+                                                                           </button>
+                                                                       </div>
+                                                                   );
+                                                               })}
                                                            </div>
-                                                           <p className="text-sm text-slate-600 mt-1 font-medium">
-                                                               {activeEntries.length} active{deletedEntries.length > 0 && showDeleted ? ` + ${deletedEntries.length} deleted` : ''}
-                                                           </p>
-                                                       </div>
-                                                   </div>
-                                                   <div className="text-right">
-                                                       <div className="text-2xl font-bold text-green-600">{formatCurrency(activeTotal, settings.currency)}</div>
-                                                       {deletedEntries.length > 0 && showDeleted && (
-                                                           <div className="text-sm text-red-600 font-semibold line-through">{formatCurrency(deletedTotal, settings.currency)} deleted</div>
                                                        )}
-                                                       <div className="text-sm text-blue-600 font-semibold mt-1 flex items-center gap-1">
-                                                           Click to view details
-                                                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                                               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                                           </svg>
-                                                       </div>
                                                    </div>
-                                               </button>
-                                           </div>
-                                       );
-                                   })
+                                               );
+                                           })}
+                                       </div>
+                                   ))
                                )}
                            </div>
                         </div>

@@ -3,12 +3,19 @@
 create table if not exists requisitions (
   id uuid primary key,
   requester_username text not null,
+  requester_name text,
   title text not null,
   purpose text,
+  intended_for text,
+  purchase_type text,
   fund text,
   needed_by date,
   total_amount numeric(12,2) default 0 not null,
   status text not null default 'draft', -- draft|submitted|approved|rejected|funded|paid|closed
+  required_approver_role text,
+  required_approver_username text,
+  completion_attachment_url text,
+  completion_attachment_at timestamptz,
   created_at timestamptz default now(),
   updated_by text,
   last_updated timestamptz
@@ -27,8 +34,11 @@ create table if not exists requisition_approvals (
   id uuid primary key,
   requisition_id uuid references requisitions(id) on delete cascade,
   approver_username text not null,
+  approver_role text,
   decision text not null, -- approved|rejected
   note text,
+  signature_name text,
+  signature_at timestamptz,
   decided_at timestamptz default now()
 );
 

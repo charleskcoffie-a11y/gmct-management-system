@@ -240,7 +240,19 @@ const mapSettingsToDB = (s: Settings) => ({
     etransfer_inbound_secret: s.etransferInboundSecret,
     etransfer_provider: s.etransferProvider,
     class_access_codes: s.classAccessCodes ? JSON.stringify(s.classAccessCodes) : null,
+    requisition_approval_limits: s.requisitionApprovalLimits ? JSON.stringify(s.requisitionApprovalLimits) : null,
+    requisition_pastor_limits: s.requisitionPastorLimits ? JSON.stringify(s.requisitionPastorLimits) : null,
+    requisition_finance_approvers: s.requisitionFinanceApprovers ? JSON.stringify(s.requisitionFinanceApprovers) : null,
 });
+
+const normalizeApprovalLimits = (raw: any) => {
+    if (!raw || typeof raw !== 'object') return undefined;
+    const financeTeam = raw.financeTeam ?? raw.steward ?? raw.finance;
+    return {
+        pastor: raw.pastor,
+        financeTeam
+    };
+};
 
 const mapSettingsFromDB = (s: any): Settings => ({
     currency: s.currency || 'GH₵',
@@ -260,6 +272,9 @@ const mapSettingsFromDB = (s: any): Settings => ({
     etransferInboundSecret: s.etransfer_inbound_secret,
     etransferProvider: s.etransfer_provider,
     classAccessCodes: s.class_access_codes ? JSON.parse(s.class_access_codes) : undefined,
+    requisitionApprovalLimits: s.requisition_approval_limits ? normalizeApprovalLimits(JSON.parse(s.requisition_approval_limits)) : undefined,
+    requisitionPastorLimits: s.requisition_pastor_limits ? JSON.parse(s.requisition_pastor_limits) : undefined,
+    requisitionFinanceApprovers: s.requisition_finance_approvers ? JSON.parse(s.requisition_finance_approvers) : undefined,
 });
 
 // --- Sync Functions ---
@@ -403,26 +418,44 @@ export const markETransferReconciled = async (url: string, key: string, id: stri
 // --- Requisitions ---
 const mapRequisitionToDB = (r: Requisition) => ({
     id: r.id,
+    requisition_number: r.requisitionNumber || null,
     requester_username: r.requesterUsername,
+    requester_name: r.requesterName,
+    date_created: r.dateCreated || null,
     title: r.title,
     purpose: r.purpose,
+    intended_for: r.intendedFor,
+    purchase_type: r.purchaseType,
     fund: r.fund,
     needed_by: r.neededBy || null,
     total_amount: r.totalAmount,
     status: r.status,
+    required_approver_role: r.requiredApproverRole || null,
+    required_approver_username: r.requiredApproverUsername || null,
+    completion_attachment_url: r.completionAttachmentUrl || null,
+    completion_attachment_at: r.completionAttachmentAt || null,
     updated_by: r.updatedBy || null,
     last_updated: r.lastUpdated || null,
 });
 
 const mapRequisitionFromDB = (r: any): Requisition => ({
     id: r.id,
+    requisitionNumber: r.requisition_number || undefined,
     requesterUsername: r.requester_username,
+    requesterName: r.requester_name || r.requester_username,
+    dateCreated: r.date_created || undefined,
     title: r.title,
     purpose: r.purpose || undefined,
+    intendedFor: r.intended_for || undefined,
+    purchaseType: r.purchase_type || undefined,
     fund: r.fund || undefined,
     neededBy: r.needed_by || undefined,
     totalAmount: parseFloat(r.total_amount || 0),
     status: r.status,
+    requiredApproverRole: r.required_approver_role || undefined,
+    requiredApproverUsername: r.required_approver_username || undefined,
+    completionAttachmentUrl: r.completion_attachment_url || undefined,
+    completionAttachmentAt: r.completion_attachment_at || undefined,
     createdAt: r.created_at || undefined,
     updatedBy: r.updated_by || undefined,
     lastUpdated: r.last_updated || undefined,
@@ -450,8 +483,11 @@ const mapApprovalToDB = (a: RequisitionApproval) => ({
     id: a.id,
     requisition_id: a.requisitionId,
     approver_username: a.approverUsername,
+    approver_role: a.approverRole || null,
     decision: a.decision,
     note: a.note || null,
+    signature_name: a.signatureName,
+    signature_at: a.signatureAt || null,
     decided_at: a.decidedAt || null,
 });
 
@@ -459,8 +495,11 @@ const mapApprovalFromDB = (a: any): RequisitionApproval => ({
     id: a.id,
     requisitionId: a.requisition_id,
     approverUsername: a.approver_username,
+    approverRole: a.approver_role || undefined,
     decision: a.decision,
     note: a.note || undefined,
+    signatureName: a.signature_name || '',
+    signatureAt: a.signature_at || undefined,
     decidedAt: a.decided_at || undefined,
 });
 
@@ -482,6 +521,13 @@ export const loadRequisitions = async (url: string, key: string): Promise<Requis
         items.forEach(i => { (byReq[i.requisitionId] ||= []).push(i); });
         reqs.forEach(r => { r.items = byReq[r.id] || []; });
     }
+    if (ids.length > 0) {
+        const { data: approvalsData } = await supabase.from('requisition_approvals').select('*').in('requisition_id', ids).order('decided_at', { ascending: false });
+        const approvals = (approvalsData || []).map(mapApprovalFromDB);
+        const byReq: Record<string, RequisitionApproval[]> = {};
+        approvals.forEach(a => { (byReq[a.requisitionId] ||= []).push(a); });
+        reqs.forEach(r => { r.approvals = byReq[r.id] || []; });
+    }
     return reqs;
 };
 
@@ -497,10 +543,18 @@ export const saveRequisition = async (url: string, key: string, req: Requisition
     }
 };
 
-export const submitRequisition = async (url: string, key: string, id: string) => {
+export const submitRequisition = async (url: string, key: string, id: string, requiredApproverRole?: string, requiredApproverUsername?: string, requisitionNumber?: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: new Date().toISOString() }).eq('id', id);
+    const { error } = await supabase.from('requisitions')
+        .update({
+            status: 'submitted',
+            required_approver_role: requiredApproverRole || null,
+            required_approver_username: requiredApproverUsername || null,
+            requisition_number: requisitionNumber || null,
+            last_updated: new Date().toISOString()
+        })
+        .eq('id', id);
     if (error) throw new Error(error.message);
 };
 
@@ -511,6 +565,26 @@ export const decideRequisition = async (url: string, key: string, approval: Requ
     if (insErr) throw new Error(insErr.message);
     const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: new Date().toISOString() }).eq('id', approval.requisitionId);
     if (updErr) throw new Error(updErr.message);
+};
+
+export const uploadRequisitionAttachment = async (url: string, key: string, requisitionId: string, file: File) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${requisitionId}/completion-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('requisition-attachments').upload(path, file, { upsert: true });
+    if (error) throw new Error(error.message);
+    const { data } = supabase.storage.from('requisition-attachments').getPublicUrl(path);
+    return data.publicUrl;
+};
+
+export const saveRequisitionAttachment = async (url: string, key: string, requisitionId: string, attachmentUrl: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase.from('requisitions')
+        .update({ completion_attachment_url: attachmentUrl, completion_attachment_at: new Date().toISOString(), last_updated: new Date().toISOString() })
+        .eq('id', requisitionId);
+    if (error) throw new Error(error.message);
 };
 
 // --- Individual Entry Operations (for multi-user real-time collaboration) ---

@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
     annual_levy_amount NUMERIC(10,2),
     etransfer_notification_email TEXT,
     etransfer_provider TEXT,
+    requisition_approval_limits TEXT,
+    requisition_pastor_limits TEXT,
+    requisition_finance_approvers TEXT,
     class_access_codes TEXT, -- JSON object mapping class numbers to access codes
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -30,6 +33,9 @@ COMMENT ON COLUMN app_settings.currency IS 'Currency symbol for display';
 COMMENT ON COLUMN app_settings.max_classes IS 'Maximum number of classes in the organization';
 COMMENT ON COLUMN app_settings.enforce_directory IS 'Whether to enforce member selection from directory';
 COMMENT ON COLUMN app_settings.class_access_codes IS 'JSON object mapping class numbers to access codes';
+COMMENT ON COLUMN app_settings.requisition_approval_limits IS 'JSON approval ranges by role for requisitions';
+COMMENT ON COLUMN app_settings.requisition_pastor_limits IS 'JSON approval ranges by pastor username';
+COMMENT ON COLUMN app_settings.requisition_finance_approvers IS 'JSON list of finance approver usernames';
 
 -- Insert default settings row if not exists
 INSERT INTO app_settings (id) VALUES ('app_settings')

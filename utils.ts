@@ -266,6 +266,37 @@ export function sanitizeUser(raw: any): User {
 }
 
 export function sanitizeSettings(raw: any): Settings {
+    const UNLIMITED_MAX = 1000000000;
+    const defaultApprovalLimits = {
+        pastor: { min: 0, max: 500 },
+        financeTeam: { min: 501, max: 2000 },
+    };
+    const rawApprovalLimits = raw.requisitionApprovalLimits && typeof raw.requisitionApprovalLimits === 'object'
+        ? raw.requisitionApprovalLimits
+        : undefined;
+    const toRange = (value: any, fallback: { min: number; max: number }) => {
+        const min = typeof value?.min === 'number' ? value.min : fallback.min;
+        const max = typeof value?.max === 'number' ? value.max : fallback.max;
+        return { min, max };
+    };
+    const rawPastorLimits = Array.isArray(raw.requisitionPastorLimits) ? raw.requisitionPastorLimits : [];
+    const pastorLimits = rawPastorLimits
+        .map((limit: any) => {
+            const username = sanitizeString(limit?.username);
+            if (!username) return undefined;
+            const unlimited = !!limit?.unlimited;
+            const min = typeof limit?.min === 'number' ? limit.min : 0;
+            const max = unlimited
+                ? UNLIMITED_MAX
+                : typeof limit?.max === 'number'
+                    ? limit.max
+                    : 0;
+            return { username, min, max, unlimited };
+        })
+        .filter(Boolean) as Settings['requisitionPastorLimits'];
+    const financeApprovers = Array.isArray(raw.requisitionFinanceApprovers)
+        ? raw.requisitionFinanceApprovers.map((name: any) => sanitizeString(name)).filter(Boolean)
+        : [];
     const validDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     const entryWindowRaw = raw.entryWindow;
     const entryWindowSanitized = entryWindowRaw && typeof entryWindowRaw === 'object'
@@ -301,6 +332,12 @@ export function sanitizeSettings(raw: any): Settings {
         etransferInboundSecret: sanitizeString(raw.etransferInboundSecret),
         etransferProvider: sanitizeString(raw.etransferProvider) as any,
         entryWindow: entryWindowSanitized,
+        requisitionApprovalLimits: {
+            pastor: toRange(rawApprovalLimits?.pastor, defaultApprovalLimits.pastor),
+            financeTeam: toRange(rawApprovalLimits?.financeTeam ?? rawApprovalLimits?.steward ?? rawApprovalLimits?.finance, defaultApprovalLimits.financeTeam),
+        },
+        requisitionPastorLimits: pastorLimits,
+        requisitionFinanceApprovers: financeApprovers,
     }
 }
 

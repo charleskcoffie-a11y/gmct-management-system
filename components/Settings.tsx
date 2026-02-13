@@ -55,6 +55,14 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
     });
 
     // Month Lock State removed - moved to Financial Control tab
+    const pastorUsernames = (allData?.users || [])
+        .filter(user => user.role === 'pastor')
+        .map(user => user.username)
+        .sort((a, b) => a.localeCompare(b));
+    const financeUsernames = (allData?.users || [])
+        .filter(user => user.role === 'finance-team')
+        .map(user => user.username)
+        .sort((a, b) => a.localeCompare(b));
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type, checked } = e.target as HTMLInputElement;
@@ -64,7 +72,100 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         }));
     };
 
+    const handleApprovalLimitChange = (role: 'pastor' | 'financeTeam', field: 'min' | 'max', value: number) => {
+        setLocalSettings(prev => {
+            const current = prev.requisitionApprovalLimits || {
+                pastor: { min: 0, max: 500 },
+                financeTeam: { min: 501, max: 2000 },
+            };
+            return {
+                ...prev,
+                requisitionApprovalLimits: {
+                    ...current,
+                    [role]: {
+                        ...current[role],
+                        [field]: Number.isFinite(value) ? value : current[role][field]
+                    }
+                }
+            };
+        });
+    };
+
+    const handlePastorLimitChange = (index: number, field: 'username' | 'min' | 'max' | 'unlimited', value: string | number | boolean) => {
+        setLocalSettings(prev => {
+            const list = [...(prev.requisitionPastorLimits || [])];
+            const current = list[index] || { username: '', min: 0, max: 0, unlimited: false };
+            const updated = { ...current, [field]: value } as any;
+            if (field === 'unlimited' && value === true) {
+                updated.max = 1000000000;
+            }
+            list[index] = updated;
+            return { ...prev, requisitionPastorLimits: list };
+        });
+    };
+
+    const addPastorLimit = () => {
+        setLocalSettings(prev => ({
+            ...prev,
+            requisitionPastorLimits: [
+                ...(prev.requisitionPastorLimits || []),
+                { username: '', min: 0, max: 0, unlimited: false }
+            ]
+        }));
+    };
+
+    const removePastorLimit = (index: number) => {
+        setLocalSettings(prev => ({
+            ...prev,
+            requisitionPastorLimits: (prev.requisitionPastorLimits || []).filter((_, i) => i !== index)
+        }));
+    };
+
+    const validateApprovalLimits = () => {
+        const errors: string[] = [];
+        const limits = localSettings.requisitionApprovalLimits;
+        if (limits) {
+            if (limits.pastor.min > limits.pastor.max) errors.push('Pastor limits must have min <= max.');
+            if (limits.financeTeam.min > limits.financeTeam.max) errors.push('Finance Team limits must have min <= max.');
+        }
+
+        const pastorLimits = (localSettings.requisitionPastorLimits || [])
+            .map(l => ({
+                username: (l.username || '').trim(),
+                min: l.min,
+                max: l.max,
+                unlimited: !!l.unlimited
+            }));
+
+        pastorLimits.forEach((limit, idx) => {
+            if (!limit.username) errors.push(`Pastor override #${idx + 1} is missing a username.`);
+            if (limit.min > limit.max) errors.push(`Pastor override #${idx + 1} must have min <= max.`);
+        });
+
+        const normalized = pastorLimits
+            .filter(l => l.username)
+            .map(l => ({ ...l, username: l.username.toLowerCase() }));
+
+        for (let i = 0; i < normalized.length; i += 1) {
+            for (let j = i + 1; j < normalized.length; j += 1) {
+                const a = normalized[i];
+                const b = normalized[j];
+                const overlap = a.min <= b.max && b.min <= a.max;
+                if (overlap) {
+                    errors.push(`Pastor override ranges overlap between "${a.username}" and "${b.username}".`);
+                }
+            }
+        }
+
+        return errors;
+    };
+
     const handleSave = async () => {
+        const errors = validateApprovalLimits();
+        if (errors.length > 0) {
+            alert(`Cannot save approval limits:\n- ${errors.join('\n- ')}`);
+            return;
+        }
         setSettings(localSettings);
         
         // Also save to Supabase if configured
@@ -227,6 +328,163 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             ) : (
                 <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
                     🔒 Only Administrators can modify System Configuration.
+                </div>
+            )}
+
+            {/* 1b. Requisition Approval Limits (Admin Only) */}
+            {currentUser.role === 'admin' ? (
+                <div className="bg-gradient-to-br from-slate-50 to-emerald-50 p-6 rounded-xl shadow-lg border-2 border-emerald-200">
+                    <h3 className="text-xl font-bold text-emerald-800 border-b-2 border-emerald-100 pb-3 mb-4">Requisition Approval Limits</h3>
+                    <p className="text-sm text-emerald-900 bg-emerald-100 border border-emerald-200 rounded-lg p-3 mb-4 font-medium">
+                        Set amount ranges that route requisitions to Pastors and Finance Team for approval.
+                    </p>
+                    {(['pastor', 'financeTeam'] as const).map(role => {
+                        const limits = localSettings.requisitionApprovalLimits?.[role] || { min: 0, max: 0 };
+                        const label = role === 'pastor' ? 'Pastor' : 'Finance Team';
+                        return (
+                            <div key={role} className="bg-white rounded-lg p-4 border border-emerald-200 mb-3">
+                                <div className="font-bold text-emerald-800 mb-2">{label}</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-emerald-700 mb-1">Minimum Amount</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="1"
+                                            value={limits.min}
+                                            onChange={(e) => handleApprovalLimitChange(role, 'min', parseFloat(e.target.value))}
+                                            className="w-full border-2 border-emerald-300 rounded-lg py-2 px-3"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-emerald-700 mb-1">Maximum Amount</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="1"
+                                            value={limits.max}
+                                            onChange={(e) => handleApprovalLimitChange(role, 'max', parseFloat(e.target.value))}
+                                            className="w-full border-2 border-emerald-300 rounded-lg py-2 px-3"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <div className="bg-white rounded-lg p-4 border border-emerald-200 mb-3">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="font-bold text-emerald-800">Pastor-specific Limits</div>
+                            <button onClick={addPastorLimit} className="text-xs font-semibold text-emerald-700">+ Add Pastor</button>
+                        </div>
+                        {(localSettings.requisitionPastorLimits || []).length === 0 && (
+                            <div className="text-sm text-slate-500">No pastor overrides yet.</div>
+                        )}
+                        {(localSettings.requisitionPastorLimits || []).map((limit, index) => (
+                            <div key={`${limit.username}-${index}`} className="border rounded-lg p-3 mb-3">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-emerald-700 mb-1">Username</label>
+                                        {pastorUsernames.length > 0 ? (
+                                            <select
+                                                value={limit.username}
+                                                onChange={(e) => handlePastorLimitChange(index, 'username', e.target.value)}
+                                                className="w-full border-2 border-emerald-300 rounded-lg py-2 px-3"
+                                            >
+                                                <option value="">Select pastor</option>
+                                                {pastorUsernames.map(username => (
+                                                    <option key={username} value={username}>{username}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                value={limit.username}
+                                                onChange={(e) => handlePastorLimitChange(index, 'username', e.target.value)}
+                                                className="w-full border-2 border-emerald-300 rounded-lg py-2 px-3"
+                                                placeholder="Pastor username"
+                                            />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-emerald-700 mb-1">Minimum</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="1"
+                                            value={limit.min}
+                                            onChange={(e) => handlePastorLimitChange(index, 'min', parseFloat(e.target.value))}
+                                            className="w-full border-2 border-emerald-300 rounded-lg py-2 px-3"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-emerald-700 mb-1">Maximum</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="1"
+                                            value={limit.max}
+                                            onChange={(e) => handlePastorLimitChange(index, 'max', parseFloat(e.target.value))}
+                                            className="w-full border-2 border-emerald-300 rounded-lg py-2 px-3"
+                                            disabled={!!limit.unlimited}
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <label className="flex items-center gap-2 text-xs text-emerald-700">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!limit.unlimited}
+                                                onChange={(e) => handlePastorLimitChange(index, 'unlimited', e.target.checked)}
+                                            />
+                                            Unlimited
+                                        </label>
+                                        <button onClick={() => removePastorLimit(index)} className="text-xs text-rose-600">Remove</button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-emerald-200 mb-3">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="font-bold text-emerald-800">Finance Approvers</div>
+                        </div>
+                        {financeUsernames.length === 0 && (
+                            <div className="text-sm text-slate-500">No finance-team users found. Add finance-team users to populate this list.</div>
+                        )}
+                        {financeUsernames.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {financeUsernames.map(username => {
+                                    const selected = (localSettings.requisitionFinanceApprovers || []).includes(username);
+                                    return (
+                                        <label key={username} className="flex items-center gap-2 text-sm text-emerald-800">
+                                            <input
+                                                type="checkbox"
+                                                checked={selected}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    setLocalSettings(prev => {
+                                                        const list = new Set(prev.requisitionFinanceApprovers || []);
+                                                        if (checked) list.add(username);
+                                                        else list.delete(username);
+                                                        return { ...prev, requisitionFinanceApprovers: Array.from(list) };
+                                                    });
+                                                }}
+                                            />
+                                            {username}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex justify-end pt-4">
+                        <button onClick={handleSave} className="bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all hover:scale-105 border-2 border-emerald-300">
+                            ✓ Save Approval Limits
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
+                    🔒 Only Administrators can modify Approval Limits.
                 </div>
             )}
             
