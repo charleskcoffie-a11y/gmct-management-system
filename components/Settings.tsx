@@ -769,7 +769,6 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                                             await saveClassLeaderToSupabase(localSettings.supabaseUrl, localSettings.supabaseKey, leaderToSave);
                                             
                                             // Reload class leaders
-                                            const { downloadDataFromSupabase } = await import('../services/supabase');
                                             const cloudData = await downloadDataFromSupabase(localSettings.supabaseUrl, localSettings.supabaseKey);
                                             setClassLeaders(cloudData.classLeaders || []);
                                             

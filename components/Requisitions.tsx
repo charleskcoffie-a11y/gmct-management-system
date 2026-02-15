@@ -332,7 +332,10 @@ export default function Requisitions({ settings, currentUser }: Props) {
   };
 
   const onSubmit = async (req: Requisition) => {
-    if (!settings.supabaseUrl || !settings.supabaseKey) return;
+    if (!settings.supabaseUrl || !settings.supabaseKey) {
+      alert('Cloud connection required. Configure Supabase in Settings.');
+      return;
+    }
     if (!req.requesterName || !req.requesterName.trim()) {
       alert('Requester name is required before submission.');
       return;
@@ -623,12 +626,12 @@ export default function Requisitions({ settings, currentUser }: Props) {
             onClick={() => toggleYear(year)}
             className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl px-6 py-4 shadow-lg hover:shadow-xl transition-all mb-4"
           >
-            <span className="text-3xl">{expandedYears.has(year) ? '📂' : '📁'}</span>
-            <span className="text-2xl font-bold">{year}</span>
-            <span className="ml-auto text-lg font-semibold bg-white/20 px-4 py-1 rounded-full">
+            <span className="text-3xl flex-shrink-0">{expandedYears.has(year) ? '📂' : '📁'}</span>
+            <span className="text-2xl font-bold min-w-0 break-words">{year}</span>
+            <span className="ml-auto text-lg font-semibold bg-white/20 px-4 py-1 rounded-full flex-shrink-0">
               {Object.values(groupedRequisitions[year]).flat().length} requisitions
             </span>
-            <span className="text-2xl">{expandedYears.has(year) ? '▼' : '▶'}</span>
+            <span className="text-2xl flex-shrink-0">{expandedYears.has(year) ? '▼' : '▶'}</span>
           </button>
 
           {/* Months within Year */}
@@ -643,17 +646,17 @@ export default function Requisitions({ settings, currentUser }: Props) {
                   onClick={() => toggleMonth(monthKey)}
                   className="w-full flex items-center gap-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl px-6 py-3 shadow-md hover:shadow-lg transition-all mb-3"
                 >
-                  <span className="text-2xl">{expandedMonths.has(monthKey) ? '📂' : '📁'}</span>
-                  <span className="text-xl font-bold">{month}</span>
-                  <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full">
+                  <span className="text-2xl flex-shrink-0">{expandedMonths.has(monthKey) ? '📂' : '📁'}</span>
+                  <span className="text-xl font-bold min-w-0 break-words">{month}</span>
+                  <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full flex-shrink-0">
                     {requisitions.length} requisitions
                   </span>
-                  <span className="text-xl">{expandedMonths.has(monthKey) ? '▼' : '▶'}</span>
+                  <span className="text-xl flex-shrink-0">{expandedMonths.has(monthKey) ? '▼' : '▶'}</span>
                 </button>
 
                 {/* Requisitions in Month */}
                 {expandedMonths.has(monthKey) && (
-                  <div className="ml-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
+                  <div className="ml-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 max-h-[70vh] overflow-y-auto pr-2">
                     {requisitions.map(r => (
           <div key={r.id} className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-md hover:shadow-xl transition-all hover:border-indigo-300">
             {/* Header with Avatar and Status */}
@@ -663,8 +666,8 @@ export default function Requisitions({ settings, currentUser }: Props) {
                   {initials(r.requesterUsername || 'U')}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-slate-900 truncate">{r.title || '(Untitled)'}</div>
-                  <div className="text-xs text-slate-600 truncate">by {r.requesterName || r.requesterUsername}</div>
+                  <div className="text-sm font-bold text-slate-900 break-words">{r.title || '(Untitled)'}</div>
+                  <div className="text-xs text-slate-600 break-words">by {r.requesterName || r.requesterUsername}</div>
                 </div>
               </div>
               <span className={statusStyle(r.status)}>{r.status}</span>

@@ -18,7 +18,7 @@ import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitize
 import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, saveUserToSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 import ProfileModal from './components/ProfileModal';
 
@@ -198,14 +198,12 @@ const App: React.FC = () => {
                 password: '',
                 role: 'class-leader'
             };
-            import('./services/supabase').then(({ saveUserToSupabase }) => {
-                saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, classLeaderUser)
-                    .then(() => {
-                        setUsers(prev => [...prev, classLeaderUser]);
-                        console.log('ClassLeader user seeded to database');
-                    })
-                    .catch(err => console.warn('Failed to seed ClassLeader:', err));
-            });
+            saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, classLeaderUser)
+                .then(() => {
+                    setUsers(prev => [...prev, classLeaderUser]);
+                    console.log('ClassLeader user seeded to database');
+                })
+                .catch(err => console.warn('Failed to seed ClassLeader:', err));
         }
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, users]);
     

@@ -1,19 +1,36 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { AppWithToasts } from './App';
+import { SUPABASE_KEY, SUPABASE_URL } from './constants';
 
-const resetInvalidSettings = () => {
+const isValidUrl = (value: string) => !!value && /^https?:\/\//i.test(value.trim());
+
+const ensureSupabaseDefaults = () => {
   if (typeof window === 'undefined') return;
   const raw = window.localStorage.getItem('gmct-settings');
-  if (!raw) return;
+  let parsed: any = {};
   try {
-    const parsed = JSON.parse(raw);
-    const url = typeof parsed?.supabaseUrl === 'string' ? parsed.supabaseUrl.trim() : '';
-    if (!url || !/^https?:\/\//i.test(url)) {
-      window.localStorage.removeItem('gmct-settings');
-    }
+    parsed = raw ? JSON.parse(raw) : {};
   } catch {
-    window.localStorage.removeItem('gmct-settings');
+    parsed = {};
+  }
+
+  const url = typeof parsed?.supabaseUrl === 'string' ? parsed.supabaseUrl.trim() : '';
+  const key = typeof parsed?.supabaseKey === 'string' ? parsed.supabaseKey.trim() : '';
+  const next = { ...parsed };
+  let changed = false;
+
+  if (!isValidUrl(url) && SUPABASE_URL) {
+    next.supabaseUrl = SUPABASE_URL;
+    changed = true;
+  }
+  if (!key && SUPABASE_KEY) {
+    next.supabaseKey = SUPABASE_KEY;
+    changed = true;
+  }
+
+  if (changed) {
+    window.localStorage.setItem('gmct-settings', JSON.stringify(next));
   }
 };
 
@@ -24,46 +41,13 @@ const resetOnSupabaseError = () => {
     if (!message.includes('supabaseUrl is required')) return;
     if (window.sessionStorage.getItem('gmct-reset-supabase')) return;
     window.sessionStorage.setItem('gmct-reset-supabase', '1');
-    try {
-      window.localStorage.removeItem('gmct-settings');
-    } catch {}
+    ensureSupabaseDefaults();
     window.location.reload();
   });
 };
 
-resetInvalidSettings();
+ensureSupabaseDefaults();
 resetOnSupabaseError();
-
-const resetWhenSupabaseMissing = () => {
-  if (typeof window === 'undefined') return;
-  const root = document.getElementById('root');
-  if (!root) return;
-  const raw = window.localStorage.getItem('gmct-settings');
-  let hasValidUrl = false;
-  try {
-    const parsed = raw ? JSON.parse(raw) : null;
-    const url = typeof parsed?.supabaseUrl === 'string' ? parsed.supabaseUrl.trim() : '';
-    hasValidUrl = !!url && /^https?:\/\//i.test(url);
-  } catch {
-    hasValidUrl = false;
-  }
-
-  if (hasValidUrl) return;
-
-  root.innerHTML = `
-    <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; color: #0f172a;">
-      <h2 style="margin: 0 0 8px; font-size: 20px;">Loading blocked by missing Supabase settings</h2>
-      <p style="margin: 0 0 12px;">We reset invalid settings. Please refresh the page.</p>
-      <button id="gmct-reload" style="padding: 8px 14px; border: 1px solid #1e293b; background: #ffffff; border-radius: 6px; cursor: pointer;">Reload</button>
-    </div>
-  `;
-  const btn = document.getElementById('gmct-reload');
-  if (btn) {
-    btn.addEventListener('click', () => window.location.reload());
-  }
-};
-
-resetWhenSupabaseMissing();
 
 const unregisterServiceWorkers = async () => {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
