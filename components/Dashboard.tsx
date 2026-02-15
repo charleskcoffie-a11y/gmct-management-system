@@ -196,6 +196,14 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
         return alerts;
     }, [monthLocks, sundayLocks, members, currentSundayDate, currentUser.role]);
 
+    const pendingSubmitted = useMemo(() => {
+        return requisitions.filter(r => r.status === 'submitted');
+    }, [requisitions]);
+
+    const pendingForUser = useMemo(() => {
+        return pendingSubmitted.filter(r => r.requiredApproverUsername === currentUser.username);
+    }, [pendingSubmitted, currentUser.username]);
+
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
             return (
@@ -247,66 +255,56 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
             )}
 
             {/* Pending Requisition Approvals */}
-            {requisitions && requisitions.length > 0 && (currentUser.role === 'finance-team' || currentUser.role === 'pastor' || currentUser.role === 'admin') && (
+            {requisitions && requisitions.length > 0 && (currentUser.role === 'finance-team' || currentUser.role === 'finance-chair' || currentUser.role === 'pastor' || currentUser.role === 'admin') && (
                 <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 rounded-xl shadow-lg border-2 border-amber-200 p-6">
                     <h3 className="text-lg font-bold text-amber-800 border-b-2 border-amber-100 pb-2 mb-4 flex items-center gap-2">
                         <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Pending Approvals ({requisitions.filter(r => r.status === 'submitted' && (currentUser.username === r.requiredApproverUsername || currentUser.role === 'admin')).length})
+                        Pending Approvals ({pendingSubmitted.length})
                     </h3>
-                    
-                    {/* Debug Info - Collapsible */}
-                    <button 
-                        onClick={() => setDebugExpanded(!debugExpanded)}
-                        className="w-full mb-4 p-2 bg-blue-100 hover:bg-blue-200 border border-blue-300 rounded text-xs font-semibold text-blue-800 flex items-center justify-between transition"
-                    >
-                        <span>🔍 Debug Info</span>
-                        <span>{debugExpanded ? '▼' : '▶'}</span>
-                    </button>
-                    
-                    {debugExpanded && (
-                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
-                            <div>Your Username: <strong>{currentUser.username}</strong></div>
-                            <div>Your Role: <strong>{currentUser.role}</strong></div>
-                            <div>Total Requisitions: <strong>{requisitions.length}</strong></div>
-                            <div>Submitted Requisitions: <strong>{requisitions.filter(r => r.status === 'submitted').length}</strong></div>
-                            {requisitions.filter(r => r.status === 'submitted').length > 0 && (
-                                <div className="mt-2">
-                                    <div className="font-semibold">Submitted Requisitions Details:</div>
-                                    {requisitions.filter(r => r.status === 'submitted').map(r => (
-                                        <div key={r.id} className="ml-2 mt-1 p-2 bg-white rounded">
-                                            <div>ID: {r.id.slice(0, 8)}</div>
-                                            <div>Status: {r.status}</div>
-                                            <div>Required Approver: <strong>{r.requiredApproverUsername || '(not set)'}</strong></div>
-                                            <div>Match: {currentUser.username === r.requiredApproverUsername ? '✓ YES' : '✗ NO'}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
 
-                    {requisitions.filter(r => r.status === 'submitted' && (currentUser.username === r.requiredApproverUsername || currentUser.role === 'admin')).length > 0 ? (
+                    {pendingSubmitted.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
-                            {requisitions.filter(r => r.status === 'submitted' && (currentUser.username === r.requiredApproverUsername || currentUser.role === 'admin')).map(req => (
-                                <div key={req.id} className={`p-3 rounded-lg border ${currentUser.username === req.requiredApproverUsername ? 'bg-orange-100 border-orange-400' : 'bg-amber-100 border-amber-300'} cursor-pointer hover:shadow-md transition`}>
-                                    <div className="flex justify-between items-start mb-1">
-                                        <div>
-                                            <p className="text-xs font-semibold text-slate-600">Requisition</p>
-                                            <p className="text-sm font-bold text-slate-900">{req.requisitionNumber || 'N/A'}</p>
+                            {pendingSubmitted.map(req => {
+                                const assignedToUser = req.requiredApproverUsername === currentUser.username;
+                                return (
+                                    <div
+                                        key={req.id}
+                                        className={`p-3 rounded-lg border ${assignedToUser ? 'bg-orange-100 border-orange-400' : 'bg-amber-100 border-amber-300'} cursor-pointer hover:shadow-md transition`}
+                                        onClick={() => {
+                                            try {
+                                                window.localStorage.setItem('gmct-open-requisition-id', req.id);
+                                            } catch {}
+                                            const nav = (window as any).GMCTNavigateTab;
+                                            if (typeof nav === 'function') nav('requisitions');
+                                        }}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-600">Requisition</p>
+                                                <p className="text-sm font-bold text-slate-900">{req.requisitionNumber || 'N/A'}</p>
+                                            </div>
+                                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${assignedToUser ? 'bg-orange-500 text-white' : 'bg-amber-500 text-white'}`}>
+                                                {assignedToUser ? 'ACTION' : 'VIEW'}
+                                            </span>
                                         </div>
-                                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${currentUser.username === req.requiredApproverUsername ? 'bg-orange-500 text-white' : 'bg-amber-500 text-white'}`}>
-                                            {currentUser.username === req.requiredApproverUsername ? 'ACTION' : 'VIEW'}
-                                        </span>
+                                        <div className="space-y-1 text-xs">
+                                            <div><span className="font-semibold text-slate-700">From:</span> <span className="text-slate-600">{req.requesterUsername || 'Unknown'}</span></div>
+                                            <div><span className="font-semibold text-slate-700">Amount:</span> <span className="text-slate-900 font-bold">{formatCurrency(req.totalAmount || 0, settings.currency)}</span></div>
+                                            <div><span className="font-semibold text-slate-700">Approver:</span> <span className="text-slate-700">{req.requiredApproverUsername || 'Unassigned'}</span></div>
+                                            <div><span className="font-semibold text-slate-700">Role:</span> <span className="text-slate-600">{req.requiredApproverRole || 'Unassigned'}</span></div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-1 text-xs">
-                                        <div><span className="font-semibold text-slate-700">From:</span> <span className="text-slate-600">{req.requesterUsername || 'Unknown'}</span></div>
-                                        <div><span className="font-semibold text-slate-700">Amount:</span> <span className="text-slate-900 font-bold">{formatCurrency(req.totalAmount || 0, settings.currency)}</span></div>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     ) : (
-                        <p className="text-slate-500 italic text-center py-2 text-sm">No pending approvals assigned to you.</p>
+                        <p className="text-slate-500 italic text-center py-2 text-sm">No pending approvals.</p>
+                    )}
+
+                    {pendingForUser.length > 0 && (
+                        <div className="mt-3 text-xs text-amber-700 font-semibold">
+                            {pendingForUser.length} assigned to you.
+                        </div>
                     )}
                 </div>
             )}

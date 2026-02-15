@@ -109,6 +109,22 @@ export function sanitizeEntry(raw: any): Entry {
     };
 }
 
+const normalizeSupabaseUrl = (raw: any): string => {
+    const s = sanitizeString(raw).toLowerCase();
+    if (!s || s === 'undefined' || s === 'null' || !/^https?:\/\//i.test(s)) {
+        return SUPABASE_URL;
+    }
+    return sanitizeString(raw);
+};
+
+const normalizeSupabaseKey = (raw: any): string => {
+    const s = sanitizeString(raw);
+    if (!s || s.toLowerCase() === 'undefined' || s.toLowerCase() === 'null') {
+        return SUPABASE_KEY;
+    }
+    return s;
+};
+
 export function sanitizeDevelopmentFundEntry(raw: any): DevelopmentFundEntry {
     const parsedDate = new Date(raw.date);
     const date = (raw.date && !isNaN(parsedDate.getTime()))
@@ -318,8 +334,8 @@ export function sanitizeSettings(raw: any): Settings {
         currency: sanitizeString(raw.currency) || DEFAULT_CURRENCY,
         maxClasses: typeof raw.maxClasses === 'number' && raw.maxClasses > 0 ? raw.maxClasses : DEFAULT_MAX_CLASSES,
         enforceDirectory: typeof raw.enforceDirectory === 'boolean' ? raw.enforceDirectory : true,
-        supabaseUrl: sanitizeString(raw.supabaseUrl) || SUPABASE_URL,
-        supabaseKey: sanitizeString(raw.supabaseKey) || SUPABASE_KEY,
+        supabaseUrl: normalizeSupabaseUrl(raw.supabaseUrl),
+        supabaseKey: normalizeSupabaseKey(raw.supabaseKey),
         logoUrl: raw.logoUrl ? sanitizeString(raw.logoUrl) : undefined,
         orgName: sanitizeString(raw.orgName),
         orgAddress: sanitizeString(raw.orgAddress),

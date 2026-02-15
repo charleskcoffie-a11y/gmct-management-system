@@ -7,6 +7,10 @@ type RequisitionPdfData = {
   settings: Settings;
 };
 
+type RequisitionTemplateData = {
+  settings: Settings;
+};
+
 const approverLabel = (role?: string) => {
   if (role === 'pastor') return 'Pastor';
   if (role === 'finance-team') return 'Steward (Finance Team)';
@@ -222,4 +226,130 @@ export const downloadRequisitionPdf = ({ requisition, settings }: RequisitionPdf
   const safeReqNum = (requisition.requisitionNumber || 'REQUISITION').replace(/\s+/g, '_');
   const fileName = `${safeReqNum}.pdf`;
   doc.save(fileName);
+};
+
+export const generateRequisitionTemplatePdf = ({ settings }: RequisitionTemplateData) => {
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const leftMargin = 40;
+  const rightMargin = 40;
+  const contentWidth = pageWidth - leftMargin - rightMargin;
+  let y = 40;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  const headerText = 'GHANA METHODIST CHURCH OF TORONTO';
+  const headerWidth = doc.getTextWidth(headerText);
+  doc.text(headerText, (pageWidth - headerWidth) / 2, y);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  if (settings.orgAddress) doc.text(`Address: ${settings.orgAddress}`, leftMargin, y + 12);
+  if (settings.orgPhone) doc.text(`Phone: ${settings.orgPhone}`, leftMargin, y + 22);
+  if (settings.orgEmail) doc.text(`Email: ${settings.orgEmail}`, leftMargin, y + 32);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  const subHeaderText = 'REQUISITION FORM';
+  const subHeaderWidth = doc.getTextWidth(subHeaderText);
+  doc.text(subHeaderText, (pageWidth - subHeaderWidth) / 2, y + 18);
+
+  y += 60;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(leftMargin, y, pageWidth - rightMargin, y);
+  y += 18;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Requester Information', leftMargin, y);
+  y += 14;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Name: ________________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Username: _____________________________________________', leftMargin, y);
+  y += 22;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Request Details', leftMargin, y);
+  y += 18;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Title: _________________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Purpose: _______________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Intended For (Approver): ________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Fund/Category: __________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Needed By: ____________________    Purchase Type: ________', leftMargin, y);
+  y += 24;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Items Ordered', leftMargin, y);
+  y += 18;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  const itemNoWidth = 30;
+  const descWidth = contentWidth * 0.45;
+  const qtyWidth = 50;
+  const unitPriceWidth = 80;
+  const amountWidth = 80;
+
+  doc.text('#', leftMargin, y);
+  doc.text('Description', leftMargin + itemNoWidth, y);
+  doc.text('Qty', leftMargin + itemNoWidth + descWidth, y);
+  doc.text('Unit Price', leftMargin + itemNoWidth + descWidth + qtyWidth, y);
+  doc.text('Amount', leftMargin + itemNoWidth + descWidth + qtyWidth + unitPriceWidth, y);
+  y += 2;
+  doc.setDrawColor(150, 150, 150);
+  doc.line(leftMargin, y, pageWidth - rightMargin, y);
+  y += 14;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  for (let i = 0; i < 8; i += 1) {
+    doc.text(String(i + 1), leftMargin, y);
+    doc.text('____________________________________________', leftMargin + itemNoWidth, y);
+    doc.text('____', leftMargin + itemNoWidth + descWidth, y);
+    doc.text('__________', leftMargin + itemNoWidth + descWidth + qtyWidth, y);
+    doc.text('__________', leftMargin + itemNoWidth + descWidth + qtyWidth + unitPriceWidth, y);
+    y += 22;
+  }
+
+  y += 6;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(leftMargin, y, pageWidth - rightMargin, y);
+  y += 16;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Grand Total:', leftMargin + itemNoWidth + descWidth + qtyWidth, y);
+  doc.text('__________________', leftMargin + itemNoWidth + descWidth + qtyWidth + unitPriceWidth, y);
+  y += 22;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Approval', leftMargin, y);
+  y += 18;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Approved By: ___________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Signature: ______________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Date: ____________________', leftMargin, y);
+
+  return doc;
+};
+
+export const downloadRequisitionTemplatePdf = ({ settings }: RequisitionTemplateData) => {
+  const doc = generateRequisitionTemplatePdf({ settings });
+  doc.save('REQUISITION_FORM_TEMPLATE.pdf');
 };

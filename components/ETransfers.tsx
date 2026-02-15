@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import type { ETransfer, Settings } from '../types';
 import { toCsv } from '../utils';
-import { loadETransfersFromSupabase, markETransferReconciled } from '../services/supabase';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient, loadETransfersFromSupabase, markETransferReconciled } from '../services/supabase';
 
 interface ETransfersProps {
   settings: Settings;
@@ -16,9 +15,7 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
   const [error, setError] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const subscriptionRef = useRef<any>(null);
-  const seenIdsRef = useRef<Set<string>>(new Set());
-
-  const canLoad = !!settings.supabaseUrl && !!settings.supabaseKey;
+  const canLoad = !!settings.supabaseUrl && !!settings.supabaseKey && /^https?:\/\//i.test(settings.supabaseUrl);
 
   const fetchItems = async () => {
     if (!canLoad) return;
@@ -52,8 +49,8 @@ const ETransfers: React.FC<ETransfersProps> = ({ settings }) => {
   // Subscribe to real-time e-transfer updates
   useEffect(() => {
     if (!canLoad || !notificationsEnabled) return;
-
-    const supabase = createClient(settings.supabaseUrl, settings.supabaseKey);
+    const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseKey);
+    if (!supabase) return;
 
     const subscription = supabase
       .channel('etransfers-realtime')

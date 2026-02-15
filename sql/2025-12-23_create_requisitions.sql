@@ -12,10 +12,12 @@ create table if not exists requisitions (
   needed_by date,
   total_amount numeric(12,2) default 0 not null,
   status text not null default 'draft', -- draft|submitted|approved|rejected|funded|paid|closed
+  source_type text,
   required_approver_role text,
   required_approver_username text,
   completion_attachment_url text,
   completion_attachment_at timestamptz,
+  uploaded_pdf jsonb,
   created_at timestamptz default now(),
   updated_by text,
   last_updated timestamptz

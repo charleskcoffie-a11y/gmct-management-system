@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { Requisition, RequisitionItem, RequisitionStatus, RequisitionApproverRole, Settings, User } from '../types';
-import { loadRequisitions, saveRequisition, saveRequisitionAttachment, submitRequisition, uploadRequisitionAttachment } from '../services/supabase';
+import type { Requisition, RequisitionItem, RequisitionStatus, RequisitionApproverRole, Settings, User, RequisitionUploadedPdf } from '../types';
+import { deleteRequisition, loadRequisitions, saveRequisition, saveRequisitionAttachment, submitRequisition, uploadRequisitionAttachment } from '../services/supabase';
 import { formatCurrency } from '../utils';
-import { downloadRequisitionPdf } from '../utils/requisitionPdf';
+import { downloadRequisitionPdf, downloadRequisitionTemplatePdf } from '../utils/requisitionPdf';
 
 type Props = {
   settings: Settings;
@@ -10,6 +10,17 @@ type Props = {
 };
 
 const getTodayISO = () => new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+const formatBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes)) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(size < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
+};
 
 const emptyReq = (username: string): Requisition => ({
   id: crypto.randomUUID(),
@@ -24,8 +35,26 @@ const emptyReq = (username: string): Requisition => ({
   neededBy: undefined,
   totalAmount: 0,
   status: 'draft',
+  sourceType: 'form',
   items: []
 });
+
+const emptyPdfReq = (username: string): Requisition => ({
+  ...emptyReq(username),
+  sourceType: 'pdf-upload',
+  items: []
+});
+
+const canEditRequisition = (req: Requisition, user: User) => {
+  if (req.status === 'draft') return true;
+  return req.status === 'submitted' && req.requesterUsername === user.username;
+};
+
+const canDeleteRequisition = (req: Requisition, user: User) => {
+  const requester = (req.requesterUsername || req.requesterName || '').toLowerCase();
+  const current = (user.username || '').toLowerCase();
+  return requester === current && ['draft', 'submitted', 'rejected'].includes(req.status);
+};
 
 export default function Requisitions({ settings, currentUser }: Props) {
   const [list, setList] = useState<Requisition[]>([]);
@@ -39,8 +68,10 @@ export default function Requisitions({ settings, currentUser }: Props) {
   const signatureCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [pdfUploading, setPdfUploading] = useState(false);
 
   const refresh = async () => {
     if (!settings.supabaseUrl || !settings.supabaseKey) return;
@@ -54,6 +85,20 @@ export default function Requisitions({ settings, currentUser }: Props) {
   };
 
   useEffect(() => { refresh(); }, [settings.supabaseUrl, settings.supabaseKey]);
+
+  useEffect(() => {
+    if (!list.length) return;
+    let targetId = '';
+    try {
+      targetId = window.localStorage.getItem('gmct-open-requisition-id') || '';
+    } catch {}
+    if (!targetId) return;
+    const match = list.find(r => r.id === targetId);
+    if (match) {
+      setEditing(match);
+      try { window.localStorage.removeItem('gmct-open-requisition-id'); } catch {}
+    }
+  }, [list]);
 
   const generateRequisitionNumber = (): string => {
     const year = new Date().getFullYear();
@@ -190,6 +235,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
 
   const addItem = () => {
     if (!editing) return;
+    if (!canEditRequisition(editing, currentUser)) return;
     const item: RequisitionItem = { id: crypto.randomUUID(), requisitionId: editing.id, description: '', qty: 1, unitPrice: 0 };
     const items = [...(editing.items||[]), item];
     const total = items.reduce((s,i)=> s + (i.qty||0)*(i.unitPrice||0), 0);
@@ -199,6 +245,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
 
   const updateItem = (id: string, patch: Partial<RequisitionItem>) => {
     if (!editing) return;
+    if (!canEditRequisition(editing, currentUser)) return;
     // Prevent zero amount entries
     const updatedItem = { ...(editing.items||[]).find(i => i.id === id), ...patch };
     const itemTotal = (Number(updatedItem.qty)||0) * (Number(updatedItem.unitPrice)||0);
@@ -213,6 +260,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
 
   const removeItem = (id: string) => {
     if (!editing) return;
+    if (!canEditRequisition(editing, currentUser)) return;
     const items = (editing.items||[]).filter(i => i.id !== id);
     const total = items.reduce((s,i)=> s + (i.qty||0)*(i.unitPrice||0), 0);
     setEditing({ ...editing, items, totalAmount: total });
@@ -252,8 +300,16 @@ export default function Requisitions({ settings, currentUser }: Props) {
 
   const onSave = async () => {
     if (!editing) return;
+    if (!canEditRequisition(editing, currentUser)) {
+      alert('Only the requester can edit a submitted requisition.');
+      return;
+    }
     if (!editing.requesterName || !editing.requesterName.trim()) {
       alert('Requester name is required.');
+      return;
+    }
+    if (editing.sourceType === 'pdf-upload' && !editing.uploadedPdf) {
+      alert('Please upload the filled requisition PDF.');
       return;
     }
     if ((editing.totalAmount || 0) === 0) {
@@ -264,7 +320,13 @@ export default function Requisitions({ settings, currentUser }: Props) {
       alert('Cloud connection required. Configure Supabase in Settings.');
       return;
     }
-    await saveRequisition(settings.supabaseUrl, settings.supabaseKey, editing);
+    const updated: Requisition = {
+      ...editing,
+      updatedBy: currentUser.username,
+      lastUpdated: new Date().toISOString()
+    };
+    await saveRequisition(settings.supabaseUrl, settings.supabaseKey, updated);
+    setList(prev => prev.map(r => (r.id === updated.id ? { ...r, ...updated } : r)));
     setEditing(null);
     await refresh();
   };
@@ -273,6 +335,10 @@ export default function Requisitions({ settings, currentUser }: Props) {
     if (!settings.supabaseUrl || !settings.supabaseKey) return;
     if (!req.requesterName || !req.requesterName.trim()) {
       alert('Requester name is required before submission.');
+      return;
+    }
+    if (req.sourceType === 'pdf-upload' && !req.uploadedPdf) {
+      alert('Please upload the filled requisition PDF before submission.');
       return;
     }
     if ((req.totalAmount || 0) === 0) {
@@ -293,8 +359,26 @@ export default function Requisitions({ settings, currentUser }: Props) {
     const isFinanceTeam = (settings.requisitionFinanceApprovers || []).includes(req.intendedFor);
     const approverRole: RequisitionApproverRole = isFinanceTeam ? 'finance-team' : 'pastor';
     const requisitionNumber = generateRequisitionNumber();
+    await saveRequisition(settings.supabaseUrl, settings.supabaseKey, req);
     await submitRequisition(settings.supabaseUrl, settings.supabaseKey, req.id, approverRole, req.intendedFor, requisitionNumber);
     setEditing(null);
+    await refresh();
+  };
+
+  const onDeleteRequisition = async (req: Requisition) => {
+    if (!canDeleteRequisition(req, currentUser)) {
+      alert('Only the requester can delete a submitted requisition.');
+      return;
+    }
+    if (!settings.supabaseUrl || !settings.supabaseKey) {
+      alert('Cloud connection required. Configure Supabase in Settings.');
+      return;
+    }
+    const confirmed = window.confirm('Delete this requisition permanently? This cannot be undone.');
+    if (!confirmed) return;
+    await deleteRequisition(settings.supabaseUrl, settings.supabaseKey, req.id);
+    setEditing(null);
+    setList(prev => prev.filter(r => r.id !== req.id));
     await refresh();
   };
 
@@ -315,6 +399,15 @@ export default function Requisitions({ settings, currentUser }: Props) {
   const initials = (name: string) => name.trim().split(' ').filter(Boolean).map(p=>p[0]).join('').slice(0,2).toUpperCase();
 
   const canAttachCompletion = (status: RequisitionStatus) => ['approved', 'funded', 'paid', 'closed'].includes(status);
+
+  const canCurrentUserApprove = (req: Requisition) => {
+    if (req.status !== 'submitted') return false;
+    if (req.requesterUsername === currentUser.username) return false;
+    if (req.requiredApproverUsername && req.requiredApproverUsername !== currentUser.username) return false;
+    if (currentUser.role === 'admin') return true;
+    if (!req.requiredApproverRole) return true;
+    return req.requiredApproverRole === currentUser.role;
+  };
 
   const handleAttachmentChange = async (file?: File) => {
     if (!file || !editing) return;
@@ -349,6 +442,120 @@ export default function Requisitions({ settings, currentUser }: Props) {
     await refresh();
   };
 
+  const canEditReceipt = (status: RequisitionStatus) => status !== 'closed';
+
+  const readUploadedPdf = (file: File, source: 'file' | 'camera' | 'scan') => new Promise<RequisitionUploadedPdf>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!dataUrl) {
+        reject(new Error('Unable to read the PDF file.'));
+        return;
+      }
+      const safeName = file.name && file.name.trim()
+        ? file.name
+        : `requisition-${Date.now()}.pdf`;
+      resolve({
+        fileName: safeName,
+        contentType: file.type || 'application/pdf',
+        size: file.size,
+        dataUrl,
+        source,
+        createdAt: new Date().toISOString()
+      });
+    };
+    reader.onerror = () => reject(new Error('Failed to load the PDF file.'));
+    reader.readAsDataURL(file);
+  });
+
+  const handleUploadedPdfChange = async (files: FileList | File | null | undefined, source: 'file' | 'camera' | 'scan' = 'file') => {
+    if (!files || !editing) return;
+    if (!canEditRequisition(editing, currentUser)) return;
+    const incoming = Array.isArray(files)
+      ? files
+      : files instanceof File
+        ? [files]
+        : Array.from(files);
+    const file = incoming[0];
+    if (!file) return;
+    setPdfUploading(true);
+    try {
+      const uploaded = await readUploadedPdf(file, source);
+      setEditing({
+        ...editing,
+        uploadedPdf: uploaded,
+        sourceType: 'pdf-upload'
+      });
+    } catch (e: any) {
+      alert(e?.message || 'Failed to load the PDF file.');
+    } finally {
+      setPdfUploading(false);
+    }
+  };
+
+  const removeUploadedPdf = () => {
+    if (!editing) return;
+    if (!canEditRequisition(editing, currentUser)) return;
+    setEditing({
+      ...editing,
+      uploadedPdf: undefined
+    });
+  };
+
+  const readReceiptFile = (file: File, source: 'file' | 'camera' | 'scan') => new Promise<RequisitionReceiptAttachment>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!dataUrl) {
+        reject(new Error('Unable to read the receipt file.'));
+        return;
+      }
+      const safeName = file.name && file.name.trim()
+        ? file.name
+        : `receipt-${Date.now()}.${(file.type.split('/')[1] || 'bin')}`;
+      resolve({
+        fileName: safeName,
+        contentType: file.type || 'application/octet-stream',
+        size: file.size,
+        dataUrl,
+        source,
+        createdAt: new Date().toISOString()
+      });
+    };
+    reader.onerror = () => reject(new Error('Failed to load the receipt file.'));
+    reader.readAsDataURL(file);
+  });
+
+  const handleReceiptChange = async (files: FileList | File | null | undefined, source: 'file' | 'camera' | 'scan' = 'file') => {
+    if (!files || !editing) return;
+    const incoming = Array.isArray(files)
+      ? files
+      : files instanceof File
+        ? [files]
+        : Array.from(files);
+    if (incoming.length === 0) return;
+    setReceiptLoading(true);
+    try {
+      const attachments = await Promise.all(incoming.map(file => readReceiptFile(file, source)));
+      const existing = editing.receiptAttachments || [];
+      setEditing({
+        ...editing,
+        receiptAttachments: [...existing, ...attachments]
+      });
+    } catch (e: any) {
+      alert(e?.message || 'Failed to load the receipt file.');
+    } finally {
+      setReceiptLoading(false);
+    }
+  };
+
+  const removeReceiptAt = (index: number) => {
+    if (!editing) return;
+    const next = [...(editing.receiptAttachments || [])];
+    next.splice(index, 1);
+    setEditing({ ...editing, receiptAttachments: next.length > 0 ? next : undefined });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Section */}
@@ -358,10 +565,20 @@ export default function Requisitions({ settings, currentUser }: Props) {
             <h2 className="text-4xl font-extrabold tracking-tight">📋 Requisitions</h2>
             <p className="text-white/80 mt-2 text-lg">Create, submit, and track purchase requests with ease</p>
           </div>
-          <button onClick={()=>setEditing(emptyReq(currentUser.username))}
-                  className="bg-white text-indigo-700 hover:bg-slate-100 text-lg font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:shadow-xl">
-            ➕ New Requisition
-          </button>
+          <div className="flex gap-3 flex-wrap">
+            <button onClick={()=>setEditing(emptyReq(currentUser.username))}
+                    className="bg-white text-indigo-700 hover:bg-slate-100 text-lg font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:shadow-xl">
+              ➕ New Requisition
+            </button>
+            <button onClick={()=>setEditing(emptyPdfReq(currentUser.username))}
+                    className="bg-white/90 text-indigo-700 hover:bg-white text-lg font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:shadow-xl">
+              📄 Upload Filled PDF
+            </button>
+            <button onClick={()=>downloadRequisitionTemplatePdf({ settings })}
+                    className="bg-white/90 text-indigo-700 hover:bg-white text-lg font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:shadow-xl">
+              🖨️ Blank Form
+            </button>
+          </div>
         </div>
       </div>
 
@@ -626,13 +843,97 @@ export default function Requisitions({ settings, currentUser }: Props) {
                   <label className="block text-sm font-bold text-slate-700 mb-2">Purpose</label>
                   <textarea className="w-full text-lg border-2 border-slate-300 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white placeholder-slate-400 resize-none" rows={4} placeholder="Detailed explanation of the purchase..." value={editing.purpose||''} onChange={e=>setEditing({...editing, purpose: e.target.value})} />
                 </div>
+
+                {editing.sourceType === 'pdf-upload' && (
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-300 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-2xl font-bold text-slate-900">Filled Requisition PDF</h4>
+                      <span className="text-sm text-slate-600 bg-white px-3 py-1 rounded-lg font-semibold">Required</span>
+                    </div>
+
+                    {editing.uploadedPdf ? (
+                      <div className="space-y-3">
+                        <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4 text-emerald-700">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="text-lg font-bold">{editing.uploadedPdf.fileName}</div>
+                              <div className="text-sm text-emerald-700/80">{editing.uploadedPdf.contentType} · {formatBytes(editing.uploadedPdf.size)}</div>
+                            </div>
+                            <div className="flex gap-2">
+                              <a
+                                className="px-3 py-2 bg-white text-emerald-700 rounded-lg border border-emerald-300 font-semibold hover:bg-emerald-100 transition"
+                                href={editing.uploadedPdf.dataUrl}
+                                download={editing.uploadedPdf.fileName}
+                              >
+                                Download
+                              </a>
+                              {canEditRequisition(editing, currentUser) && (
+                                <button
+                                  onClick={removeUploadedPdf}
+                                  className="px-3 py-2 bg-rose-100 text-rose-700 rounded-lg border border-rose-300 font-semibold hover:bg-rose-200 transition"
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-3">
+                          <object
+                            data={editing.uploadedPdf.dataUrl}
+                            type="application/pdf"
+                            className="w-full"
+                            style={{ height: '420px' }}
+                          >
+                            <p className="text-sm text-slate-600">PDF preview not available. Use Download.</p>
+                          </object>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-lg text-slate-600">No PDF uploaded yet.</div>
+                    )}
+
+                    {canEditRequisition(editing, currentUser) && (
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <label className="inline-flex items-center gap-3 text-lg font-bold text-indigo-700 cursor-pointer hover:text-indigo-800">
+                          <input
+                            type="file"
+                            accept="application/pdf"
+                            onChange={(e) => handleUploadedPdfChange(e.target.files, 'file')}
+                            disabled={pdfUploading}
+                            className="hidden"
+                          />
+                          <span className="bg-indigo-100 hover:bg-indigo-200 px-4 py-2 rounded-lg transition">📄 {pdfUploading ? 'Loading...' : 'Upload PDF'}</span>
+                        </label>
+                        <label className="inline-flex items-center gap-3 text-lg font-bold text-indigo-700 cursor-pointer hover:text-indigo-800">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => handleUploadedPdfChange(e.target.files, 'camera')}
+                            disabled={pdfUploading}
+                            className="hidden"
+                          />
+                          <span className="bg-indigo-100 hover:bg-indigo-200 px-4 py-2 rounded-lg transition">📸 Scan with camera</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Items Section */}
+              {editing.sourceType !== 'pdf-upload' ? (
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-300 p-6 mb-8">
                 <div className="flex items-center justify-between mb-5">
                   <h4 className="text-2xl font-bold text-slate-900">Items ({(editing.items||[]).length})</h4>
-                  <button onClick={addItem} className="px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:shadow-lg transition text-lg">+ Add Item</button>
+                  <button
+                    onClick={addItem}
+                    disabled={!canEditRequisition(editing, currentUser)}
+                    className={`px-5 py-3 rounded-xl font-semibold transition text-lg ${canEditRequisition(editing, currentUser) ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg' : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
+                  >
+                    + Add Item
+                  </button>
                 </div>
 
                 {/* Added Items - Collapsible List */}
@@ -667,7 +968,13 @@ export default function Requisitions({ settings, currentUser }: Props) {
                                     <input type="number" min={0} step="0.01" className="w-full text-lg border-2 border-slate-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white" value={it.unitPrice} onChange={e=>updateItem(it.id,{unitPrice: parseFloat(e.target.value) || 0})} />
                                   </div>
                                   <div className="sm:col-span-2">
-                                    <button onClick={()=>setEditingItemId(null)} className="w-full bg-green-100 text-green-700 hover:bg-green-200 font-bold rounded-lg py-3 transition">✓ Done</button>
+                                    <button
+                                      onClick={()=>setEditingItemId(null)}
+                                      disabled={!canEditRequisition(editing, currentUser)}
+                                      className={`w-full font-bold rounded-lg py-3 transition ${canEditRequisition(editing, currentUser) ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                                    >
+                                      ✓ Done
+                                    </button>
                                   </div>
                                 </div>
                                 <div className="mt-4 text-right bg-indigo-50 rounded-lg px-4 py-3 border border-indigo-200">
@@ -689,8 +996,20 @@ export default function Requisitions({ settings, currentUser }: Props) {
                                   </div>
                                 </div>
                                 <div className="ml-4 flex gap-2">
-                                  <button onClick={()=>setEditingItemId(it.id)} className="px-4 py-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-bold rounded-lg transition">✎ Edit</button>
-                                  <button onClick={()=>removeItem(it.id)} className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 font-bold rounded-lg transition">✕ Remove</button>
+                                  <button
+                                    onClick={()=>setEditingItemId(it.id)}
+                                    disabled={!canEditRequisition(editing, currentUser)}
+                                    className={`px-4 py-2 font-bold rounded-lg transition ${canEditRequisition(editing, currentUser) ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                                  >
+                                    ✎ Edit
+                                  </button>
+                                  <button
+                                    onClick={()=>removeItem(it.id)}
+                                    disabled={!canEditRequisition(editing, currentUser)}
+                                    className={`px-4 py-2 font-bold rounded-lg transition ${canEditRequisition(editing, currentUser) ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                                  >
+                                    ✕ Remove
+                                  </button>
                                 </div>
                               </div>
                             )}
@@ -715,6 +1034,11 @@ export default function Requisitions({ settings, currentUser }: Props) {
                   </div>
                 </div>
               </div>
+              ) : (
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-300 p-6 mb-8 text-slate-600">
+                  Line items are replaced by the uploaded PDF.
+                </div>
+              )}
 
               {/* Signature Section */}
               {editing.status === 'submitted' && (
@@ -724,6 +1048,12 @@ export default function Requisitions({ settings, currentUser }: Props) {
                     <h4 className="text-2xl font-bold text-slate-900">Approval Signature Required</h4>
                   </div>
                   <p className="text-slate-600 mb-4">Please sign below to approve this requisition. You can also enter your name as an alternative.</p>
+
+                  {!canCurrentUserApprove(editing) && (
+                    <div className="mb-4 p-3 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-800 text-sm">
+                      You are not assigned to approve this requisition.
+                    </div>
+                  )}
                   
                   {/* Signature Pad */}
                   <div className="mb-4">
@@ -733,9 +1063,10 @@ export default function Requisitions({ settings, currentUser }: Props) {
                         ref={signatureCanvasRef}
                         width={800}
                         height={200}
-                        className="w-full cursor-crosshair"
+                        className={`w-full ${canCurrentUserApprove(editing) ? 'cursor-crosshair' : 'cursor-not-allowed opacity-70'}`}
                         style={{ maxHeight: '200px' }}
                         onMouseDown={(e) => {
+                          if (!canCurrentUserApprove(editing)) return;
                           const canvas = signatureCanvasRef.current;
                           if (!canvas) return;
                           const rect = canvas.getBoundingClientRect();
@@ -748,6 +1079,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                           ctx.moveTo(x, y);
                         }}
                         onMouseMove={(e) => {
+                          if (!canCurrentUserApprove(editing)) return;
                           if (!isDrawing) return;
                           const canvas = signatureCanvasRef.current;
                           if (!canvas) return;
@@ -767,6 +1099,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                         onMouseUp={() => setIsDrawing(false)}
                         onMouseLeave={() => setIsDrawing(false)}
                         onTouchStart={(e) => {
+                          if (!canCurrentUserApprove(editing)) return;
                           e.preventDefault();
                           const canvas = signatureCanvasRef.current;
                           if (!canvas) return;
@@ -781,6 +1114,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                           ctx.moveTo(x, y);
                         }}
                         onTouchMove={(e) => {
+                          if (!canCurrentUserApprove(editing)) return;
                           e.preventDefault();
                           if (!isDrawing) return;
                           const canvas = signatureCanvasRef.current;
@@ -804,6 +1138,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                     </div>
                     <button
                       onClick={() => {
+                        if (!canCurrentUserApprove(editing)) return;
                         const canvas = signatureCanvasRef.current;
                         if (!canvas) return;
                         const ctx = canvas.getContext('2d');
@@ -811,7 +1146,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         setHasSignature(false);
                       }}
-                      className="mt-2 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition font-semibold"
+                      className={`mt-2 px-4 py-2 rounded-lg transition font-semibold ${canCurrentUserApprove(editing) ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                     >
                       Clear Signature
                     </button>
@@ -826,6 +1161,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                       className="w-full text-lg border-2 border-amber-300 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white placeholder-slate-400"
                       value={editing.signatureName || ''}
                       onChange={(e) => setEditing({...editing, signatureName: e.target.value})}
+                      disabled={!canCurrentUserApprove(editing)}
                     />
                   </div>
                 </div>
@@ -862,15 +1198,124 @@ export default function Requisitions({ settings, currentUser }: Props) {
                   <div className="text-lg text-slate-600">Complete the approval before attaching a photo.</div>
                 )}
               </div>
+
+              {/* Receipt Attachment */}
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-300 p-6 mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-2xl font-bold text-slate-900">Receipt Attachment</h4>
+                  <span className="text-sm text-slate-600 bg-white px-3 py-1 rounded-lg font-semibold">Optional</span>
+                </div>
+
+                {(editing.receiptAttachments || []).length > 0 ? (
+                  <div className="space-y-4">
+                    {(editing.receiptAttachments || []).map((attachment, index) => (
+                      <div key={`${attachment.fileName}-${index}`} className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4 text-emerald-700">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="text-lg font-bold">{attachment.fileName}</div>
+                            <div className="text-sm text-emerald-700/80">{attachment.contentType} · {formatBytes(attachment.size)}</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              className="px-3 py-2 bg-white text-emerald-700 rounded-lg border border-emerald-300 font-semibold hover:bg-emerald-100 transition"
+                              href={attachment.dataUrl}
+                              download={attachment.fileName}
+                            >
+                              Download
+                            </a>
+                            {canEditReceipt(editing.status) && canEditRequisition(editing, currentUser) && (
+                              <button
+                                onClick={() => removeReceiptAt(index)}
+                                className="px-3 py-2 bg-rose-100 text-rose-700 rounded-lg border border-rose-300 font-semibold hover:bg-rose-200 transition"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {attachment.contentType.startsWith('image/') && (
+                          <div className="rounded-lg border border-slate-200 bg-white p-3 mt-3">
+                            <img
+                              src={attachment.dataUrl}
+                              alt="Receipt preview"
+                              className="max-h-64 w-full object-contain"
+                            />
+                          </div>
+                        )}
+                        {attachment.contentType === 'application/pdf' && (
+                          <div className="rounded-lg border border-slate-200 bg-white p-3 mt-3">
+                            <object
+                              data={attachment.dataUrl}
+                              type="application/pdf"
+                              className="w-full"
+                              style={{ height: '420px' }}
+                            >
+                              <p className="text-sm text-slate-600">
+                                PDF preview not available. Use the Download button to open the file.
+                              </p>
+                            </object>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-lg text-slate-600">No receipt uploaded yet.</div>
+                )}
+
+                {canEditReceipt(editing.status) && canEditRequisition(editing, currentUser) && (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <label className="inline-flex items-center gap-3 text-lg font-bold text-indigo-700 cursor-pointer hover:text-indigo-800">
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        multiple
+                        onChange={(e) => handleReceiptChange(e.target.files, 'file')}
+                        disabled={receiptLoading}
+                        className="hidden"
+                      />
+                      <span className="bg-indigo-100 hover:bg-indigo-200 px-4 py-2 rounded-lg transition">📎 {receiptLoading ? 'Loading...' : 'Upload PDF or image'}</span>
+                    </label>
+                    <label className="inline-flex items-center gap-3 text-lg font-bold text-indigo-700 cursor-pointer hover:text-indigo-800">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        multiple
+                        onChange={(e) => handleReceiptChange(e.target.files, 'camera')}
+                        disabled={receiptLoading}
+                        className="hidden"
+                      />
+                      <span className="bg-indigo-100 hover:bg-indigo-200 px-4 py-2 rounded-lg transition">📸 Take photo or scan</span>
+                    </label>
+                    <div className="text-sm text-slate-500 w-full">
+                      Tip: On mobile, the camera may offer a scan-to-PDF option.
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Action Buttons - Fixed */}
             <div className="flex justify-end gap-3 p-6 bg-slate-50 border-t border-slate-200 flex-shrink-0 flex-wrap">
               <button onClick={()=>setEditing(null)} className="px-6 py-3 rounded-xl border-2 border-slate-300 text-slate-700 font-bold hover:bg-slate-100 transition text-lg">Cancel</button>
-              {editing.status === 'draft' && (
+              <button
+                onClick={()=>editing && onDeleteRequisition(editing)}
+                disabled={!editing || !canDeleteRequisition(editing, currentUser)}
+                className={`px-6 py-3 rounded-xl font-bold transition text-lg ${!editing || !canDeleteRequisition(editing, currentUser) ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700'}`}
+              >
+                🗑 Delete
+              </button>
+              {editing.status === 'draft' && editing.sourceType !== 'pdf-upload' && (
                 <button onClick={()=>downloadRequisitionPdf({ requisition: editing, settings })} className="px-6 py-3 rounded-xl border-2 border-slate-400 text-slate-700 font-bold hover:bg-slate-100 transition text-lg">📋 PDF</button>
               )}
-              <button onClick={onSave} className="px-6 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition text-lg">💾 Save</button>
+              <button
+                onClick={onSave}
+                disabled={!editing || !canEditRequisition(editing, currentUser)}
+                className={`px-6 py-3 rounded-xl font-bold transition text-lg ${!editing || !canEditRequisition(editing, currentUser) ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+              >
+                💾 Save
+              </button>
               {editing.status==='draft' && <button onClick={()=>onSubmit(editing)} className="px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition text-lg">✓ Submit</button>}
               {canAttachCompletion(editing.status) && editing.completionAttachmentUrl && editing.status !== 'closed' && (
                 <button onClick={markComplete} className="px-6 py-3 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-900 transition text-lg">🏁 Mark Complete</button>

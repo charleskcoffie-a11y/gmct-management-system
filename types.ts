@@ -188,6 +188,7 @@ export type RequisitionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' 
 export type ApprovalDecision = 'approved' | 'rejected';
 export type RequisitionPurchaseType = 'routine' | 'adhoc';
 export type RequisitionApproverRole = 'pastor' | 'finance-team' | 'admin';
+export type RequisitionSourceType = 'form' | 'pdf-upload';
 
 export interface RequisitionItem {
     id: string;
@@ -196,6 +197,24 @@ export interface RequisitionItem {
     qty: number;
     unitPrice: number;
     accountCode?: string;
+}
+
+export interface RequisitionReceiptAttachment {
+    fileName: string;
+    contentType: string;
+    size: number;
+    dataUrl: string;
+    source?: 'file' | 'camera' | 'scan';
+    createdAt?: string;
+}
+
+export interface RequisitionUploadedPdf {
+    fileName: string;
+    contentType: string;
+    size: number;
+    dataUrl: string;
+    source?: 'file' | 'camera' | 'scan';
+    createdAt?: string;
 }
 
 export interface Requisition {
@@ -212,10 +231,13 @@ export interface Requisition {
     neededBy?: string; // ISO date
     totalAmount: number;
     status: RequisitionStatus;
+    sourceType?: RequisitionSourceType;
     requiredApproverRole?: RequisitionApproverRole;
     requiredApproverUsername?: string;
     completionAttachmentUrl?: string;
     completionAttachmentAt?: string;
+    uploadedPdf?: RequisitionUploadedPdf;
+    receiptAttachments?: RequisitionReceiptAttachment[];
     createdAt?: string;
     updatedBy?: string;
     lastUpdated?: string;

@@ -9,6 +9,7 @@ let currentKey = '';
 
 export const getSupabaseClient = (url: string, key: string): SupabaseClient | null => {
     if (!url || !key) return null;
+    if (!/^https?:\/\//i.test(url)) return null;
     
     // Return existing instance if credentials haven't changed
     if (supabaseInstance && url === currentUrl && key === currentKey) {
@@ -34,7 +35,7 @@ export const getSupabaseClient = (url: string, key: string): SupabaseClient | nu
 // --- Connection Test ---
 export const testSupabaseConnection = async (url: string, key: string) => {
     try {
-        if (!url || !key) {
+        if (!url || !key || !/^https?:\/\//i.test(url)) {
              return { success: false, message: "URL and Key are required." };
         }
         
@@ -430,13 +431,33 @@ const mapRequisitionToDB = (r: Requisition) => ({
     needed_by: r.neededBy || null,
     total_amount: r.totalAmount,
     status: r.status,
+    source_type: r.sourceType || null,
     required_approver_role: r.requiredApproverRole || null,
     required_approver_username: r.requiredApproverUsername || null,
     completion_attachment_url: r.completionAttachmentUrl || null,
     completion_attachment_at: r.completionAttachmentAt || null,
+    uploaded_pdf: r.uploadedPdf || null,
+    receipt_attachment: r.receiptAttachments || null,
     updated_by: r.updatedBy || null,
     last_updated: r.lastUpdated || null,
 });
+
+const normalizeReceiptAttachment = (raw: any) => {
+    if (!raw) return undefined;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && typeof parsed === 'object') return [parsed];
+            return undefined;
+        } catch {
+            return undefined;
+        }
+    }
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') return [raw];
+    return undefined;
+};
 
 const mapRequisitionFromDB = (r: any): Requisition => ({
     id: r.id,
@@ -452,10 +473,13 @@ const mapRequisitionFromDB = (r: any): Requisition => ({
     neededBy: r.needed_by || undefined,
     totalAmount: parseFloat(r.total_amount || 0),
     status: r.status,
+    sourceType: r.source_type || undefined,
     requiredApproverRole: r.required_approver_role || undefined,
     requiredApproverUsername: r.required_approver_username || undefined,
     completionAttachmentUrl: r.completion_attachment_url || undefined,
     completionAttachmentAt: r.completion_attachment_at || undefined,
+    uploadedPdf: r.uploaded_pdf || undefined,
+    receiptAttachments: normalizeReceiptAttachment(r.receipt_attachment),
     createdAt: r.created_at || undefined,
     updatedBy: r.updated_by || undefined,
     lastUpdated: r.last_updated || undefined,
@@ -536,11 +560,25 @@ export const saveRequisition = async (url: string, key: string, req: Requisition
     if (!supabase) throw new Error('Invalid Supabase configuration');
     const { error } = await supabase.from('requisitions').upsert([mapRequisitionToDB(req)]);
     if (error) throw new Error(error.message);
-    if (req.items && req.items.length > 0) {
-        // Upsert items
-        const { error: itemErr } = await supabase.from('requisition_items').upsert(req.items.map(mapReqItemToDB));
+    const items = req.items || [];
+
+    const { error: deleteErr } = await supabase
+        .from('requisition_items')
+        .delete()
+        .eq('requisition_id', req.id);
+    if (deleteErr) throw new Error(deleteErr.message);
+
+    if (items.length > 0) {
+        const { error: itemErr } = await supabase.from('requisition_items').upsert(items.map(mapReqItemToDB));
         if (itemErr) throw new Error(itemErr.message);
     }
+};
+
+export const deleteRequisition = async (url: string, key: string, id: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase.from('requisitions').delete().eq('id', id);
+    if (error) throw new Error(error.message);
 };
 
 export const submitRequisition = async (url: string, key: string, id: string, requiredApproverRole?: string, requiredApproverUsername?: string, requisitionNumber?: string) => {
