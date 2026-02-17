@@ -225,6 +225,8 @@ export interface Requisition {
     dateCreated?: string; // ISO date YYYY-MM-DD when requisition was created
     title: string;
     purpose?: string;
+    payableTo?: string;
+    organizationCommittee?: string;
     intendedFor?: string;
     purchaseType?: RequisitionPurchaseType;
     fund?: string;

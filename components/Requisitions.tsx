@@ -29,6 +29,8 @@ const emptyReq = (username: string): Requisition => ({
   dateCreated: getTodayISO(),
   title: '',
   purpose: '',
+  payableTo: '',
+  organizationCommittee: '',
   intendedFor: '',
   purchaseType: 'routine',
   fund: '',
@@ -840,6 +842,27 @@ export default function Requisitions({ settings, currentUser }: Props) {
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Title</label>
                   <input className="w-full text-lg border-2 border-slate-300 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white placeholder-slate-400" placeholder="Brief title of purchase" value={editing.title} onChange={e=>setEditing({...editing, title: e.target.value})} />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Payable To</label>
+                    <input
+                      className="w-full text-lg border-2 border-slate-300 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white placeholder-slate-400"
+                      placeholder="Name on the cheque"
+                      value={editing.payableTo || ''}
+                      onChange={e=>setEditing({...editing, payableTo: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Organization/Committee</label>
+                    <input
+                      className="w-full text-lg border-2 border-slate-300 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white placeholder-slate-400"
+                      placeholder="e.g., Missions Committee"
+                      value={editing.organizationCommittee || ''}
+                      onChange={e=>setEditing({...editing, organizationCommittee: e.target.value})}
+                    />
+                  </div>
                 </div>
 
                 <div>

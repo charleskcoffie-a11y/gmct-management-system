@@ -102,6 +102,10 @@ export const generateRequisitionPdf = ({ requisition, settings }: RequisitionPdf
   doc.setFontSize(9);
   doc.text(`Title: ${requisition.title || '-'}`, leftMargin, y);
   y += 12;
+  doc.text(`Payable To: ${requisition.payableTo || '-'}`, leftMargin, y);
+  y += 12;
+  doc.text(`Organization/Committee: ${requisition.organizationCommittee || '-'}`, leftMargin, y);
+  y += 12;
   doc.text(`Intended For: ${requisition.intendedFor || '-'}`, leftMargin, y);
   y += 12;
   doc.text(`Purchase Type: ${requisition.purchaseType || '-'}`, leftMargin, y);
@@ -281,6 +285,10 @@ export const generateRequisitionTemplatePdf = ({ settings }: RequisitionTemplate
   doc.text('Title: _________________________________________________', leftMargin, y);
   y += 16;
   doc.text('Purpose: _______________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Payable To: _____________________________________________', leftMargin, y);
+  y += 16;
+  doc.text('Organization/Committee: _________________________________', leftMargin, y);
   y += 16;
   doc.text('Intended For (Approver): ________________________________', leftMargin, y);
   y += 16;
