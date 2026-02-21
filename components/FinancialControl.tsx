@@ -159,9 +159,9 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                     </div>
                 </div>
 
-                <p className="text-sm text-slate-600 mb-6 font-medium">
-                     <strong>Locked</strong> months cannot be edited by Finance Team or Data Entry staff. Only Admin and Finance Chair can edit locked months.
-                </p>
+                 <p className="text-sm text-slate-600 mb-6 font-medium">
+                     <strong>Locked</strong> months cannot be edited by Data Entry staff. Admin, Finance Chair, and Finance Team can edit locked months.
+                 </p>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {Array.from({ length: 12 }, (_, i) => {
@@ -205,9 +205,9 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                     </div>
                 </div>
 
-                <p className="text-sm text-slate-600 mb-6 font-medium">
-                     <strong>Locked</strong> Sundays prevent Finance Team and Data Entry from editing entries for that week. Only Admin and Finance Chair can edit locked Sundays.
-                </p>
+                 <p className="text-sm text-slate-600 mb-6 font-medium">
+                     <strong>Locked</strong> Sundays prevent Data Entry from editing entries for that week. Admin, Finance Chair, and Finance Team can edit locked Sundays.
+                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     {getSundaysInMonth.map((sunday, idx) => {
@@ -243,8 +243,9 @@ const FinancialControl: React.FC<FinancialControlProps> = ({ monthLocks, setMont
                     About Month Locking
                 </h4>
                 <ul className="space-y-2 text-sm text-blue-900 font-medium">
-                    <li> <strong>Admin & Finance Chair</strong> can lock/unlock any month or Sunday and edit locked periods.</li>
-                    <li> <strong>Finance Team & Data Entry</strong> cannot edit entries in locked months or Sundays.</li>
+                    <li> <strong>Admin, Finance Chair & Finance Team</strong> can lock/unlock any month or Sunday.</li>
+                    <li> <strong>Admin, Finance Chair & Finance Team</strong> can edit entries in locked periods.</li>
+                    <li> <strong>Data Entry</strong> cannot edit entries in locked months or Sundays.</li>
                     <li> Use month locking for month-end reconciliation and Sunday locking for weekly closeouts.</li>
                     <li> Each lock records who locked it and when for audit purposes.</li>
                 </ul>

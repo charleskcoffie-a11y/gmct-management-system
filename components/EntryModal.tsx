@@ -168,7 +168,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
             return false;
         }
 
-        const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+        const canOverrideLock = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair' || currentUser?.role === 'finance-team';
         
         // Special exception for contractor "Okyere CPA" - Monday to Friday only
         if (currentUser?.username === 'Okyere CPA' && currentUser?.role === 'finance-team') {

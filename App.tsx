@@ -1119,7 +1119,7 @@ const App: React.FC = () => {
                                                                 const member = membersMap.get(entry.memberID);
                                                                 const displayClass = entry.classNumber || member?.classNumber || '-';
                                                                 const isLocked = isMonthLocked(entry.date, monthLocks);
-                                                                const canEdit = currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair') && canWrite;
+                                                                const canEdit = currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team') && canWrite;
                                                                 
                                                                 return (
                                                                     <div key={entry.id} className="rounded-xl border-2 p-5 transition-all bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md">
@@ -1152,6 +1152,11 @@ const App: React.FC = () => {
                                                                                         <span className="font-medium">Note:</span> {entry.note}
                                                                                     </div>
                                                                                 )}
+                                                                                <div className="mt-3 text-xs text-slate-700 bg-slate-100 p-2 rounded border border-slate-200">
+                                                                                    <span className="font-semibold">Last edited by:</span> {entry.updatedBy || entry.createdBy || 'Unknown'}
+                                                                                    <span className="mx-2 text-slate-400">•</span>
+                                                                                    <span className="font-semibold">Updated:</span> {entry.lastUpdated ? new Date(entry.lastUpdated).toLocaleString() : '—'}
+                                                                                </div>
                                                                             </div>
                                                                             <div className="text-right ml-4">
                                                                                 <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
@@ -1161,7 +1166,7 @@ const App: React.FC = () => {
                                                                                     if (currentUser?.role === 'data-entry') return null;
                                                                                     // Check window status for edits
                                                                                     const windowStatus = isEntryWindowOpen(settings.entryWindow);
-                                                                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                                                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair' || currentUser?.role === 'finance-team';
                                                                                     const disabled = !canWrite || (!windowStatus.isOpen && !canOverride);
                                                                                     const title = !canWrite ? 'Requires cloud connection' : (!windowStatus.isOpen && !canOverride ? `Editing is locked. ${windowStatus.reason}` : undefined);
                                                                                     return (
@@ -1237,6 +1242,11 @@ const App: React.FC = () => {
                                                                                     <div className="mt-3 text-xs text-red-700 bg-red-100 p-2 rounded">
                                                                                         <div className="font-semibold">Deleted by: {entry.deletedBy || 'Unknown'}</div>
                                                                                         <div className="italic">Reason: "{entry.deletedReason || 'No reason provided'}"</div>
+                                                                                    </div>
+                                                                                    <div className="mt-2 text-xs text-red-700 bg-red-100 p-2 rounded border border-red-200">
+                                                                                        <span className="font-semibold">Last edited by:</span> {entry.updatedBy || entry.createdBy || 'Unknown'}
+                                                                                        <span className="mx-2 text-red-300">•</span>
+                                                                                        <span className="font-semibold">Updated:</span> {entry.lastUpdated ? new Date(entry.lastUpdated).toLocaleString() : '—'}
                                                                                     </div>
                                                                                 </div>
                                                                                 <div className="text-right ml-4">
@@ -1430,7 +1440,7 @@ const App: React.FC = () => {
                 { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
-                { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
+                { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair', 'finance-team'] },
                 { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
