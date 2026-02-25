@@ -451,8 +451,8 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'finance-chair')) {
-                                                alert('Only admins or finance chairs can delete entries.');
+                                            if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'finance-chair' && currentUser.role !== 'finance-team')) {
+                                                alert('Only admins, finance chairs, or finance team can delete entries.');
                                                 return;
                                             }
                                             setShowDeleteModal(true);
@@ -490,8 +490,8 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                                                         settings.supabaseUrl,
                                                                         settings.supabaseKey,
                                                                         entry,
-                                                                        deleteReason,
-                                                                        currentUser?.username || 'Unknown'
+                                                                        currentUser?.username || 'Unknown',
+                                                                        deleteReason
                                                                     );
                                                                     
                                                                     // Mark entry as deleted in database
