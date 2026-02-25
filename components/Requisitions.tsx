@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { Requisition, RequisitionItem, RequisitionStatus, RequisitionApproverRole, Settings, User, RequisitionUploadedPdf } from '../types';
-import { deleteRequisition, loadRequisitions, saveRequisition, saveRequisitionAttachment, submitRequisition, uploadRequisitionAttachment } from '../services/supabase';
+import type { ApprovalDecision, Requisition, RequisitionApproval, RequisitionItem, RequisitionStatus, RequisitionApproverRole, Settings, User, RequisitionUploadedPdf } from '../types';
+import { decideRequisition, deleteRequisition, loadRequisitions, saveRequisition, saveRequisitionAttachment, submitRequisition, uploadRequisitionAttachment } from '../services/supabase';
 import { formatCurrency } from '../utils';
 import { downloadRequisitionPdf, downloadRequisitionTemplatePdf } from '../utils/requisitionPdf';
 
@@ -73,7 +73,12 @@ export default function Requisitions({ settings, currentUser }: Props) {
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [expandedClosedYears, setExpandedClosedYears] = useState<Set<string>>(new Set());
   const [pdfUploading, setPdfUploading] = useState(false);
+  const [closeWithoutAttachment, setCloseWithoutAttachment] = useState(false);
+  const [closeWithoutAttachmentReason, setCloseWithoutAttachmentReason] = useState('');
+  const [approvalSignatureName, setApprovalSignatureName] = useState('');
+  const [decisionSaving, setDecisionSaving] = useState(false);
 
   const refresh = async () => {
     if (!settings.supabaseUrl || !settings.supabaseKey) return;
@@ -101,6 +106,19 @@ export default function Requisitions({ settings, currentUser }: Props) {
       try { window.localStorage.removeItem('gmct-open-requisition-id'); } catch {}
     }
   }, [list]);
+
+  useEffect(() => {
+    setApprovalSignatureName('');
+    setHasSignature(false);
+    setIsDrawing(false);
+    setCloseWithoutAttachment(false);
+    setCloseWithoutAttachmentReason('');
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }, [editing?.id]);
 
   const generateRequisitionNumber = (): string => {
     const year = new Date().getFullYear();
@@ -206,11 +224,12 @@ export default function Requisitions({ settings, currentUser }: Props) {
       setExpandedYears(new Set([mostRecentYear]));
       
       // Also expand the most recent month in that year
-      const months = Object.keys(groupedRequisitions[mostRecentYear]);
-      if (months.length > 0) {
-        const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        const sortedMonths = months.sort((a, b) => monthOrder.indexOf(b) - monthOrder.indexOf(a));
-        setExpandedMonths(new Set([`${mostRecentYear}-${sortedMonths[0]}`]));
+      const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const sortedMonths = Object.keys(groupedRequisitions[mostRecentYear]).sort((a, b) => monthOrder.indexOf(b) - monthOrder.indexOf(a));
+      const openMonths = sortedMonths.filter(month => (groupedRequisitions[mostRecentYear][month] || []).some(req => req.status !== 'closed'));
+      const monthToExpand = openMonths[0] || sortedMonths[0];
+      if (monthToExpand) {
+        setExpandedMonths(new Set([`${mostRecentYear}-${monthToExpand}`]));
       }
     }
   }, [groupedRequisitions]);
@@ -233,6 +252,16 @@ export default function Requisitions({ settings, currentUser }: Props) {
       newExpanded.add(yearMonth);
     }
     setExpandedMonths(newExpanded);
+  };
+
+  const toggleClosedYear = (year: string) => {
+    const newExpanded = new Set(expandedClosedYears);
+    if (newExpanded.has(year)) {
+      newExpanded.delete(year);
+    } else {
+      newExpanded.add(year);
+    }
+    setExpandedClosedYears(newExpanded);
   };
 
   const addItem = () => {
@@ -437,17 +466,84 @@ export default function Requisitions({ settings, currentUser }: Props) {
       alert('Cloud connection required. Configure Supabase in Settings.');
       return;
     }
-    if (!editing.completionAttachmentUrl) {
-      alert('Attach a completion photo before closing the requisition.');
-      return;
+    const hasReceipt = (editing.receiptAttachments || []).length > 0;
+    const canBypassReceipt = ['admin', 'finance-chair', 'finance-team'].includes(currentUser.role);
+    if (!hasReceipt) {
+      if (!closeWithoutAttachment) {
+        alert('Cannot close requisition without a receipt attachment. Upload a receipt, or check "Close without receipt" and provide a reason.');
+        return;
+      }
+      if (!canBypassReceipt) {
+        alert('Only Admin, Finance Chair, or Finance Team can close without receipt.');
+        return;
+      }
+      if (!closeWithoutAttachmentReason.trim()) {
+        alert('Please provide a reason for closing without receipt.');
+        return;
+      }
     }
-    const updated = { ...editing, status: 'closed' as RequisitionStatus };
+    const reasonNote = closeWithoutAttachmentReason.trim();
+    const closeNotes: string[] = [];
+    if (!hasReceipt) closeNotes.push('[Closed without receipt]');
+    if (!editing.completionAttachmentUrl) closeNotes.push('[Closed without completion attachment]');
+    const updatedPurpose = closeNotes.length > 0
+      ? `${editing.purpose ? `${editing.purpose}\n\n` : ''}${closeNotes.join(' ')}${reasonNote ? ` Reason: ${reasonNote}` : ''}`
+      : editing.purpose;
+    const updated = {
+      ...editing,
+      status: 'closed' as RequisitionStatus,
+      purpose: updatedPurpose,
+      updatedBy: currentUser.username,
+      lastUpdated: new Date().toISOString()
+    };
     await saveRequisition(settings.supabaseUrl, settings.supabaseKey, updated);
-    setEditing(updated);
+    setEditing(null);
     await refresh();
   };
 
+  const onDecision = async (decision: ApprovalDecision) => {
+    if (!editing) return;
+    if (!settings.supabaseUrl || !settings.supabaseKey) {
+      alert('Cloud connection required. Configure Supabase in Settings.');
+      return;
+    }
+    if (!canCurrentUserApprove(editing)) {
+      alert('You are not assigned to approve this requisition.');
+      return;
+    }
+
+    const signature = approvalSignatureName.trim();
+    if (!hasSignature && !signature) {
+      alert('Please draw your signature or enter your name before submitting your decision.');
+      return;
+    }
+
+    const approval: RequisitionApproval = {
+      id: crypto.randomUUID(),
+      requisitionId: editing.id,
+      approverUsername: currentUser.username,
+      approverRole: currentUser.role as RequisitionApproverRole,
+      decision,
+      signatureName: signature || currentUser.username,
+      signatureAt: new Date().toISOString(),
+    };
+
+    setDecisionSaving(true);
+    try {
+      await decideRequisition(settings.supabaseUrl, settings.supabaseKey, approval, decision);
+      setEditing(null);
+      await refresh();
+    } finally {
+      setDecisionSaving(false);
+    }
+  };
+
   const canEditReceipt = (status: RequisitionStatus) => status !== 'closed';
+  const canManageReceiptAttachments = (req: Requisition) => {
+    if (req.status === 'closed') return false;
+    if (canEditRequisition(req, currentUser)) return true;
+    return ['admin', 'finance-chair', 'finance-team'].includes(currentUser.role);
+  };
 
   const readUploadedPdf = (file: File, source: 'file' | 'camera' | 'scan') => new Promise<RequisitionUploadedPdf>((resolve, reject) => {
     const reader = new FileReader();
@@ -631,35 +727,50 @@ export default function Requisitions({ settings, currentUser }: Props) {
             <span className="text-3xl flex-shrink-0">{expandedYears.has(year) ? '📂' : '📁'}</span>
             <span className="text-2xl font-bold min-w-0 break-words">{year}</span>
             <span className="ml-auto text-lg font-semibold bg-white/20 px-4 py-1 rounded-full flex-shrink-0">
-              {Object.values(groupedRequisitions[year]).flat().length} requisitions
+              {(() => {
+                const yearRequisitions = Object.values(groupedRequisitions[year]).flat();
+                const closedCount = yearRequisitions.filter(req => req.status === 'closed').length;
+                const openCount = yearRequisitions.length - closedCount;
+                return `${openCount} open • ${closedCount} closed`;
+              })()}
             </span>
             <span className="text-2xl flex-shrink-0">{expandedYears.has(year) ? '▼' : '▶'}</span>
           </button>
 
           {/* Months within Year */}
-          {expandedYears.has(year) && Object.keys(groupedRequisitions[year]).map(month => {
-            const monthKey = `${year}-${month}`;
-            const requisitions = groupedRequisitions[year][month];
-            
-            return (
-              <div key={monthKey} className="ml-8 mb-4">
-                {/* Month Folder */}
-                <button
-                  onClick={() => toggleMonth(monthKey)}
-                  className="w-full flex items-center gap-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl px-6 py-3 shadow-md hover:shadow-lg transition-all mb-3"
-                >
-                  <span className="text-2xl flex-shrink-0">{expandedMonths.has(monthKey) ? '📂' : '📁'}</span>
-                  <span className="text-xl font-bold min-w-0 break-words">{month}</span>
-                  <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full flex-shrink-0">
-                    {requisitions.length} requisitions
-                  </span>
-                  <span className="text-xl flex-shrink-0">{expandedMonths.has(monthKey) ? '▼' : '▶'}</span>
-                </button>
+          {expandedYears.has(year) && (() => {
+            const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const months = Object.keys(groupedRequisitions[year]).sort((a, b) => monthOrder.indexOf(b) - monthOrder.indexOf(a));
+            const openMonthEntries = months
+              .map(month => ({ month, requisitions: (groupedRequisitions[year][month] || []).filter(r => r.status !== 'closed') }))
+              .filter(entry => entry.requisitions.length > 0);
+            const closedMonthEntries = months
+              .map(month => ({ month, requisitions: (groupedRequisitions[year][month] || []).filter(r => r.status === 'closed') }))
+              .filter(entry => entry.requisitions.length > 0);
 
-                {/* Requisitions in Month */}
-                {expandedMonths.has(monthKey) && (
-                  <div className="ml-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 max-h-[70vh] overflow-y-auto pr-2">
-                    {requisitions.map(r => (
+            return (
+              <>
+                {openMonthEntries.map(({ month, requisitions }) => {
+                  const monthKey = `${year}-${month}`;
+                  return (
+                    <div key={monthKey} className="ml-8 mb-4">
+                      {/* Month Folder */}
+                      <button
+                        onClick={() => toggleMonth(monthKey)}
+                        className="w-full flex items-center gap-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl px-6 py-3 shadow-md hover:shadow-lg transition-all mb-3"
+                      >
+                        <span className="text-2xl flex-shrink-0">{expandedMonths.has(monthKey) ? '📂' : '📁'}</span>
+                        <span className="text-xl font-bold min-w-0 break-words">{month}</span>
+                        <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full flex-shrink-0">
+                          {requisitions.length} requisitions
+                        </span>
+                        <span className="text-xl flex-shrink-0">{expandedMonths.has(monthKey) ? '▼' : '▶'}</span>
+                      </button>
+
+                      {/* Requisitions in Month */}
+                      {expandedMonths.has(monthKey) && (
+                        <div className="ml-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 max-h-[70vh] overflow-y-auto pr-2">
+                          {requisitions.map(r => (
           <div key={r.id} className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-md hover:shadow-xl transition-all hover:border-indigo-300">
             {/* Header with Avatar and Status */}
             <div className="flex items-start justify-between mb-4">
@@ -726,12 +837,111 @@ export default function Requisitions({ settings, currentUser }: Props) {
               )}
             </div>
           </div>
-                    ))}
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {closedMonthEntries.length > 0 && (
+                  <div className="ml-8 mb-4">
+                    <button
+                      onClick={() => toggleClosedYear(year)}
+                      className="w-full flex items-center gap-4 bg-gradient-to-r from-slate-500 to-slate-700 text-white rounded-xl px-6 py-3 shadow-md hover:shadow-lg transition-all mb-3"
+                    >
+                      <span className="text-2xl flex-shrink-0">{expandedClosedYears.has(year) ? '📂' : '📁'}</span>
+                      <span className="text-xl font-bold min-w-0 break-words">Closed</span>
+                      <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full flex-shrink-0">
+                        {closedMonthEntries.reduce((sum, entry) => sum + entry.requisitions.length, 0)} requisitions
+                      </span>
+                      <span className="text-xl flex-shrink-0">{expandedClosedYears.has(year) ? '▼' : '▶'}</span>
+                    </button>
+
+                    {expandedClosedYears.has(year) && closedMonthEntries.map(({ month, requisitions }) => {
+                      const monthKey = `${year}-closed-${month}`;
+                      return (
+                        <div key={monthKey} className="ml-8 mb-4">
+                          <button
+                            onClick={() => toggleMonth(monthKey)}
+                            className="w-full flex items-center gap-4 bg-gradient-to-r from-slate-400 to-slate-600 text-white rounded-xl px-6 py-3 shadow-md hover:shadow-lg transition-all mb-3"
+                          >
+                            <span className="text-2xl flex-shrink-0">{expandedMonths.has(monthKey) ? '📂' : '📁'}</span>
+                            <span className="text-xl font-bold min-w-0 break-words">{month}</span>
+                            <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full flex-shrink-0">
+                              {requisitions.length} requisitions
+                            </span>
+                            <span className="text-xl flex-shrink-0">{expandedMonths.has(monthKey) ? '▼' : '▶'}</span>
+                          </button>
+
+                          {expandedMonths.has(monthKey) && (
+                            <div className="ml-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 max-h-[70vh] overflow-y-auto pr-2">
+                              {requisitions.map(r => (
+                                <div key={r.id} className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-md hover:shadow-xl transition-all hover:border-indigo-300">
+                                  <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-3 flex-1">
+                                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-lg border-2 border-indigo-200">
+                                        {initials(r.requesterUsername || 'U')}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-bold text-slate-900 break-words">{r.title || '(Untitled)'}</div>
+                                        <div className="text-xs text-slate-600 break-words">by {r.requesterName || r.requesterUsername}</div>
+                                      </div>
+                                    </div>
+                                    <span className={statusStyle(r.status)}>{r.status}</span>
+                                  </div>
+
+                                  <div className="space-y-3 mb-4 bg-slate-50 rounded-xl p-4 border border-slate-200">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <div className="text-xs font-bold text-slate-600 uppercase">Fund</div>
+                                        <div className="text-sm font-semibold text-slate-900 mt-1">{r.fund || '—'}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-xs font-bold text-slate-600 uppercase">Needed By</div>
+                                        <div className="text-sm font-semibold text-slate-900 mt-1">{r.neededBy || '—'}</div>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-bold text-slate-600 uppercase">Approver</div>
+                                      <div className="text-sm font-semibold text-indigo-700 mt-1">
+                                        {approverLabel(r.requiredApproverRole)}
+                                        {r.requiredApproverUsername ? ` - ${r.requiredApproverUsername}` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-end justify-between mb-5 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-200">
+                                    <div>
+                                      <div className="text-xs font-bold text-slate-600 uppercase">Items</div>
+                                      <div className="text-2xl font-bold text-slate-900">{r.items?.length || 0}</div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-xs font-bold text-slate-600 uppercase">Total</div>
+                                      <div className="text-3xl font-extrabold text-indigo-700">{formatCurrency(r.totalAmount || 0, settings.currency || 'USD')}</div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      className="flex-1 px-4 py-2.5 rounded-lg border-2 border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition text-base"
+                                      onClick={()=>setEditing(r)}
+                                    >
+                                      Open
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-              </div>
+              </>
             );
-          })}
+          })()}
         </div>
       ))}
 
@@ -1185,8 +1395,8 @@ export default function Requisitions({ settings, currentUser }: Props) {
                       type="text" 
                       placeholder="Enter your full name" 
                       className="w-full text-lg border-2 border-amber-300 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white placeholder-slate-400"
-                      value={editing.signatureName || ''}
-                      onChange={(e) => setEditing({...editing, signatureName: e.target.value})}
+                      value={approvalSignatureName}
+                      onChange={(e) => setApprovalSignatureName(e.target.value)}
                       disabled={!canCurrentUserApprove(editing)}
                     />
                   </div>
@@ -1197,7 +1407,12 @@ export default function Requisitions({ settings, currentUser }: Props) {
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-300 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-2xl font-bold text-slate-900">Completion Attachment</h4>
-                  <span className="text-sm text-slate-600 bg-white px-3 py-1 rounded-lg font-semibold">Available after approval</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600 bg-white px-3 py-1 rounded-lg font-semibold">Available after approval</span>
+                    <span className={`text-sm px-3 py-1 rounded-lg font-semibold ${(editing.receiptAttachments || []).length > 0 ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-rose-100 text-rose-700 border border-rose-300'}`}>
+                      {(editing.receiptAttachments || []).length > 0 ? 'Receipt exists' : 'No receipt uploaded'}
+                    </span>
+                  </div>
                 </div>
                 {canAttachCompletion(editing.status) ? (
                   <div className="space-y-4">
@@ -1207,6 +1422,33 @@ export default function Requisitions({ settings, currentUser }: Props) {
                       </div>
                     ) : (
                       <div className="text-lg text-slate-600">No attachment yet.</div>
+                    )}
+                    {editing.status !== 'closed' && (editing.receiptAttachments || []).length === 0 && ['admin', 'finance-chair', 'finance-team'].includes(currentUser.role) && (
+                      <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+                        <label className="flex items-start gap-3 text-sm text-amber-900 font-semibold">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4"
+                            checked={closeWithoutAttachment}
+                            onChange={(e) => setCloseWithoutAttachment(e.target.checked)}
+                          />
+                          <span>Close without receipt (for cases like worker payment where no receipt exists).</span>
+                        </label>
+                        {closeWithoutAttachment && (
+                          <textarea
+                            rows={2}
+                            className="w-full text-sm border-2 border-amber-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white"
+                            placeholder="Reason is required when closing without receipt"
+                            value={closeWithoutAttachmentReason}
+                            onChange={(e) => setCloseWithoutAttachmentReason(e.target.value)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {editing.status !== 'closed' && (editing.receiptAttachments || []).length === 0 && !['admin', 'finance-chair', 'finance-team'].includes(currentUser.role) && (
+                      <div className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
+                        Closing without receipt is restricted to Admin, Finance Chair, and Finance Team.
+                      </div>
                     )}
                     <label className="inline-flex items-center gap-3 text-lg font-bold text-indigo-700 cursor-pointer hover:text-indigo-800">
                       <input
@@ -1249,7 +1491,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                             >
                               Download
                             </a>
-                            {canEditReceipt(editing.status) && canEditRequisition(editing, currentUser) && (
+                            {canEditReceipt(editing.status) && canManageReceiptAttachments(editing) && (
                               <button
                                 onClick={() => removeReceiptAt(index)}
                                 className="px-3 py-2 bg-rose-100 text-rose-700 rounded-lg border border-rose-300 font-semibold hover:bg-rose-200 transition"
@@ -1289,7 +1531,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                   <div className="text-lg text-slate-600">No receipt uploaded yet.</div>
                 )}
 
-                {canEditReceipt(editing.status) && canEditRequisition(editing, currentUser) && (
+                {canEditReceipt(editing.status) && canManageReceiptAttachments(editing) && (
                   <div className="mt-4 flex flex-wrap gap-3">
                     <label className="inline-flex items-center gap-3 text-lg font-bold text-indigo-700 cursor-pointer hover:text-indigo-800">
                       <input
@@ -1342,8 +1584,26 @@ export default function Requisitions({ settings, currentUser }: Props) {
               >
                 💾 Save
               </button>
+              {editing.status === 'submitted' && canCurrentUserApprove(editing) && (
+                <>
+                  <button
+                    onClick={() => onDecision('approved')}
+                    disabled={decisionSaving}
+                    className={`px-6 py-3 rounded-xl font-bold transition text-lg ${decisionSaving ? 'bg-emerald-300 text-white cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                  >
+                    {decisionSaving ? 'Saving...' : '✓ Approve'}
+                  </button>
+                  <button
+                    onClick={() => onDecision('rejected')}
+                    disabled={decisionSaving}
+                    className={`px-6 py-3 rounded-xl font-bold transition text-lg ${decisionSaving ? 'bg-rose-300 text-white cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700'}`}
+                  >
+                    {decisionSaving ? 'Saving...' : '✕ Reject'}
+                  </button>
+                </>
+              )}
               {editing.status==='draft' && <button onClick={()=>onSubmit(editing)} className="px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition text-lg">✓ Submit</button>}
-              {canAttachCompletion(editing.status) && editing.completionAttachmentUrl && editing.status !== 'closed' && (
+              {canAttachCompletion(editing.status) && editing.status !== 'closed' && ((editing.receiptAttachments || []).length > 0 || (closeWithoutAttachment && ['admin', 'finance-chair', 'finance-team'].includes(currentUser.role))) && (
                 <button onClick={markComplete} className="px-6 py-3 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-900 transition text-lg">🏁 Mark Complete</button>
               )}
             </div>

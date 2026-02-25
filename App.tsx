@@ -579,6 +579,13 @@ const App: React.FC = () => {
 
     // Soft Delete Logic
     const confirmDeleteEntry = async () => {
+        const canDelete = currentUser && ['admin', 'finance-chair', 'finance-team'].includes(currentUser.role);
+        if (!canDelete) {
+            alert('Only Admin, Finance Chair, or Finance Team can delete entries.');
+            setIsConfirmModalOpen(false);
+            setEntryToDeleteId(null);
+            return;
+        }
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
             alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             setIsConfirmModalOpen(false);
@@ -779,7 +786,7 @@ const App: React.FC = () => {
                 );
             case 'my-approvals':
                 return (
-                    <MyApprovals settings={settings} currentUser={currentUser} />
+                    <MyApprovals settings={settings} currentUser={currentUser} onDecisionSaved={refreshRequisitions} />
                 );
             case 'records':
                 return (
@@ -1427,6 +1434,16 @@ const App: React.FC = () => {
         }
     };
 
+    const refreshRequisitions = async () => {
+        if (!settings.supabaseUrl || !settings.supabaseKey) return;
+        try {
+            const updatedRequisitions = await loadRequisitions(settings.supabaseUrl, settings.supabaseKey);
+            setRequisitions(updatedRequisitions);
+        } catch (err) {
+            console.warn('Failed to refresh requisitions:', err);
+        }
+    };
+
     const navSections = [
         {
             id: 'financial',
@@ -1445,7 +1462,7 @@ const App: React.FC = () => {
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-                { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team'] },
+                { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'settings', label: 'Settings', roles: ['admin'] },
             ]
         },

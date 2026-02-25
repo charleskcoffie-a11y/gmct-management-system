@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { ApprovalDecision, Requisition, RequisitionApproval, Settings, User } from '../types';
 import { decideRequisition, loadRequisitions } from '../services/supabase';
 import { formatCurrency } from '../utils';
@@ -6,15 +6,19 @@ import { formatCurrency } from '../utils';
 type Props = {
   settings: Settings;
   currentUser: User;
+  onDecisionSaved?: () => Promise<void> | void;
 };
 
-export default function MyApprovals({ settings, currentUser }: Props) {
+export default function MyApprovals({ settings, currentUser, onDecisionSaved }: Props) {
   const [pending, setPending] = useState<Requisition[]>([]);
   const [note, setNote] = useState<Record<string, string>>({});
   const [signatureName, setSignatureName] = useState<Record<string, string>>({});
   const [signatureConfirmed, setSignatureConfirmed] = useState<Record<string, boolean>>({});
+  const [isDrawing, setIsDrawing] = useState<Record<string, boolean>>({});
+  const [hasDrawnSignature, setHasDrawnSignature] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const signatureCanvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
   const canApprove = (req: Requisition) => {
     if (req.requesterUsername === currentUser.username) return false;
@@ -37,6 +41,54 @@ export default function MyApprovals({ settings, currentUser }: Props) {
 
   useEffect(() => { refresh(); }, [settings.supabaseUrl, settings.supabaseKey]);
 
+  const getCanvasPoint = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * (canvas.width / rect.width);
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+    return { x, y };
+  };
+
+  const startDrawing = (id: string, clientX: number, clientY: number) => {
+    const canvas = signatureCanvasRefs.current[id];
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(canvas, clientX, clientY);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(prev => ({ ...prev, [id]: true }));
+  };
+
+  const draw = (id: string, clientX: number, clientY: number) => {
+    if (!isDrawing[id]) return;
+    const canvas = signatureCanvasRefs.current[id];
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(canvas, clientX, clientY);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = '#1e40af';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    setHasDrawnSignature(prev => ({ ...prev, [id]: true }));
+  };
+
+  const stopDrawing = (id: string) => {
+    if (!isDrawing[id]) return;
+    setIsDrawing(prev => ({ ...prev, [id]: false }));
+  };
+
+  const clearSignaturePad = (id: string) => {
+    const canvas = signatureCanvasRefs.current[id];
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawnSignature(prev => ({ ...prev, [id]: false }));
+  };
+
   const act = async (req: Requisition, decision: ApprovalDecision) => {
     if (!settings.supabaseUrl || !settings.supabaseKey) return;
     if (req.requesterUsername === currentUser.username) {
@@ -48,8 +100,9 @@ export default function MyApprovals({ settings, currentUser }: Props) {
       return;
     }
     const signature = (signatureName[req.id] || '').trim();
-    if (!signature) {
-      alert('Approval signature name is required.');
+    const hasDrawn = !!hasDrawnSignature[req.id];
+    if (!signature && !hasDrawn) {
+      alert('Please draw your signature or enter your name before approving.');
       return;
     }
     if (!signatureConfirmed[req.id]) {
@@ -63,11 +116,14 @@ export default function MyApprovals({ settings, currentUser }: Props) {
       approverRole: currentUser.role as any,
       decision,
       note: note[req.id] || '',
-      signatureName: signature,
+      signatureName: signature || `${currentUser.username} (drawn signature)`,
       signatureAt: new Date().toISOString(),
     };
     await decideRequisition(settings.supabaseUrl, settings.supabaseKey, approval, decision);
     await refresh();
+    if (onDecisionSaved) {
+      await onDecisionSaved();
+    }
   };
 
   const toggle = (id: string) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -221,11 +277,50 @@ export default function MyApprovals({ settings, currentUser }: Props) {
                 value={note[r.id]||''} 
                 onChange={e=>setNote(prev=>({...prev,[r.id]: e.target.value}))} 
               />
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Draw signature:</label>
+                <div className="border-2 border-indigo-300 rounded-lg overflow-hidden bg-white" style={{ touchAction: 'none' }}>
+                  <canvas
+                    ref={(el) => { signatureCanvasRefs.current[r.id] = el; }}
+                    width={700}
+                    height={160}
+                    className="w-full h-32 cursor-crosshair"
+                    onMouseDown={(e) => startDrawing(r.id, e.clientX, e.clientY)}
+                    onMouseMove={(e) => draw(r.id, e.clientX, e.clientY)}
+                    onMouseUp={() => stopDrawing(r.id)}
+                    onMouseLeave={() => stopDrawing(r.id)}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      const t = e.touches[0];
+                      startDrawing(r.id, t.clientX, t.clientY);
+                    }}
+                    onTouchMove={(e) => {
+                      e.preventDefault();
+                      const t = e.touches[0];
+                      draw(r.id, t.clientX, t.clientY);
+                    }}
+                    onTouchEnd={() => stopDrawing(r.id)}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">
+                    {hasDrawnSignature[r.id] ? '✓ Signature captured' : 'Draw above or enter your name below'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => clearSignaturePad(r.id)}
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
               
               <div className="grid grid-cols-1 gap-2">
                 <input
                   className="border-2 border-indigo-300 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition"
-                  placeholder="Enter your full name for approval signature *"
+                  placeholder="Enter your full name for approval signature"
                   value={signatureName[r.id] || ''}
                   onChange={e=>setSignatureName(prev=>({...prev,[r.id]: e.target.value}))}
                 />
