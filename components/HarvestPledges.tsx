@@ -12,13 +12,20 @@ interface HarvestPledgesProps {
   currentUser?: User | null;
 }
 
-type PledgeCategory = 'harvest-appeal' | 'harvest-sales';
+type PledgeCategory = 'harvest-appeal' | 'harvest-sales' | 'harvest-pledge';
 type PledgeGroup = 'Men' | 'Women' | 'Youth' | 'Day Born' | 'Main';
 
 const pledgeCategories: { value: PledgeCategory; label: string }[] = [
   { value: 'harvest-appeal', label: 'Harvest Appeal' },
   { value: 'harvest-sales', label: 'Harvest Sales' },
+  { value: 'harvest-pledge', label: 'Harvest Pledge' },
 ];
+
+const pledgeCategoryLabels: Record<PledgeCategory, string> = {
+  'harvest-appeal': 'Harvest Appeal',
+  'harvest-sales': 'Harvest Sales',
+  'harvest-pledge': 'Harvest Pledge',
+};
 
 const pledgeGroups: PledgeGroup[] = ['Men', 'Women', 'Youth', 'Day Born', 'Main'];
 
@@ -76,6 +83,8 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
       return;
     }
 
+    const selectedCategoryLabel = pledgeCategories.find(cat => cat.value === bulkCategory)?.label || 'Harvest Pledge';
+
     const newPledges: HarvestPledge[] = bulkEntries
       .filter(e => e.memberID && e.amount && parseFloat(e.amount) > 0)
       .map(e => {
@@ -90,7 +99,7 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
           amount: parseFloat(e.amount),
           remaining: parseFloat(e.amount),
           category: bulkCategory as PledgeCategory,
-          note: bulkCategory === 'harvest-appeal' ? 'Harvest Appeal' : 'Harvest Sales',
+          note: selectedCategoryLabel,
           createdAt: getNowEST(),
           createdBy: 'bulk-entry',
         };
@@ -341,7 +350,7 @@ const HarvestPledges: React.FC<HarvestPledgesProps> = ({ members, pledges, setPl
                           </div>
                           <div>
                             <span className="text-slate-500 font-medium">Category:</span>
-                            <span className="ml-1 font-bold text-slate-700 capitalize">{pledge.note || 'N/A'}</span>
+                            <span className="ml-1 font-bold text-slate-700">{(pledge.category && pledgeCategoryLabels[pledge.category as PledgeCategory]) || pledge.note || 'N/A'}</span>
                           </div>
                           <div>
                             <span className="text-slate-500 font-medium">Amount:</span>

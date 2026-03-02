@@ -698,6 +698,7 @@ const App: React.FC = () => {
         }
 
         const canWrite = syncStatus.state === 'synced';
+        const canViewFilteredTotals = currentUser.role !== 'data-entry';
 
         const handlePayPledge = (pledge: HarvestPledge, amount: number, paymentDate: string) => {
             if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
@@ -884,7 +885,7 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Mini Dashboard */}
-                        {financialSummary.total > 0 && (
+                        {canViewFilteredTotals && financialSummary.total > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="col-span-1 bg-gradient-to-br from-orange-300 to-amber-400 p-6 rounded-xl shadow-lg border-2 border-orange-300 flex flex-col justify-center transform hover:scale-105 transition">
                                     <h3 className="text-white font-bold text-sm uppercase tracking-wider">💰 Filtered Total</h3>
@@ -1113,10 +1114,12 @@ const App: React.FC = () => {
                                             return (
                                                 <>
                                                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-xs font-bold uppercase text-slate-500">Filtered Total</span>
-                                                            <span className="text-2xl font-extrabold text-green-600">{formatCurrency(filteredTotal, settings.currency)}</span>
-                                                        </div>
+                                                        {canViewFilteredTotals && (
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xs font-bold uppercase text-slate-500">Filtered Total</span>
+                                                                <span className="text-2xl font-extrabold text-green-600">{formatCurrency(filteredTotal, settings.currency)}</span>
+                                                            </div>
+                                                        )}
                                                         <span className="text-sm font-semibold text-slate-600">{filteredCount} entr{filteredCount === 1 ? 'y' : 'ies'}</span>
                                                     </div>
                                                     {/* Active Entries Section */}

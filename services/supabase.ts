@@ -910,17 +910,25 @@ export const saveHarvestPledgePayment = async (
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const { error } = await supabase
+    const basePayload = {
+        pledge_id: pledgeId,
+        payment_date: paymentDate,
+        amount: amount,
+        paid_by: paidBy,
+        created_at: new Date().toISOString()
+    };
+
+    let { error } = await supabase
         .from('harvest_pledge_payments')
-        .insert([{
-            pledge_id: pledgeId,
-            payment_entry_id: paymentEntryId,
-            payment_date: paymentDate,
-            amount: amount,
-            paid_by: paidBy,
-            created_at: new Date().toISOString()
-        }]);
-    
+        .insert([{ ...basePayload, entry_id: paymentEntryId }]);
+
+    if (error && /entry_id/i.test(error.message) && /column/i.test(error.message)) {
+        const retry = await supabase
+            .from('harvest_pledge_payments')
+            .insert([{ ...basePayload, payment_entry_id: paymentEntryId }]);
+        error = retry.error;
+    }
+
     if (error) throw new Error(`Save harvest pledge payment failed: ${error.message}`);
     return { success: true };
 };

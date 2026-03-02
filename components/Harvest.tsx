@@ -52,8 +52,8 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     });
     const harvestCategories = [
         { value: 'harvest-levy', label: 'Harvest Levy' },
-        { value: 'harvest-sales', label: 'Harvest Sales' },
-        { value: 'chairperson-supporter', label: 'Chairperson Supporter' }
+        { value: 'harvest', label: 'Harvest Sales' },
+        { value: 'harvest-pledge', label: 'Harvest Pledge' }
     ];
     const [amountInput, setAmountInput] = useState('');
     const [memberNumberInput, setMemberNumberInput] = useState('');
@@ -562,7 +562,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                         </div>
                                         <div className="md:col-span-1">
                                             <label className="block text-sm font-semibold text-slate-700 mb-2">Category</label>
-                                            <select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value as any })} className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all">
+                                            <select value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as Entry['type'] })} className="w-full border-2 border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all">
                                                 {harvestCategories.map(cat => (
                                                     <option key={cat.value} value={cat.value}>{cat.label}</option>
                                                 ))}
