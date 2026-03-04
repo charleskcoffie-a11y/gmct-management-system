@@ -802,13 +802,55 @@ export const deleteUserFromSupabase = async (url: string, key: string, username:
 };
 
 // --- Individual Member Delete ---
-export const deleteMemberFromSupabase = async (url: string, key: string, memberId: string) => {
+export const deleteMemberFromSupabase = async (
+    url: string,
+    key: string,
+    memberId: string
+): Promise<{ success: true; mode: 'deleted' | 'deactivated' }> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
+    const { error: pledgeDeleteError } = await supabase
+        .from('harvest_pledges')
+        .delete()
+        .eq('member_id', memberId);
+
+    if (pledgeDeleteError && pledgeDeleteError.code !== '42P01') {
+        throw new Error(`Delete member failed while removing linked harvest pledges: ${pledgeDeleteError.message}`);
+    }
+
+    const { error: levyDeleteError } = await supabase
+        .from('member_levies')
+        .delete()
+        .eq('member_id', memberId);
+
+    if (levyDeleteError && levyDeleteError.code !== '42P01') {
+        throw new Error(`Delete member failed while removing linked levies: ${levyDeleteError.message}`);
+    }
+
     const { error } = await supabase.from('members').delete().eq('id', memberId);
-    if (error) throw new Error(`Delete member failed: ${error.message}`);
-    return { success: true };
+    if (!error) return { success: true, mode: 'deleted' };
+
+    const isFkConflict =
+        error.code === '23503' ||
+        /foreign key|constraint|still referenced|violates/i.test(`${error.message || ''} ${error.details || ''}`);
+
+    if (!isFkConflict) {
+        throw new Error(`Delete member failed: ${error.message}`);
+    }
+
+    const { error: deactivateError } = await supabase
+        .from('members')
+        .update({ active: false, last_updated: new Date().toISOString() })
+        .eq('id', memberId);
+
+    if (deactivateError) {
+        throw new Error(
+            `Delete member blocked by linked records, and fallback deactivation failed: ${deactivateError.message}`
+        );
+    }
+
+    return { success: true, mode: 'deactivated' };
 };
 
 // --- Harvest Pledge Functions ---

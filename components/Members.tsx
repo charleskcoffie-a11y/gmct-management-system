@@ -1,9 +1,8 @@
 // components/Members.tsx
 import React, { useState, useMemo } from 'react';
-import type { Member, Settings, Entry, DevelopmentFundEntry, SyncStatus } from '../types';
+import type { Member, Settings, Entry, DevelopmentFundEntry, SyncStatus, User } from '../types';
 import { sanitizeString, sanitizeMember, fromCsv } from '../utils';
 import MemberModal from './MemberModal';
-import ConfirmationModal from './ConfirmationModal';
 import MemberProfileModal from './MemberProfileModal';
 import { UploadIcon } from './icons';
 import { saveMemberToSupabase as saveMemberToSupabaseFn, deleteMemberFromSupabase } from '../services/supabase';
@@ -17,6 +16,7 @@ interface MembersProps {
     entries?: Entry[];
     developmentEntries?: DevelopmentFundEntry[];
     syncStatus?: SyncStatus;
+    currentUser?: User;
 }
 
 const colorGradients = [
@@ -48,17 +48,16 @@ const getColorForClass = (classNumber: string | undefined) => {
     return { gradient: colorGradients[index], badge: badgeColors[index] };
 };
 
-const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entries = [], developmentEntries = [], syncStatus }) => {
-    const { showToast } = useToast();
+const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entries = [], developmentEntries = [], syncStatus, currentUser }) => {
+    const { showToast, showConfirm } = useToast();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [classFilter, setClassFilter] = useState<string>('all');
-    const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
-    const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [showInactive, setShowInactive] = useState<boolean>(false);
+    const [memberStatusFilter, setMemberStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
     const [syncConfirmation, setSyncConfirmation] = useState<{ memberName: string; mode: 'added' | 'updated'; ts: number } | null>(null);
+    const [isDuplicatePanelCollapsed, setIsDuplicatePanelCollapsed] = useState(false);
     
     // New State for Profile Modal
     const [viewProfileMember, setViewProfileMember] = useState<Member | null>(null);
@@ -66,6 +65,58 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
     const classOptions = useMemo(() => {
         return ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))];
     }, [settings.maxClasses]);
+
+    const canManageDuplicateActions = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair' || currentUser?.role === 'finance-team';
+
+    const duplicateGroups = useMemo(() => {
+        const byName = new Map<string, Member[]>();
+        members
+            .filter(member => member.active !== false)
+            .forEach(member => {
+            const key = sanitizeString(member.name).trim().toLowerCase();
+            if (!key) return;
+            const group = byName.get(key) || [];
+            group.push(member);
+            byName.set(key, group);
+        });
+
+        return Array.from(byName.entries())
+            .filter(([, group]) => group.length > 1)
+            .map(([nameKey, group]) => ({
+                key: nameKey,
+                displayName: group[0]?.name || nameKey,
+                members: [...group].sort((a, b) => {
+                    const aActive = a.active !== false ? 1 : 0;
+                    const bActive = b.active !== false ? 1 : 0;
+                    if (aActive !== bActive) return bActive - aActive;
+                    return (a.classNumber || '').localeCompare(b.classNumber || '');
+                })
+            }))
+            .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }, [members]);
+
+    const setMemberInactiveFromDuplicate = async (member: Member) => {
+        if (!canManageDuplicateActions) {
+            showToast('Only Admin or Finance users can set duplicates inactive.', 'warning', 3200);
+            return;
+        }
+        if (member.active === false) {
+            showToast('Member is already inactive.', 'info', 2200);
+            return;
+        }
+        if (!settings.supabaseUrl || !settings.supabaseKey || (syncStatus && syncStatus.state !== 'synced')) {
+            showToast('Cloud connection is required to update member status.', 'error', 3500);
+            return;
+        }
+
+        try {
+            const result = await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, { ...member, active: false });
+            setMembers(prev => prev.map(m => m.id === result.member.id ? result.member : m).sort((a, b) => a.name.localeCompare(b.name)));
+            showToast(`Set ${sanitizeString(member.name)} to inactive.`, 'success', 2600);
+        } catch (error: any) {
+            showToast(`Failed to set inactive: ${error.message || error}`, 'error', 4000);
+        }
+    };
 
     const handleImportMembers = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (!settings.supabaseUrl || !settings.supabaseKey || (syncStatus && syncStatus.state !== 'synced')) {
@@ -162,29 +213,31 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
     }, [syncConfirmation]);
     
     const handleDelete = (id: string) => {
-        setMemberToDeleteId(id);
-        setIsConfirmDeleteOpen(true);
+        showConfirm(
+            'Are you sure you want to delete this member? This action cannot be undone.',
+            () => { void confirmDeleteMember(id); }
+        );
     };
 
-    const confirmDeleteMember = async () => {
+    const confirmDeleteMember = async (memberId: string) => {
         if (!settings.supabaseUrl || !settings.supabaseKey || (syncStatus && syncStatus.state !== 'synced')) {
             alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
-            setIsConfirmDeleteOpen(false);
-            setMemberToDeleteId(null);
             return;
         }
-        if (memberToDeleteId) {
-            setMembers(members.filter(m => m.id !== memberToDeleteId));
-            if (settings.supabaseUrl && settings.supabaseKey) {
-                try {
-                    await deleteMemberFromSupabase(settings.supabaseUrl, settings.supabaseKey, memberToDeleteId);
-                } catch (e: any) {
-                    alert(`Cloud delete failed. Local removed only. Details: ${e.message || e}`);
+        if (settings.supabaseUrl && settings.supabaseKey) {
+            try {
+                const result = await deleteMemberFromSupabase(settings.supabaseUrl, settings.supabaseKey, memberId);
+                if (result.mode === 'deleted') {
+                    setMembers(members.filter(m => m.id !== memberId));
+                    showToast('Member deleted successfully.', 'success', 2500);
+                } else {
+                    setMembers(prev => prev.map(m => (m.id === memberId ? { ...m, active: false } : m)));
+                    showToast('Member has linked records and was set to Inactive to preserve history.', 'info', 4200);
                 }
+            } catch (e: any) {
+                alert(`Cloud delete failed. Member was not removed. Details: ${e.message || e}`);
             }
         }
-        setIsConfirmDeleteOpen(false);
-        setMemberToDeleteId(null);
     };
     
     const filteredMembers = useMemo(() => {
@@ -199,15 +252,20 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
             
             const classFilterMatch = classFilter === 'all' || m.classNumber === classFilter;
 
-            const activeMatch = showInactive ? true : (m.active !== false);
+            const activeMatch = memberStatusFilter === 'all'
+                ? true
+                : memberStatusFilter === 'inactive'
+                    ? m.active === false
+                    : m.active !== false;
 
             return searchTermMatch && classFilterMatch && activeMatch;
         });
-    }, [members, searchTerm, classFilter, showInactive]);
+    }, [members, searchTerm, classFilter, memberStatusFilter]);
 
     const clearFilters = () => {
         setSearchTerm('');
         setClassFilter('all');
+        setMemberStatusFilter('active');
     };
 
     return (
@@ -323,7 +381,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                             </select>
                         </div>
                     </div>
-                    {(searchTerm || classFilter !== 'all') && (
+                    {(searchTerm || classFilter !== 'all' || memberStatusFilter !== 'active') && (
                         <button 
                             onClick={clearFilters}
                             className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-3 px-6 rounded-xl transition-all hover:scale-105 shadow-lg flex items-center gap-2 text-base"
@@ -336,15 +394,77 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                     )}
                 </div>
                 
-                <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                    </svg>
-                    <span className="text-base text-slate-600">
-                        Showing <span className="font-bold text-blue-600 text-lg">{filteredMembers.length}</span> of <span className="font-bold text-slate-900">{members.length}</span> member{members.length !== 1 ? 's' : ''}
-                    </span>
+                <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                        </svg>
+                        <span className="text-base text-slate-600">
+                            Showing <span className="font-bold text-blue-600 text-lg">{filteredMembers.length}</span> of <span className="font-bold text-slate-900">{members.length}</span> member{members.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                        <span className="font-bold text-slate-800">Status</span>
+                        <select
+                            value={memberStatusFilter}
+                            onChange={e => setMemberStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}
+                            className="border border-slate-300 rounded-lg py-1.5 px-2.5 text-sm font-semibold bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="active">Active only</option>
+                            <option value="inactive">Inactive only</option>
+                            <option value="all">Active + Inactive</option>
+                        </select>
+                    </div>
                 </div>
             </div>
+
+            {duplicateGroups.length > 0 && (
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 shadow-lg">
+                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                        <h3 className="text-xl font-bold text-amber-900">Potential Duplicates ({duplicateGroups.length} groups)</h3>
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-amber-800">Review and keep only one active member per person</span>
+                            <button
+                                onClick={() => setIsDuplicatePanelCollapsed(prev => !prev)}
+                                className="text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg"
+                            >
+                                {isDuplicatePanelCollapsed ? 'Expand' : 'Collapse'}
+                            </button>
+                        </div>
+                    </div>
+                    {!isDuplicatePanelCollapsed && (
+                    <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                        {duplicateGroups.map(group => (
+                            <div key={group.key} className="bg-white border border-amber-200 rounded-xl p-4">
+                                <div className="font-bold text-slate-900 mb-2">{sanitizeString(group.displayName)} ({group.members.length})</div>
+                                <div className="space-y-2">
+                                    {group.members.map(member => (
+                                        <div key={member.id} className="flex items-center justify-between gap-3 border border-slate-200 rounded-lg px-3 py-2">
+                                            <div className="text-sm text-slate-700">
+                                                <span className="font-semibold">Class {member.classNumber || '-'}</span>
+                                                <span className="mx-2">•</span>
+                                                <span>ID {member.id.substring(0, 8)}</span>
+                                                <span className={`ml-3 px-2 py-0.5 rounded-full text-xs font-bold ${member.active === false ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                    {member.active === false ? 'Inactive' : 'Active'}
+                                                </span>
+                                            </div>
+                                            {canManageDuplicateActions && member.active !== false && (
+                                                <button
+                                                    onClick={() => setMemberInactiveFromDuplicate(member)}
+                                                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg"
+                                                >
+                                                    Set Inactive
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    )}
+                </div>
+            )}
 
             {/* Grid View */}
             {viewMode === 'grid' && (
@@ -570,20 +690,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                             </tbody>
                         </table>
                     </div>
-                    <div className="w-full md:w-72">
-                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 h-full flex items-center">
-                            <label htmlFor="showInactive" className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    id="showInactive"
-                                    type="checkbox"
-                                    checked={showInactive}
-                                    onChange={e => setShowInactive(e.target.checked)}
-                                    className="h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                                />
-                                <span className="font-bold text-slate-800">Show inactive members</span>
-                            </label>
-                        </div>
-                    </div>
                 </div>
             )}
 
@@ -595,7 +701,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                     </svg>
                     <p className="text-3xl font-bold text-slate-800 mb-3">No Members Found</p>
                     <p className="text-lg text-slate-600 mb-6">Try adjusting your search or filters</p>
-                    {(searchTerm || classFilter !== 'all') && (
+                    {(searchTerm || classFilter !== 'all' || memberStatusFilter !== 'active') && (
                         <button 
                             onClick={clearFilters}
                             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 inline-flex items-center gap-2 text-base"
@@ -620,17 +726,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                     onClose={() => setViewProfileMember(null)} 
                 />
             )}
-
-            <ConfirmationModal
-                isOpen={isConfirmDeleteOpen}
-                onClose={() => {
-                    setIsConfirmDeleteOpen(false);
-                    setMemberToDeleteId(null);
-                }}
-                onConfirm={confirmDeleteMember}
-                title="Confirm Member Deletion"
-                message="Are you sure you want to delete this member? This action cannot be undone."
-            />
         </div>
     );
 };

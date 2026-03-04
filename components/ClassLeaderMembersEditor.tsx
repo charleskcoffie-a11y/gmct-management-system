@@ -80,7 +80,12 @@ const ClassLeaderMembersEditor: React.FC<ClassLeaderMembersEditorProps> = ({
         setIsDeleting(true);
         try {
             if (isConnected) {
-                await deleteMemberFromSupabase(memberId, settings.supabaseUrl, settings.supabaseKey);
+                const result = await deleteMemberFromSupabase(settings.supabaseUrl, settings.supabaseKey, memberId);
+                if (result.mode === 'deactivated') {
+                    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, active: false } : m));
+                    showToast('Member has records and was set to inactive', 'info', 2800);
+                    return;
+                }
             }
             setMembers(prev => prev.filter(m => m.id !== memberId));
             showToast('Member deleted', 'success', 2000);
