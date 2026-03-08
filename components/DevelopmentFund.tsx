@@ -1024,7 +1024,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             )}
 
             {(() => {
-                const allowedRoles = ['admin','finance-chair','finance-team','data-entry'];
+                const allowedRoles = ['admin','finance-chair','finance-team','data-entry','pastor'];
                 const canSee = currentUser && allowedRoles.includes(currentUser.role);
                 const windowStatus = isEntryWindowOpen(settings.entryWindow);
                 const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
