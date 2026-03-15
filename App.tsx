@@ -755,7 +755,7 @@ const App: React.FC = () => {
                 return (
                     <Harvest 
                         members={members}
-                        entries={entries.filter(e => ['harvest-levy', 'harvest', 'harvest-pledge'].includes(e.type))}
+                        entries={entries.filter(e => ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch'].includes(e.type))}
                         setEntries={setEntries}
                         settings={settings}
                         currentUser={currentUser}
