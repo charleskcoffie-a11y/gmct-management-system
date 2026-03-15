@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastProvider';
 import type { Entry, Member, Settings, SyncStatus, User } from '../types';
 import { formatCurrency, getTodayEST, getNowEST } from '../utils';
-import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
+import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, saveEntryToSupabase, loadEntriesFromSupabase } from '../services/supabase';
 
 interface HarvestProps {
     members: Member[];
@@ -21,11 +21,13 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     
     // Filters
-    const [startDateFilter, setStartDateFilter] = useState(getTodayEST());
-    const [endDateFilter, setEndDateFilter] = useState(getTodayEST());
+    const [startDateFilter, setStartDateFilter] = useState('');
+    const [endDateFilter, setEndDateFilter] = useState('');
     const [classFilter, setClassFilter] = useState('all');
     const [searchFilter, setSearchFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
+    const [collapsedYears, setCollapsedYears] = useState<Set<string>>(new Set());
+    const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
     
     // Delete state
     const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -34,7 +36,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [deleteError, setDeleteError] = useState('');
 
     // Harvest types to filter
-    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge'] as const;
+    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch'] as const;
 
     // Form state
     const [formData, setFormData] = useState<Entry>({
@@ -53,10 +55,13 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const harvestCategories = [
         { value: 'harvest-levy', label: 'Harvest Levy' },
         { value: 'harvest', label: 'Harvest Sales' },
-        { value: 'harvest-pledge', label: 'Harvest Pledge' }
+        { value: 'harvest-pledge', label: 'Harvest Pledge' },
+        { value: 'harvest-launch', label: 'Harvest Launch' }
     ];
+    const predefinedGroupOptions = ['Men', 'Women', 'Youth', 'Dayborn Special'];
     const [amountInput, setAmountInput] = useState('');
     const [memberNumberInput, setMemberNumberInput] = useState('');
+    const [groupSelection, setGroupSelection] = useState('');
 
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
     // Require browser online state AND valid Supabase credentials AND synced status
@@ -96,6 +101,63 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         return Object.keys(entriesByDate).sort((a, b) => b.localeCompare(a));
     }, [entriesByDate]);
 
+    const groupedDates = useMemo(() => {
+        const groups: Array<{
+            year: string;
+            months: Array<{
+                monthKey: string;
+                monthLabel: string;
+                dates: string[];
+                total: number;
+                count: number;
+            }>;
+        }> = [];
+
+        const byYear = new Map<string, Map<string, string[]>>();
+
+        sortedDates.forEach(date => {
+            const [year, month] = date.split('-');
+            if (!byYear.has(year)) {
+                byYear.set(year, new Map());
+            }
+            const months = byYear.get(year)!;
+            if (!months.has(month)) {
+                months.set(month, []);
+            }
+            months.get(month)!.push(date);
+        });
+
+        Array.from(byYear.entries())
+            .sort(([a], [b]) => b.localeCompare(a))
+            .forEach(([year, months]) => {
+                const monthGroups = Array.from(months.entries())
+                    .sort(([a], [b]) => b.localeCompare(a))
+                    .map(([month, dates]) => {
+                        const monthLabel = new Date(`${year}-${month}-01T00:00:00`).toLocaleDateString('en-US', {
+                            month: 'long',
+                            year: 'numeric'
+                        });
+                        const total = dates.reduce((sum, date) => {
+                            const dayEntries = entriesByDate[date] || [];
+                            return sum + dayEntries.reduce((daySum, entry) => daySum + entry.amount, 0);
+                        }, 0);
+                        const count = dates.reduce((sum, date) => sum + (entriesByDate[date]?.length || 0), 0);
+
+                        return {
+                            monthKey: `${year}-${month}`,
+                            monthLabel,
+                            dates,
+                            total,
+                            count,
+                        };
+                    });
+
+                groups.push({ year, months: monthGroups });
+            });
+
+        return groups;
+    }, [entriesByDate, sortedDates]);
+
     // Summary
     const summary = useMemo(() => {
         const activeEntries = filteredEntries.filter(e => !e.deleted);
@@ -115,6 +177,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             setAmountInput(String(entry.amount));
             const member = members.find(m => m.id === entry.memberID);
             setMemberNumberInput(member?.memberNumber || '');
+            setGroupSelection(entry.note && !predefinedGroupOptions.includes(entry.note) ? '__other__' : (entry.note || ''));
         } else {
             setFormData({
                 id: crypto.randomUUID(),
@@ -132,13 +195,14 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             });
             setAmountInput('');
             setMemberNumberInput('');
+            setGroupSelection('');
         }
         setSelectedEntry(entry);
         setIsModalOpen(true);
     };
 
     const { showToast, showConfirm } = useToast();
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isConnected) {
             showToast('Requires cloud connection to save', 'warning');
@@ -149,16 +213,24 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             return;
         }
 
-        if (selectedEntry) {
-            setEntries(prev => prev.map(entry => 
-                entry.id === selectedEntry.id 
-                    ? { ...formData, updatedBy: currentUser?.username, lastUpdated: getNowEST() }
-                    : entry
-            ));
-        } else {
-            setEntries(prev => [...prev, formData]);
+        if (!settings.supabaseUrl || !settings.supabaseKey) {
+            showToast('Supabase is not configured for Harvest saves', 'error');
+            return;
         }
-        setIsModalOpen(false);
+
+        const entryToSave = selectedEntry
+            ? { ...formData, updatedBy: currentUser?.username, lastUpdated: getNowEST() }
+            : formData;
+
+        try {
+            await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            setEntries(updatedEntries);
+            setIsModalOpen(false);
+            showToast('Harvest entry saved successfully', 'success');
+        } catch (error: any) {
+            showToast(`Failed to save harvest entry: ${error.message}`, 'error');
+        }
     };
 
     const handleDelete = (id: string) => {
@@ -223,6 +295,24 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         setDeleteId(null);
         setDeleteReason('');
         setDeleteError('');
+    };
+
+    const toggleYear = (year: string) => {
+        setCollapsedYears(prev => {
+            const next = new Set(prev);
+            if (next.has(year)) next.delete(year);
+            else next.add(year);
+            return next;
+        });
+    };
+
+    const toggleMonth = (monthKey: string) => {
+        setCollapsedMonths(prev => {
+            const next = new Set(prev);
+            if (next.has(monthKey)) next.delete(monthKey);
+            else next.add(monthKey);
+            return next;
+        });
     };
 
     const handleMemberNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -347,54 +437,94 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                     </div>
                 )}
                 <div className="max-h-[60vh] overflow-y-auto p-6 space-y-4">
-                    {sortedDates.length === 0 ? (
+                    {groupedDates.length === 0 ? (
                         <div className="text-center py-16 text-slate-400">
                             <div className="text-6xl mb-4">📭</div>
                             <p className="text-xl font-bold">No harvest records found</p>
                             <p className="text-sm mt-2">Try adjusting your filters</p>
                         </div>
                     ) : (
-                        sortedDates.map(date => {
-                            const dateEntries = entriesByDate[date];
-                            const dateTotal = dateEntries.reduce((sum, e) => sum + e.amount, 0);
-                            const hasDeleted = dateEntries.some(e => e.deleted);
-                            
-                            return (
-                                <div key={date} className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedDateForModal(date);
-                                            setModalClassFilter('all');
-                                        }}
-                                        className="w-full p-5 flex items-center justify-between hover:bg-amber-100 transition-colors text-left"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-xl p-4 shadow-md">
-                                                <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
-                                                <div className="text-2xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
-                                                <div className="text-xs">{new Date(date + 'T00:00:00').getFullYear()}</div>
-                                            </div>
+                        groupedDates.map(yearGroup => (
+                            <div key={yearGroup.year} className="space-y-4">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleYear(yearGroup.year)}
+                                    className="sticky top-0 z-10 w-full bg-slate-100/95 backdrop-blur rounded-xl border border-slate-200 px-4 py-3 shadow-sm flex items-center justify-between text-left hover:bg-slate-200/95 transition-colors"
+                                >
+                                    <h3 className="text-xl font-bold text-slate-800">{yearGroup.year}</h3>
+                                    <span className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                                        {collapsedYears.has(yearGroup.year) ? 'Expand' : 'Collapse'}
+                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform ${collapsedYears.has(yearGroup.year) ? '' : 'rotate-180'}`} viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                        </svg>
+                                    </span>
+                                </button>
+                                {!collapsedYears.has(yearGroup.year) && yearGroup.months.map(monthGroup => (
+                                    <div key={monthGroup.monthKey} className="space-y-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleMonth(monthGroup.monthKey)}
+                                            className="w-full flex items-center justify-between rounded-xl bg-gradient-to-r from-amber-100 to-orange-100 border border-amber-200 px-4 py-3 text-left hover:from-amber-200 hover:to-orange-200 transition-colors"
+                                        >
                                             <div>
-                                                <div className="flex items-center gap-3">
-                                                    <h3 className="text-xl font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
-                                                    {hasDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">Has Deleted</span>}
+                                                <h4 className="text-lg font-bold text-amber-900">{monthGroup.monthLabel}</h4>
+                                                <p className="text-sm font-medium text-amber-700">{monthGroup.count} contribution{monthGroup.count !== 1 ? 's' : ''}</p>
+                                            </div>
+                                            <div className="text-right flex items-center gap-4">
+                                                <div className="text-lg font-bold text-green-700">{formatCurrency(monthGroup.total, settings.currency)}</div>
+                                                <span className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                                                    {collapsedMonths.has(monthGroup.monthKey) ? 'Expand' : 'Collapse'}
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform ${collapsedMonths.has(monthGroup.monthKey) ? '' : 'rotate-180'}`} viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                    </svg>
+                                                </span>
+                                            </div>
+                                        </button>
+                                        {!collapsedMonths.has(monthGroup.monthKey) && monthGroup.dates.map(date => {
+                                            const dateEntries = entriesByDate[date];
+                                            const dateTotal = dateEntries.reduce((sum, e) => sum + e.amount, 0);
+                                            const hasDeleted = dateEntries.some(e => e.deleted);
+
+                                            return (
+                                                <div key={date} className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedDateForModal(date);
+                                                            setModalClassFilter('all');
+                                                        }}
+                                                        className="w-full p-5 flex items-center justify-between hover:bg-amber-100 transition-colors text-left"
+                                                    >
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-xl p-4 shadow-md">
+                                                                <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
+                                                                <div className="text-2xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
+                                                                <div className="text-xs">{new Date(date + 'T00:00:00').getFullYear()}</div>
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <h3 className="text-xl font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
+                                                                    {hasDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">Has Deleted</span>}
+                                                                </div>
+                                                                <p className="text-sm text-slate-600 mt-1 font-medium">{dateEntries.length} contribution{dateEntries.length !== 1 ? 's' : ''}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-2xl font-bold text-green-600">{formatCurrency(dateTotal, settings.currency)}</div>
+                                                            <div className="text-sm text-amber-500 font-semibold mt-1 flex items-center gap-1">
+                                                                Click to view details
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                    </button>
                                                 </div>
-                                                <p className="text-sm text-slate-600 mt-1 font-medium">{dateEntries.length} contribution{dateEntries.length !== 1 ? 's' : ''}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-2xl font-bold text-green-600">{formatCurrency(dateTotal, settings.currency)}</div>
-                                            <div className="text-sm text-amber-500 font-semibold mt-1 flex items-center gap-1">
-                                                Click to view details
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                    </button>
-                                </div>
-                            );
-                        })
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
+                        ))
                     )}
                 </div>
             </div>
@@ -601,21 +731,43 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                         Group (Optional)
                                     </label>
                                     {(() => {
-                                        const baseOptions = ['Men','Women','Youth','Dayborn Special'];
                                         const current = formData.note || '';
-                                        const includesCurrent = current && baseOptions.includes(current);
-                                        const options = includesCurrent ? baseOptions : (current ? [current, ...baseOptions] : baseOptions);
+                                        const showCustomGroupInput = groupSelection === '__other__';
                                         return (
-                                            <select
-                                                value={current}
-                                                onChange={e => setFormData(prev => ({ ...prev, note: e.target.value }))}
-                                                className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all bg-white"
-                                            >
-                                                <option value="">None</option>
-                                                {options.map(opt => (
-                                                    <option key={opt} value={opt}>{opt}</option>
-                                                ))}
-                                            </select>
+                                            <div className="space-y-3">
+                                                <select
+                                                    value={groupSelection}
+                                                    onChange={e => {
+                                                        const value = e.target.value;
+                                                        if (value === '__other__') {
+                                                            setGroupSelection('__other__');
+                                                            setFormData(prev => ({ ...prev, note: predefinedGroupOptions.includes(prev.note || '') ? '' : (prev.note || '') }));
+                                                            return;
+                                                        }
+                                                        setGroupSelection(value);
+                                                        setFormData(prev => ({ ...prev, note: value }));
+                                                    }}
+                                                    className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all bg-white"
+                                                >
+                                                    <option value="">None</option>
+                                                    {predefinedGroupOptions.map(opt => (
+                                                        <option key={opt} value={opt}>{opt}</option>
+                                                    ))}
+                                                    <option value="__other__">Other</option>
+                                                </select>
+                                                {showCustomGroupInput && (
+                                                    <input
+                                                        type="text"
+                                                        value={current}
+                                                        onChange={e => {
+                                                            setGroupSelection('__other__');
+                                                            setFormData(prev => ({ ...prev, note: e.target.value }));
+                                                        }}
+                                                        placeholder="Enter custom group"
+                                                        className="w-full border-2 border-slate-300 rounded-lg p-3 text-slate-700 font-semibold focus:ring-2 focus:ring-slate-400 focus:border-slate-400 transition-all bg-white"
+                                                    />
+                                                )}
+                                            </div>
                                         );
                                     })()}
                                 </div>
