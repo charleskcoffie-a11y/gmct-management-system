@@ -282,6 +282,15 @@ const App: React.FC = () => {
         }
     }, [typeFilter, dayBornFilter]);
 
+    // Lock date filters to today for data-entry role
+    useEffect(() => {
+        if (currentUser?.role === 'data-entry') {
+            const today = getTodayEST();
+            setStartDateFilter(today);
+            setEndDateFilter(today);
+        }
+    }, [currentUser]);
+
     const filteredAndSortedEntries = useMemo(() => {
         const filtered = entries.filter(entry => {
             // Soft Delete check
@@ -854,16 +863,28 @@ const App: React.FC = () => {
                                     {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
                                 </select>
                             </div>
-                            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 Start Date</label>
-                                    <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                            {currentUser?.role === 'data-entry' ? (
+                                <div className="lg:col-span-2 flex items-end">
+                                    <div className="w-full bg-blue-100 border-2 border-blue-400 rounded-lg px-4 py-3 flex items-center gap-3">
+                                        <span className="text-2xl">📅</span>
+                                        <div>
+                                            <div className="text-xs font-bold uppercase text-blue-600">Viewing Today Only</div>
+                                            <div className="text-base font-bold text-blue-900">{getTodayEST()}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 End Date</label>
-                                    <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                            ) : (
+                                <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 Start Date</label>
+                                        <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 End Date</label>
+                                        <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                             <div className="lg:col-span-1">
                                 <label className="block text-sm font-bold uppercase text-blue-700 mb-1 flex items-center gap-2">🧬 Day Born <span className="text-[11px] font-semibold text-blue-500">(active when Type is Day Born)</span></label>
                                 <select
@@ -930,7 +951,48 @@ const App: React.FC = () => {
                                    <div className="text-center py-16 text-slate-400">
                                        <div className="text-6xl mb-4">📭</div>
                                        <p className="text-xl font-bold">No records found</p>
-                                       <p className="text-sm mt-2">Try adjusting your filters</p>
+                                       <p className="text-sm mt-2">{currentUser?.role === 'data-entry' ? 'No entries have been recorded for today.' : 'Try adjusting your filters'}</p>
+                                   </div>
+                               ) : currentUser?.role === 'data-entry' ? (
+                                   /* Data-entry: flat list showing only today's entries — no year/month folder tree */
+                                   <div className="space-y-3">
+                                       {sortedDates.map(date => {
+                                           const dateEntries = entriesByDate[date];
+                                           const activeEntries = dateEntries.filter(e => !e.deleted);
+                                           const activeTotal = activeEntries.reduce((sum, e) => sum + e.amount, 0);
+                                           return (
+                                               <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
+                                                   <button
+                                                       onClick={() => {
+                                                           setSelectedDateForModal(date);
+                                                           setModalClassFilter('all');
+                                                           setModalTypeFilter('all');
+                                                       }}
+                                                       className="w-full p-4 flex items-center justify-between hover:bg-blue-100 transition-colors text-left"
+                                                   >
+                                                       <div className="flex items-center gap-3">
+                                                           <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg p-3 shadow-md">
+                                                               <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
+                                                               <div className="text-xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
+                                                           </div>
+                                                           <div>
+                                                               <h3 className="text-lg font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric' })}</h3>
+                                                               <p className="text-xs text-slate-600 mt-0.5 font-medium">{activeEntries.length} contribution{activeEntries.length !== 1 ? 's' : ''}</p>
+                                                           </div>
+                                                       </div>
+                                                       <div className="text-right">
+                                                           <div className="text-xl font-bold text-green-600">{formatCurrency(activeTotal, settings.currency)}</div>
+                                                           <div className="text-xs text-blue-600 font-semibold mt-1 flex items-center gap-1">
+                                                               Click to view
+                                                               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                               </svg>
+                                                           </div>
+                                                       </div>
+                                                   </button>
+                                               </div>
+                                           );
+                                       })}
                                    </div>
                                ) : (
                                    Object.keys(entriesByYearMonth).sort((a, b) => parseInt(b) - parseInt(a)).map(year => (

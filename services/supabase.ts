@@ -122,10 +122,12 @@ const mapMemberFromDB = (m: any): Member => {
     };
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const mapEntryToDB = (e: Entry) => ({
     id: e.id,
     date: e.date,
-    member_id: e.memberID,
+    member_id: e.memberID && UUID_REGEX.test(e.memberID) ? e.memberID : null,
     member_name: e.memberName,
     type: e.type,
     fund: e.fund,
