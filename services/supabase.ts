@@ -1492,38 +1492,79 @@ export const logEntryDeletionToSupabase = async (
 ) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    
-    const logEntry = {
+
+    const normalizedMemberId = entry?.memberID && UUID_REGEX.test(entry.memberID) ? entry.memberID : null;
+    const normalizedReason = (reason || '').trim() || 'No reason provided';
+    const normalizedDeletedBy = (deletedBy || '').trim() || 'Unknown';
+
+    // Primary audit table used by the SQL migration/docs.
+    const auditLogEntry = {
         entry_id: entry.id,
         entry_type: entry.type,
-        member_id: entry.memberID,
-        member_name: entry.memberName,
+        member_id: normalizedMemberId,
+        member_name: entry.memberName || null,
+        amount: entry.type === 'count' ? null : entry.amount,
+        original_date: entry.date,
+        deletion_reason: normalizedReason,
+        deleted_by: normalizedDeletedBy,
+        deleted_at: new Date().toISOString(),
+        original_entry_data: entry,
+    };
+
+    const { error: auditError } = await supabase
+        .from('entry_deletions')
+        .insert([auditLogEntry]);
+
+    if (!auditError) return { success: true };
+
+    // Backward compatibility fallback for deployments still using `deletion_log`.
+    const legacyLogEntry = {
+        entry_id: entry.id,
+        entry_type: entry.type,
+        member_id: normalizedMemberId,
+        member_name: entry.memberName || null,
         amount: entry.type === 'count' ? null : entry.amount,
         count_value: entry.type === 'count' ? entry.amount : null,
         fund: entry.fund,
         method: entry.method,
         date: entry.date,
         note: entry.note,
-        deleted_by: deletedBy,
+        deleted_by: normalizedDeletedBy,
         deleted_at: new Date().toISOString(),
-        deletion_reason: reason || null,
+        deletion_reason: normalizedReason,
     };
-    
-    const { error } = await supabase
+
+    const { error: legacyError } = await supabase
         .from('deletion_log')
-        .insert([logEntry]);
-    
-    if (error) throw new Error(`Log entry deletion failed: ${error.message}`);
+        .insert([legacyLogEntry]);
+
+    if (legacyError) {
+        throw new Error(`Log entry deletion failed: ${legacyError.message}`);
+    }
     return { success: true };
 };
 
-export const markEntryAsDeletedInSupabase = async (url: string, key: string, entryId: string) => {
+export const markEntryAsDeletedInSupabase = async (
+    url: string,
+    key: string,
+    entryId: string,
+    deletedBy?: string,
+    deleteReason?: string
+) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    
+
+    const updates: any = {
+        deleted: true,
+        deleted_at: new Date().toISOString(),
+    };
+
+    if (deletedBy) updates.deleted_by = deletedBy;
+    if (deleteReason) updates.deleted_reason = deleteReason;
+
     const { error } = await supabase
         .from('entries')
-        .update({ deleted: true, deleted_at: new Date().toISOString() })
+        .update(updates)
         .eq('id', entryId);
     
     if (error) throw new Error(`Mark entry as deleted failed: ${error.message}`);

@@ -548,9 +548,24 @@ const App: React.FC = () => {
         if (tab) setActiveTab(tab);
     };
 
+    const isDuplicateEntry = (entry: Entry) => {
+        return entries.some(e =>
+            e.id !== entry.id &&
+            !e.deleted &&
+            e.date === entry.date &&
+            e.type === entry.type &&
+            e.memberID === entry.memberID
+        );
+    };
+
     const handleSaveEntry = async (entry: Entry) => {
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
+
+        if (isDuplicateEntry(entry)) {
+            alert(`Duplicate entry detected: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
             return;
         }
 
@@ -568,6 +583,11 @@ const App: React.FC = () => {
     const handleSaveAndNew = async (entry: Entry) => {
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
+            return;
+        }
+
+        if (isDuplicateEntry(entry)) {
+            alert(`Duplicate entry detected: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
             return;
         }
 

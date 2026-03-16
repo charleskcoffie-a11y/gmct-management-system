@@ -475,8 +475,9 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                                 <textarea className="w-full border-2 border-slate-300 rounded-lg p-2 mb-2" rows={3} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
                                                 {deleteError && <div className="text-red-600 text-sm mb-2">{deleteError}</div>}
                                                 <div className="flex gap-3 justify-end mt-2">
-                                                    <button onClick={() => setShowDeleteModal(false)} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                                                    <button type="button" onClick={() => setShowDeleteModal(false)} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
                                                     <button
+                                                        type="button"
                                                         onClick={async () => {
                                                             if (!deleteReason.trim()) {
                                                                 setDeleteError('Reason is required.');
