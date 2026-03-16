@@ -47,11 +47,11 @@ const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex justify-center items-center p-4"
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex justify-center items-start sm:items-center p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border-2 border-yellow-200"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border-2 border-yellow-200 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden my-auto"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -76,7 +76,7 @@ const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
         </div>
 
         {/* Entry Details */}
-        <div className="p-6 space-y-4 bg-slate-50">
+        <div className="p-6 space-y-4 bg-slate-50 flex-1 overflow-y-auto">
           <div>
             <label className="block text-xs font-bold uppercase text-slate-600 mb-2">
               📅 Collection Date
