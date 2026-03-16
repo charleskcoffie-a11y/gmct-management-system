@@ -30,7 +30,7 @@ const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
     const entry: Entry = {
       id: uuidv4(),
       date,
-      memberID: 'children-ministry-collection',
+      memberID: '',
       memberName: `Children's Ministry Collection${collectionSource ? ` - ${collectionSource}` : ''}`,
       type: 'childrens-ministry',
       fund: 'General',
