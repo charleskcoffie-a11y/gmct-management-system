@@ -548,13 +548,21 @@ const App: React.FC = () => {
         if (tab) setActiveTab(tab);
     };
 
+    const getMemberKey = (entry: Entry) => {
+        if (entry.memberID && entry.memberID.trim() !== '') return `id:${entry.memberID.trim().toLowerCase()}`;
+        if (entry.type === 'childrens-ministry') return 'childrens-ministry-collection';
+        const normalizedName = (entry.memberName || '').trim().toLowerCase();
+        return normalizedName ? `name:${normalizedName}` : 'name:';
+    };
+
     const isDuplicateEntry = (entry: Entry) => {
+        const targetMemberKey = getMemberKey(entry);
         return entries.some(e =>
             e.id !== entry.id &&
             !e.deleted &&
             e.date === entry.date &&
             e.type === entry.type &&
-            e.memberID === entry.memberID
+            getMemberKey(e) === targetMemberKey
         );
     };
 
@@ -601,9 +609,21 @@ const App: React.FC = () => {
         }
     };
     
-    const handleDeleteEntry = (id: string) => {
-        setEntryToDeleteId(id);
-        setIsConfirmModalOpen(true);
+    const handleDeleteEntry = async (id: string) => {
+        // EntryModal already confirms and writes soft-delete to Supabase.
+        // Here we keep UI in sync immediately and then refresh from server.
+        setEntries(prev => prev.map(e => e.id === id ? { ...e, deleted: true } : e));
+
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
+            return;
+        }
+
+        try {
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            setEntries(updatedEntries);
+        } catch (error) {
+            console.error('Failed to refresh entries after delete:', error);
+        }
     };
 
     // Soft Delete Logic
@@ -1715,6 +1735,7 @@ const App: React.FC = () => {
                 {showChildrenMinistryModal && (
                     <BulkChildrenMinistryModal
                         settings={settings}
+                        existingEntries={entries}
                         onSave={handleSaveEntry}
                         onClose={() => setShowChildrenMinistryModal(false)}
                     />

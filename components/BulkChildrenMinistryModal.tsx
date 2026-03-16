@@ -1,17 +1,19 @@
 // components/BulkChildrenMinistryModal.tsx
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { Entry, Settings, Method } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { getTodayEST, getNowEST, formatMethod } from '../utils';
 
 interface BulkChildrenMinistryModalProps {
   settings: Settings;
+  existingEntries: Entry[];
   onSave: (entry: Entry) => void;
   onClose: () => void;
 }
 
 const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
   settings,
+  existingEntries,
   onSave,
   onClose,
 }) => {
@@ -21,9 +23,17 @@ const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
   const [note, setNote] = useState('');
   const [collectionSource, setCollectionSource] = useState('');
 
+  const hasDuplicateForDate = useMemo(() => {
+    return existingEntries.some(e =>
+      !e.deleted &&
+      e.date === date &&
+      e.type === 'childrens-ministry'
+    );
+  }, [existingEntries, date]);
+
   const handleSave = () => {
     const amt = parseFloat(amount);
-    if (!date || isNaN(amt) || amt <= 0) {
+    if (!date || isNaN(amt) || amt <= 0 || hasDuplicateForDate) {
       return;
     }
 
@@ -156,6 +166,14 @@ const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
               <span className="font-bold">ℹ️ Note:</span> This records the total collection amount. When individual member contributions are tracked in the future, they can be added separately.
             </p>
           </div>
+
+          {hasDuplicateForDate && (
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800 font-semibold">
+                A Children's Ministry entry already exists for {date}. Delete or edit the existing record before adding another.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
@@ -168,7 +186,7 @@ const BulkChildrenMinistryModal: React.FC<BulkChildrenMinistryModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            disabled={!date || !amount || parseFloat(amount) <= 0}
+            disabled={!date || !amount || parseFloat(amount) <= 0 || hasDuplicateForDate}
             className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all"
           >
             ✓ Save Collection Entry
