@@ -1184,31 +1184,164 @@ export const deleteWesleyHallReceipt = async (url: string, key: string, id: stri
 };
 
 // --- Attendance Functions ---
-export const loadAttendanceForDate = async (url: string, key: string, date: string) => {
+type AttendanceMemberRow = {
+    id: string;
+    class_number: string;
+    attendance_date: string;
+    service_type: 'sunday' | 'bible-study';
+    member_id: string;
+    member_name?: string;
+    status: string;
+};
+
+type AttendanceSaveRow = {
+    date: string;
+    member_id: string;
+    status: string;
+    service_type?: 'sunday' | 'bible-study';
+    class_number?: string;
+};
+
+export const loadAttendanceForDate = async (
+    url: string,
+    key: string,
+    date: string,
+    serviceType: 'sunday' | 'bible-study' = 'sunday'
+) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
     const { data, error } = await supabase
         .from('attendance')
-        .select('*')
-        .eq('date', date);
+        .select(`
+            id,
+            class_number,
+            attendance_date,
+            service_type,
+            deleted,
+            member_attendance (
+                member_id,
+                member_name,
+                class_number,
+                status
+            )
+        `)
+        .eq('attendance_date', date)
+        .eq('service_type', serviceType)
+        .eq('deleted', false);
     if (error) {
         console.warn('Load attendance failed:', error.message);
         return [];
     }
-    return data || [];
+
+    return (data || []).flatMap((session: any) =>
+        (session.member_attendance || []).map((member: any) => ({
+            id: session.id,
+            class_number: member.class_number || session.class_number,
+            attendance_date: session.attendance_date,
+            service_type: session.service_type,
+            member_id: member.member_id,
+            member_name: member.member_name,
+            status: member.status,
+        }))
+    ) as AttendanceMemberRow[];
 };
 
 export const saveAttendanceToSupabase = async (
     url: string,
     key: string,
-    records: Array<{ date: string; member_id: string; status: string }>
+    records: AttendanceSaveRow[]
 ) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase
-        .from('attendance')
-        .upsert(records, { onConflict: 'date,member_id' });
-    if (error) throw new Error(`Save attendance failed: ${error.message}`);
+
+    if (records.length === 0) return { success: true };
+
+    const groupedRecords = records.reduce((groups, record) => {
+        const attendanceDate = record.date;
+        const classNumber = record.class_number?.trim();
+        const serviceType = record.service_type || 'sunday';
+
+        if (!attendanceDate || !classNumber) {
+            throw new Error('Attendance records require date and class_number');
+        }
+
+        const groupKey = `${classNumber}::${attendanceDate}::${serviceType}`;
+        if (!groups.has(groupKey)) {
+            groups.set(groupKey, {
+                attendanceDate,
+                classNumber,
+                serviceType,
+                records: [] as AttendanceSaveRow[],
+            });
+        }
+
+        groups.get(groupKey)!.records.push(record);
+        return groups;
+    }, new Map<string, { attendanceDate: string; classNumber: string; serviceType: 'sunday' | 'bible-study'; records: AttendanceSaveRow[] }>());
+
+    for (const group of groupedRecords.values()) {
+        const memberIds = group.records.map(record => record.member_id);
+        const { data: members, error: membersError } = await supabase
+            .from('members')
+            .select('id, name, class_number')
+            .in('id', memberIds);
+
+        if (membersError) {
+            throw new Error(`Load members for attendance failed: ${membersError.message}`);
+        }
+
+        const memberMap = new Map((members || []).map((member: any) => [member.id, member]));
+        const presentCount = group.records.filter(record => record.status === 'present').length;
+        const absentCount = group.records.filter(record => record.status === 'absent').length;
+
+        const { data: attendanceSession, error: attendanceError } = await supabase
+            .from('attendance')
+            .upsert({
+                class_number: group.classNumber,
+                attendance_date: group.attendanceDate,
+                service_type: group.serviceType,
+                total_members_present: presentCount,
+                total_members_absent: absentCount,
+                deleted: false,
+                last_updated: new Date().toISOString(),
+            }, { onConflict: 'class_number,attendance_date,service_type' })
+            .select('id, class_number, attendance_date, service_type')
+            .single();
+
+        if (attendanceError || !attendanceSession) {
+            throw new Error(`Save attendance failed: ${attendanceError?.message || 'Unable to create attendance session'}`);
+        }
+
+        const { error: deleteError } = await supabase
+            .from('member_attendance')
+            .delete()
+            .eq('attendance_id', attendanceSession.id);
+
+        if (deleteError) {
+            throw new Error(`Clear existing attendance details failed: ${deleteError.message}`);
+        }
+
+        const memberAttendanceRows = group.records.map(record => {
+            const member = memberMap.get(record.member_id);
+            return {
+                attendance_id: attendanceSession.id,
+                member_id: record.member_id,
+                member_name: member?.name || 'Unknown Member',
+                class_number: record.class_number || member?.class_number || group.classNumber,
+                status: record.status,
+                last_updated: new Date().toISOString(),
+            };
+        });
+
+        const { error: detailError } = await supabase
+            .from('member_attendance')
+            .insert(memberAttendanceRows);
+
+        if (detailError) {
+            throw new Error(`Save member attendance failed: ${detailError.message}`);
+        }
+    }
+
     return { success: true };
 };
 
@@ -1217,15 +1350,39 @@ export const loadAttendanceReport = async (url: string, key: string, startDate: 
     if (!supabase) return [];
     const { data, error } = await supabase
         .from('attendance')
-        .select('*')
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: false });
+        .select(`
+            id,
+            class_number,
+            attendance_date,
+            service_type,
+            deleted,
+            member_attendance (
+                member_id,
+                member_name,
+                class_number,
+                status
+            )
+        `)
+        .gte('attendance_date', startDate)
+        .lte('attendance_date', endDate)
+        .eq('deleted', false)
+        .order('attendance_date', { ascending: false });
     if (error) {
         console.warn('Load attendance report failed:', error.message);
         return [];
     }
-    return data || [];
+
+    return (data || []).flatMap((session: any) =>
+        (session.member_attendance || []).map((member: any) => ({
+            id: session.id,
+            class_number: member.class_number || session.class_number,
+            attendance_date: session.attendance_date,
+            service_type: session.service_type,
+            member_id: member.member_id,
+            member_name: member.member_name,
+            status: member.status,
+        }))
+    ) as AttendanceMemberRow[];
 };
 
 // --- Asset Management Functions ---

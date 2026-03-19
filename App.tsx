@@ -1444,7 +1444,7 @@ const App: React.FC = () => {
                     />
                 );
             case 'attendance':
-                return (
+                return currentUser.role === 'class-leader' ? (
                     <ClassAttendance
                         members={members}
                         setMembers={setMembers}
@@ -1452,6 +1452,10 @@ const App: React.FC = () => {
                         currentUser={currentUser}
                         syncStatus={syncStatus}
                     />
+                ) : (
+                    <Suspense fallback={<div className="p-8 text-slate-500">Loading Attendance Summary...</div>}>
+                        <BibleClassAttendanceSummary settings={settings} syncStatus={syncStatus} />
+                    </Suspense>
                 );
             case 'assets':
                 return (

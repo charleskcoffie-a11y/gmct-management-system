@@ -5,7 +5,7 @@ import MemberModal from './MemberModal';
 import { useToast } from './ToastProvider';
 import MobileAttendanceMarking from './MobileAttendanceMarking';
 import ClassLeaderMembersEditor from './ClassLeaderMembersEditor';
-import { getTodayEST, getWeekStart } from '../utils';
+import { getTodayEST } from '../utils';
 interface ClassAttendanceProps {
     members: Member[];
     setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
@@ -15,8 +15,6 @@ interface ClassAttendanceProps {
 }
 const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, settings, currentUser, syncStatus }) => {
     const { showToast } = useToast();
-    // Base date selector; we will snap it to the week start (Sunday)
-    const [selectedDate, setSelectedDate] = useState<string>(getTodayEST());
     const [attendance, setAttendance] = useState<Map<string, AttendanceStatus>>(new Map());
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
@@ -28,9 +26,59 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
     const [isMobileMarkingOpen, setIsMobileMarkingOpen] = useState(false);
     const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(true);
     const [isMembersEditorOpen, setIsMembersEditorOpen] = useState(false);
-    const [serviceType, setServiceType] = useState<'sunday' | 'bible-study'>('sunday');
+    const [serviceType, setServiceType] = useState<'sunday' | 'bible-study'>('bible-study');
 
     const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
+
+    const getMondayWeekStart = (isoDate: string) => {
+        const date = new Date(`${isoDate}T00:00:00`);
+        const day = date.getUTCDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        const monday = new Date(date);
+        monday.setUTCDate(date.getUTCDate() + diffToMonday);
+        return monday.toISOString().slice(0, 10);
+    };
+
+    const getSundayWeekEnd = (weekStart: string) => {
+        const monday = new Date(`${weekStart}T00:00:00`);
+        const sunday = new Date(monday);
+        sunday.setUTCDate(monday.getUTCDate() + 6);
+        return sunday.toISOString().slice(0, 10);
+    };
+
+    const addDays = (isoDate: string, days: number) => {
+        const date = new Date(`${isoDate}T00:00:00`);
+        date.setUTCDate(date.getUTCDate() + days);
+        return date.toISOString().slice(0, 10);
+    };
+
+    const getServiceDateForWeek = (weekStart: string, nextServiceType: 'sunday' | 'bible-study') => {
+        return nextServiceType === 'bible-study' ? addDays(weekStart, 1) : addDays(weekStart, 6);
+    };
+
+    const getWeekInputValue = (weekStart: string) => {
+        const date = new Date(`${weekStart}T00:00:00`);
+        const thursday = new Date(date);
+        thursday.setUTCDate(date.getUTCDate() + 3);
+        const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
+        const weekNumber = Math.ceil((((thursday.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+        return `${thursday.getUTCFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
+    };
+
+    const parseWeekInputValue = (weekValue: string) => {
+        const match = /^(\d{4})-W(\d{2})$/.exec(weekValue);
+        if (!match) return getMondayWeekStart(getTodayEST());
+        const [, yearText, weekText] = match;
+        const year = Number(yearText);
+        const week = Number(weekText);
+        const januaryFourth = new Date(Date.UTC(year, 0, 4));
+        const day = januaryFourth.getUTCDay() || 7;
+        const monday = new Date(januaryFourth);
+        monday.setUTCDate(januaryFourth.getUTCDate() - day + 1 + (week - 1) * 7);
+        return monday.toISOString().slice(0, 10);
+    };
+
+    const [selectedWeekStart, setSelectedWeekStart] = useState<string>(() => getMondayWeekStart(getTodayEST()));
 
     // Filter members by assigned class
     const classMembers = useMemo(() => {
@@ -39,25 +87,11 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
         return members.filter(m => m.classNumber === assignedClass && m.active !== false).sort((a, b) => a.name.localeCompare(b.name));
     }, [members, currentUser]);
 
-    // Helper: compute week start (Sunday) and end (Saturday) for a given ISO date string
-    const getWeekStart = (isoDate: string) => {
-        const d = new Date(isoDate + 'T00:00:00');
-        const day = d.getUTCDay(); // 0=Sun,6=Sat
-        const start = new Date(d);
-        start.setUTCDate(d.getUTCDate() - day);
-        return start.toISOString().slice(0, 10);
-    };
-    const getWeekEnd = (isoDate: string) => {
-        const startStr = getWeekStart(isoDate);
-        const start = new Date(startStr + 'T00:00:00');
-        const end = new Date(start);
-        end.setUTCDate(start.getUTCDate() + 6);
-        return end.toISOString().slice(0, 10);
-    };
-    const currentWeekStart = getWeekStart(getTodayEST());
-    const selectedWeekStart = getWeekStart(selectedDate);
-    const selectedWeekEnd = getWeekEnd(selectedDate);
+    const currentWeekStart = getMondayWeekStart(getTodayEST());
+    const selectedWeekEnd = getSundayWeekEnd(selectedWeekStart);
+    const serviceDate = getServiceDateForWeek(selectedWeekStart, serviceType);
     const isCurrentWeek = selectedWeekStart === currentWeekStart;
+    const weekRangeLabel = `${new Date(selectedWeekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(selectedWeekEnd + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
     // Helpers for month/quarter ranges (calendar based, ending at current week end)
     const getMonthStart = (isoDate: string) => {
@@ -72,19 +106,19 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
         return qs.toISOString().slice(0, 10);
     };
 
-    // Load existing attendance for selected week (store as a single record per member using date = weekStart)
+    // Load existing attendance for the selected service inside the selected Monday-Sunday week.
     useEffect(() => {
         if (!isConnected || !selectedWeekStart) return;
-        loadAttendanceForDate(settings.supabaseUrl, settings.supabaseKey, selectedWeekStart, serviceType)
+        loadAttendanceForDate(settings.supabaseUrl, settings.supabaseKey, serviceDate, serviceType)
             .then(records => {
                 const map = new Map<string, AttendanceStatus>();
                 records.forEach(r => map.set(r.member_id, (r.status as AttendanceStatus) || 'absent'));
                 setAttendance(map);
             })
             .catch(err => console.error('Load attendance failed:', err));
-    }, [selectedWeekStart, isConnected, settings.supabaseUrl, settings.supabaseKey, serviceType]);
+    }, [serviceDate, selectedWeekStart, isConnected, settings.supabaseUrl, settings.supabaseKey, serviceType]);
 
-    // Default all members to 'absent' for the selected week (fills gaps for new members or no prior data)
+    // Default all members to 'absent' for the selected service in the selected week.
     useEffect(() => {
         if (classMembers.length === 0) return;
         setAttendance(prev => {
@@ -94,7 +128,7 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
             });
             return next;
         });
-    }, [classMembers, selectedWeekStart]);
+    }, [classMembers, selectedWeekStart, serviceType]);
 
     const handleStatusChange = (memberId: string, status: AttendanceStatus) => {
         if (!isCurrentWeek) return; // prevent editing past/future weeks
@@ -109,8 +143,7 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
         setIsSaving(true);
         try {
             const records = Array.from(attendance.entries()).map(([member_id, status]) => ({
-                // Persist weekly attendance using the week start (Sunday) as the record date
-                date: selectedWeekStart,
+                date: serviceDate,
                 member_id,
                 status,
                 service_type: serviceType,
@@ -201,7 +234,10 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                         <div>
                             <h2 className="text-3xl font-bold text-slate-800">Class Attendance</h2>
                             <p className="text-base text-slate-500 mt-1 font-medium">Class {currentUser.assignedClass || currentUser.classLed} • {classMembers.length} members</p>
-                            <p className="text-sm text-slate-500 mt-1">Week: {new Date(selectedWeekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric'})} – {new Date(selectedWeekEnd + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric'})} {isCurrentWeek ? '• Editing current week' : '• Read-only (past week)'}
+                            <p className="text-sm text-slate-500 mt-1">Week Range: {weekRangeLabel} {isCurrentWeek ? '• Editing current week' : '• Read-only (past week)'}
+                            </p>
+                            <p className="text-sm text-slate-500 mt-1">
+                                Service date: {new Date(serviceDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                         </div>
                     </div>
@@ -236,25 +272,25 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => {
-                                const start = new Date(selectedWeekStart + 'T00:00:00');
-                                start.setUTCDate(start.getUTCDate() - 7);
-                                setSelectedDate(start.toISOString().slice(0,10));
+                                setSelectedWeekStart(addDays(selectedWeekStart, -7));
                             }}
                             className="bg-white border-2 border-indigo-300 text-indigo-700 px-4 py-3 rounded-xl font-bold hover:bg-indigo-50"
                         >
                             ← Prev Week
                         </button>
                         <div className="bg-gradient-to-br from-indigo-100 to-blue-100 p-4 rounded-xl border-2 border-indigo-200 min-w-[220px] text-center">
-                            <div className="text-sm font-bold text-indigo-800">Week of</div>
-                            <div className="font-bold text-lg">
-                                {new Date(selectedWeekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </div>
+                            <div className="text-sm font-bold text-indigo-800">Week Range</div>
+                            <div className="font-bold text-lg">{weekRangeLabel}</div>
+                            <input
+                                type="week"
+                                value={getWeekInputValue(selectedWeekStart)}
+                                onChange={(e) => setSelectedWeekStart(parseWeekInputValue(e.target.value))}
+                                className="mt-3 w-full rounded-lg border-2 border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none"
+                            />
                         </div>
                         <button
                             onClick={() => {
-                                const start = new Date(selectedWeekStart + 'T00:00:00');
-                                start.setUTCDate(start.getUTCDate() + 7);
-                                setSelectedDate(start.toISOString().slice(0,10));
+                                setSelectedWeekStart(addDays(selectedWeekStart, 7));
                             }}
                             className="bg-white border-2 border-indigo-300 text-indigo-700 px-4 py-3 rounded-xl font-bold hover:bg-indigo-50"
                         >
@@ -293,11 +329,11 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                             setAlertType('month');
                             const today = new Date().toISOString().slice(0,10);
                             const start = getMonthStart(today);
-                            const end = getWeekEnd(today);
+                            const end = getSundayWeekEnd(getMondayWeekStart(today));
                             const rows = await loadAttendanceReport(settings.supabaseUrl, settings.supabaseKey, start, end);
                             // Build absent list: members with no 'present' in the period
                             const byMember: Record<string, AttendanceStatus[]> = {};
-                            (rows || []).forEach(r => {
+                            (rows || []).filter(r => r.service_type === serviceType).forEach(r => {
                                 byMember[r.member_id] ||= [];
                                 byMember[r.member_id].push(r.status as AttendanceStatus);
                             });
@@ -322,10 +358,10 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                             setAlertType('quarter');
                             const today = new Date().toISOString().slice(0,10);
                             const start = getQuarterStart(today);
-                            const end = getWeekEnd(today);
+                            const end = getSundayWeekEnd(getMondayWeekStart(today));
                             const rows = await loadAttendanceReport(settings.supabaseUrl, settings.supabaseKey, start, end);
                             const byMember: Record<string, AttendanceStatus[]> = {};
-                            (rows || []).forEach(r => {
+                            (rows || []).filter(r => r.service_type === serviceType).forEach(r => {
                                 byMember[r.member_id] ||= [];
                                 byMember[r.member_id].push(r.status as AttendanceStatus);
                             });
@@ -344,7 +380,7 @@ const ClassAttendance: React.FC<ClassAttendanceProps> = ({ members, setMembers, 
                         Generate Quarterly Absentees
                     </button>
                 </div>
-                <p className="text-slate-500 text-sm mt-3">Tip: Lists include members with no "present" for the period.</p>
+                    <p className="text-slate-500 text-sm mt-3">Tip: Lists include members with no "present" for the selected service in the period.</p>
             </div>
 
             {/* Actions */}
