@@ -23,6 +23,9 @@ export interface Entry {
     updatedBy?: string;
     lastUpdated?: string; // ISO Timestamp
     deleted?: boolean;
+    deletedBy?: string;
+    deletedReason?: string;
+    deletedAt?: string; // ISO Timestamp
     createdAt?: string; // ISO Timestamp (creation time)
 }
 

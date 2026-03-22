@@ -1,7 +1,7 @@
 // components/DayBorn.tsx
 import React, { useState, useMemo } from 'react';
 import type { Member, Entry, Settings, User, SyncStatus, MonthLock } from '../types';
-import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
+import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, checkEntryDuplicateInSupabase, loadEntriesFromSupabase } from '../services/supabase';
 import EntryModal from './EntryModal';
 import BulkDayBornModal from './BulkDayBornModal';
 import { v4 as uuidv4 } from 'uuid';
@@ -97,6 +97,14 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
     const handleSaveEntry = async (entry: Entry) => {
         if (!requireCloud()) return;
         try {
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            if (hasCloudDuplicate) {
+                showToast(`❌ Duplicate blocked: a ${entry.type.replace(/-/g, ' ')} entry already exists for this member on ${entry.date}.`, 'error', 5000);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+                return;
+            }
+
             await persistEntry(entry);
             const newEntries = [...entries];
             const index = newEntries.findIndex(e => e.id === entry.id);
@@ -116,6 +124,14 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
     const handleSaveAndNew = async (entry: Entry) => {
         if (!requireCloud()) return;
         try {
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            if (hasCloudDuplicate) {
+                showToast(`❌ Duplicate blocked: a ${entry.type.replace(/-/g, ' ')} entry already exists for this member on ${entry.date}.`, 'error', 5000);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+                return;
+            }
+
             await persistEntry(entry);
             const newEntries = [...entries, entry];
             setEntries(newEntries);
@@ -164,18 +180,21 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
 
         try {
             // Mark as deleted in Supabase
-            await markEntryAsDeletedInSupabase(settings.supabaseUrl, settings.supabaseKey, deleteId);
+            await markEntryAsDeletedInSupabase(
+                settings.supabaseUrl,
+                settings.supabaseKey,
+                deleteId,
+                (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                deleteReason
+            );
             
             // Log the deletion
             await logEntryDeletionToSupabase(
                 settings.supabaseUrl,
                 settings.supabaseKey,
-                {
-                    id: deleteId,
-                    reason: deleteReason,
-                    deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
-                    deletedAt: getNowEST(),
-                }
+                entry,
+                (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                deleteReason
             );
 
             // Update local state
@@ -184,6 +203,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                 deleted: true,
                 deletedReason: deleteReason,
                 deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                deletedAt: getNowEST(),
             } : e));
 
             showToast('Entry deleted successfully', 'success');

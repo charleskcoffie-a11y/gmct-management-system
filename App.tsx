@@ -18,7 +18,7 @@ import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitize
 import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, saveUserToSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, saveUserToSupabase, checkEntryDuplicateInSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 import ProfileModal from './components/ProfileModal';
 
@@ -578,6 +578,14 @@ const App: React.FC = () => {
         }
 
         try {
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            if (hasCloudDuplicate) {
+                alert(`Duplicate entry blocked by cloud check: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+                return;
+            }
+
             await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
             // Reload entries from database
             const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
@@ -600,6 +608,14 @@ const App: React.FC = () => {
         }
 
         try {
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            if (hasCloudDuplicate) {
+                alert(`Duplicate entry blocked by cloud check: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+                return;
+            }
+
             await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
             // Reload entries from database
             const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);

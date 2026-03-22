@@ -161,6 +161,9 @@ const mapEntryFromDB = (e: any): Entry => ({
     updatedBy: e.updated_by,
     lastUpdated: e.last_updated,
     deleted: e.deleted,
+    deletedBy: e.deleted_by,
+    deletedReason: e.deleted_reason,
+    deletedAt: e.deleted_at,
     createdAt: e.created_at
 });
 
@@ -347,9 +350,28 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
     const members = membersDB?.map(mapMemberFromDB) || [];
 
-    const { data: entriesDB, error: entErr } = await supabase.from('entries').select('*');
-    if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
-    const entries = entriesDB?.map(mapEntryFromDB) || [];
+    const entriesDB: any[] = [];
+    const entriesPageSize = 1000;
+    let entriesFrom = 0;
+
+    while (true) {
+        const { data: page, error: entErr } = await supabase
+            .from('entries')
+            .select('*')
+            .order('date', { ascending: false })
+            .order('id', { ascending: false })
+            .range(entriesFrom, entriesFrom + entriesPageSize - 1);
+
+        if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
+        if (!page || page.length === 0) break;
+
+        entriesDB.push(...page);
+
+        if (page.length < entriesPageSize) break;
+        entriesFrom += entriesPageSize;
+    }
+
+    const entries = entriesDB.map(mapEntryFromDB);
 
     const { data: usersDB, error: userErr } = await supabase.from('app_users').select('*');
     if (userErr) throw new Error(`Fetch Users failed: ${userErr.message}`);
@@ -673,15 +695,64 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
     return { success: true };
 };
 
+export const checkEntryDuplicateInSupabase = async (
+    url: string,
+    key: string,
+    entry: Pick<Entry, 'id' | 'date' | 'type' | 'memberID' | 'memberName'>
+): Promise<boolean> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    let query = supabase
+        .from('entries')
+        .select('id')
+        .eq('date', entry.date)
+        .eq('type', entry.type)
+        .or('deleted.is.null,deleted.eq.false')
+        .limit(20);
+
+    if (entry.memberID && UUID_REGEX.test(entry.memberID)) {
+        query = query.eq('member_id', entry.memberID);
+    } else {
+        const normalizedName = (entry.memberName || '').trim();
+        query = query.eq('member_name', normalizedName);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Duplicate check failed: ${error.message}`);
+
+    return (data || []).some(row => row.id !== entry.id);
+};
+
 export const loadEntriesFromSupabase = async (url: string, key: string): Promise<Entry[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
-    const { data, error } = await supabase.from('entries').select('*').order('date', { ascending: false });
-    if (error) {
-        console.warn('Failed to load entries:', error.message);
-        return [];
+
+    const allRows: any[] = [];
+    const pageSize = 1000;
+    let from = 0;
+
+    while (true) {
+        const { data, error } = await supabase
+            .from('entries')
+            .select('*')
+            .order('date', { ascending: false })
+            .order('id', { ascending: false })
+            .range(from, from + pageSize - 1);
+
+        if (error) {
+            console.warn('Failed to load entries:', error.message);
+            return [];
+        }
+
+        if (!data || data.length === 0) break;
+        allRows.push(...data);
+
+        if (data.length < pageSize) break;
+        from += pageSize;
     }
-    return (data || []).map(mapEntryFromDB);
+
+    return allRows.map(mapEntryFromDB);
 };
 
 export const loadMembersFromSupabase = async (url: string, key: string): Promise<Member[]> => {

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastProvider';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import type { Entry, Member, Settings, SyncStatus, User } from '../types';
 import { formatCurrency, getTodayEST, getNowEST } from '../utils';
-import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, saveEntryToSupabase, loadEntriesFromSupabase } from '../services/supabase';
+import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, saveEntryToSupabase, loadEntriesFromSupabase, getSupabaseClient } from '../services/supabase';
 
 interface HarvestProps {
     members: Member[];
@@ -26,6 +27,8 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [classFilter, setClassFilter] = useState('all');
     const [searchFilter, setSearchFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
+    const [showDuplicatesPanel, setShowDuplicatesPanel] = useState(false);
+    const [acceptedDuplicateKeys, setAcceptedDuplicateKeys] = useLocalStorage<string[]>('gmct-harvest-accepted-duplicates', []);
     const [collapsedYears, setCollapsedYears] = useState<Set<string>>(new Set());
     const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
     
@@ -139,7 +142,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                         });
                         const total = dates.reduce((sum, date) => {
                             const dayEntries = entriesByDate[date] || [];
-                            return sum + dayEntries.reduce((daySum, entry) => daySum + entry.amount, 0);
+                            return sum + dayEntries.filter(entry => !entry.deleted).reduce((daySum, entry) => daySum + entry.amount, 0);
                         }, 0);
                         const count = dates.reduce((sum, date) => sum + (entriesByDate[date]?.length || 0), 0);
 
@@ -158,14 +161,58 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         return groups;
     }, [entriesByDate, sortedDates]);
 
-    // Summary
+    // Summary totals for currently applied filters (independent of showDeleted toggle)
     const summary = useMemo(() => {
-        const activeEntries = filteredEntries.filter(e => !e.deleted);
+        const matchingEntries = entries.filter(entry => {
+            if (!harvestTypes.includes(entry.type as any)) return false;
+            if (searchFilter && !entry.memberName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
+            if (startDateFilter && entry.date < startDateFilter) return false;
+            if (endDateFilter && entry.date > endDateFilter) return false;
+
+            const member = membersMap.get(entry.memberID);
+            const entryClass = entry.classNumber || member?.classNumber;
+            if (classFilter !== 'all' && entryClass !== classFilter) return false;
+            return true;
+        });
+
+        const activeEntries = matchingEntries.filter(e => !e.deleted);
+        const deletedEntries = matchingEntries.filter(e => e.deleted);
+        const activeTotal = activeEntries.reduce((sum, e) => sum + e.amount, 0);
+        const deletedTotal = deletedEntries.reduce((sum, e) => sum + e.amount, 0);
+        const activeByType = activeEntries.reduce((acc, entry) => {
+            const key = entry.type;
+            acc[key] = (acc[key] || 0) + entry.amount;
+            return acc;
+        }, {} as Record<string, number>);
+
         return {
-            total: activeEntries.reduce((sum, e) => sum + e.amount, 0),
-            count: activeEntries.length
+            activeTotal,
+            deletedTotal,
+            grossTotal: activeTotal + deletedTotal,
+            activeCount: activeEntries.length,
+            deletedCount: deletedEntries.length,
+            activeByType,
         };
-    }, [filteredEntries]);
+    }, [entries, harvestTypes, searchFilter, startDateFilter, endDateFilter, classFilter, membersMap]);
+
+    const duplicateGroups = useMemo(() => {
+        const activeHarvestEntries = entries.filter(entry => harvestTypes.includes(entry.type as any) && !entry.deleted);
+        const groups = new Map<string, Entry[]>();
+
+        activeHarvestEntries.forEach(entry => {
+            const memberKey = entry.memberID || entry.memberName.trim().toLowerCase();
+            const key = `${entry.date}__${entry.type}__${memberKey}`;
+            const current = groups.get(key) || [];
+            current.push(entry);
+            groups.set(key, current);
+        });
+
+        return Array.from(groups.entries())
+            .filter(([, group]) => group.length > 1)
+            .filter(([key]) => !acceptedDuplicateKeys.includes(key))
+            .map(([key, group]) => ({ key, entries: group }))
+            .sort((a, b) => b.entries[0].date.localeCompare(a.entries[0].date));
+    }, [entries, acceptedDuplicateKeys]);
 
     const handleOpenModal = (entry: Entry | null = null) => {
         if (!isConnected) {
@@ -222,7 +269,52 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             ? { ...formData, updatedBy: currentUser?.username, lastUpdated: getNowEST() }
             : formData;
 
+        // First guard: local duplicate check in currently loaded entries.
+        const localDuplicate = entries.some(existing => {
+            if (existing.deleted) return false;
+            if (!harvestTypes.includes(existing.type as any)) return false;
+            if (existing.date !== entryToSave.date) return false;
+            if (existing.type !== entryToSave.type) return false;
+            if (existing.memberID !== entryToSave.memberID) return false;
+            if (existing.id === entryToSave.id) return false;
+            return true;
+        });
+
+        if (localDuplicate) {
+            showToast('Duplicate blocked: same member, date, and category already exists.', 'error');
+            return;
+        }
+
         try {
+            // Second guard: cloud duplicate check to avoid race conditions / stale local cache.
+            const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseKey);
+            if (!supabase) {
+                showToast('Supabase connection is invalid. Cannot validate duplicates.', 'error');
+                return;
+            }
+
+            const { data: dbPotentialDupes, error: dupeCheckError } = await supabase
+                .from('entries')
+                .select('id')
+                .eq('date', entryToSave.date)
+                .eq('type', entryToSave.type)
+                .eq('member_id', entryToSave.memberID)
+                .or('deleted.is.null,deleted.eq.false')
+                .limit(10);
+
+            if (dupeCheckError) {
+                showToast(`Duplicate check failed: ${dupeCheckError.message}`, 'error');
+                return;
+            }
+
+            const dbHasDuplicate = (dbPotentialDupes || []).some(row => row.id !== entryToSave.id);
+            if (dbHasDuplicate) {
+                showToast('Duplicate blocked by cloud check: same member, date, and category already exists.', 'error');
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+                return;
+            }
+
             await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
             const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
             setEntries(updatedEntries);
@@ -259,18 +351,21 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
 
         try {
             // Mark as deleted in Supabase
-            await markEntryAsDeletedInSupabase(settings.supabaseUrl, settings.supabaseKey, deleteId);
+            await markEntryAsDeletedInSupabase(
+                settings.supabaseUrl,
+                settings.supabaseKey,
+                deleteId,
+                (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                deleteReason
+            );
             
             // Log the deletion
             await logEntryDeletionToSupabase(
                 settings.supabaseUrl,
                 settings.supabaseKey,
-                {
-                    id: deleteId,
-                    reason: deleteReason,
-                    deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
-                    deletedAt: getNowEST(),
-                }
+                entry,
+                (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                deleteReason
             );
 
             // Update local state
@@ -279,6 +374,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 deleted: true,
                 deletedReason: deleteReason,
                 deletedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+                deletedAt: getNowEST(),
             } : e));
 
             showToast('Entry deleted successfully', 'success');
@@ -418,13 +514,120 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             </div>
 
             {/* Summary */}
-            {summary.total > 0 && (
-                <div className="bg-gradient-to-br from-amber-300 to-orange-400 p-6 rounded-xl shadow-lg border-2 border-amber-200 flex flex-col justify-center">
-                    <h3 className="text-white font-bold text-sm uppercase tracking-wider">🌾 Harvest Total</h3>
-                    <p className="text-4xl font-bold text-white mt-2 drop-shadow">{formatCurrency(summary.total, settings.currency)}</p>
-                    <p className="text-amber-50 text-sm mt-1 font-semibold">{summary.count} contribution{summary.count !== 1 ? 's' : ''}</p>
+            <div className="bg-gradient-to-br from-amber-300 to-orange-400 p-6 rounded-xl shadow-lg border-2 border-amber-200">
+                <h3 className="text-white font-bold text-sm uppercase tracking-wider">🌾 Harvest Final Total (Excludes Deleted)</h3>
+                <p className="text-4xl font-bold text-white mt-2 drop-shadow">{formatCurrency(summary.activeTotal, settings.currency)}</p>
+                <p className="text-amber-50 text-sm mt-1 font-semibold">Active: {summary.activeCount} contribution{summary.activeCount !== 1 ? 's' : ''}</p>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-white/20 rounded-lg p-2 text-white">
+                        <div className="font-bold uppercase tracking-wide">Deleted</div>
+                        <div className="text-sm font-bold">{formatCurrency(summary.deletedTotal, settings.currency)}</div>
+                        <div>{summary.deletedCount} record{summary.deletedCount !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div className="bg-white/20 rounded-lg p-2 text-white">
+                        <div className="font-bold uppercase tracking-wide">Gross</div>
+                        <div className="text-sm font-bold">{formatCurrency(summary.grossTotal, settings.currency)}</div>
+                        <div>For audit only</div>
+                    </div>
                 </div>
-            )}
+                <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div className="bg-white/20 rounded-lg p-2 text-white">
+                        <div className="font-bold uppercase tracking-wide">Harvest Levy</div>
+                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-levy'] || 0, settings.currency)}</div>
+                    </div>
+                    <div className="bg-white/20 rounded-lg p-2 text-white">
+                        <div className="font-bold uppercase tracking-wide">Harvest Launch</div>
+                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-launch'] || 0, settings.currency)}</div>
+                    </div>
+                    <div className="bg-white/20 rounded-lg p-2 text-white">
+                        <div className="font-bold uppercase tracking-wide">Harvest Pledge</div>
+                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-pledge'] || 0, settings.currency)}</div>
+                    </div>
+                    <div className="bg-white/20 rounded-lg p-2 text-white">
+                        <div className="font-bold uppercase tracking-wide">Harvest</div>
+                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest'] || 0, settings.currency)}</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Duplicate Entries Audit */}
+            <div className="bg-white rounded-xl shadow-lg border-2 border-red-200 overflow-hidden">
+                <button
+                    type="button"
+                    onClick={() => setShowDuplicatesPanel(prev => !prev)}
+                    className="w-full px-5 py-4 flex items-center justify-between bg-gradient-to-r from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 transition-colors"
+                >
+                    <div className="text-left">
+                        <div className="text-sm font-bold uppercase tracking-wide text-red-700">Duplicate Entries (Cloud Data)</div>
+                        <div className="text-xs text-red-600">Same member + same date + same category</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold text-red-700">
+                            {duplicateGroups.length} group{duplicateGroups.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-xs font-bold text-red-700">{showDuplicatesPanel ? 'Hide' : 'Show'}</span>
+                    </div>
+                </button>
+
+                {showDuplicatesPanel && (
+                    <div className="p-4 space-y-3 bg-red-50/40">
+                        {duplicateGroups.length === 0 ? (
+                            <div className="text-sm text-slate-600">No duplicates found.</div>
+                        ) : (
+                            duplicateGroups.map(group => {
+                                const lead = group.entries[0];
+                                const groupTotal = group.entries.reduce((sum, e) => sum + e.amount, 0);
+                                const canFix = !!currentUser && ['admin', 'finance-chair', 'finance-team'].includes(currentUser.role);
+                                const canVerify = currentUser?.role === 'admin';
+
+                                return (
+                                    <div key={group.key} className="rounded-lg border border-red-200 bg-white p-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <div className="text-sm font-bold text-slate-800">{lead.memberName}</div>
+                                                <div className="text-xs text-slate-600">
+                                                    {lead.date} • {lead.type.replace(/-/g, ' ')} • {group.entries.length} duplicates • Total {formatCurrency(groupTotal, settings.currency)}
+                                                </div>
+                                            </div>
+                                            {canVerify && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAcceptedDuplicateKeys(prev => prev.includes(group.key) ? prev : [...prev, group.key]);
+                                                        showToast('Duplicate group verified and accepted.', 'success');
+                                                    }}
+                                                    className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded"
+                                                    title="Verify and accept this duplicate group"
+                                                >
+                                                    ✓ Verify & Accept
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="mt-2 space-y-1">
+                                            {group.entries.map(entry => (
+                                                <div key={entry.id} className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                                                    <span>
+                                                        {formatCurrency(entry.amount, settings.currency)} • ID: {entry.id.slice(0, 8)} • By: {entry.createdBy || 'Unknown'}
+                                                    </span>
+                                                    {canFix && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenModal(entry)}
+                                                            className="text-amber-700 hover:text-amber-900 font-bold"
+                                                        >
+                                                            Open
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+            </div>
 
             {/* Grouped List */}
             <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
@@ -482,7 +685,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                         </button>
                                         {!collapsedMonths.has(monthGroup.monthKey) && monthGroup.dates.map(date => {
                                             const dateEntries = entriesByDate[date];
-                                            const dateTotal = dateEntries.reduce((sum, e) => sum + e.amount, 0);
+                                            const dateTotal = dateEntries.filter(e => !e.deleted).reduce((sum, e) => sum + e.amount, 0);
                                             const hasDeleted = dateEntries.some(e => e.deleted);
 
                                             return (
@@ -537,7 +740,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <h2 className="text-2xl font-bold">{new Date(selectedDateForModal + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
-                                    <p className="text-amber-100 mt-1">{entriesByDate[selectedDateForModal].length} contribution{entriesByDate[selectedDateForModal].length !== 1 ? 's' : ''} • Total: {formatCurrency(entriesByDate[selectedDateForModal].reduce((sum, e) => sum + e.amount, 0), settings.currency)}</p>
+                                    <p className="text-amber-100 mt-1">{entriesByDate[selectedDateForModal].length} contribution{entriesByDate[selectedDateForModal].length !== 1 ? 's' : ''} • Active Total: {formatCurrency(entriesByDate[selectedDateForModal].filter(e => !e.deleted).reduce((sum, e) => sum + e.amount, 0), settings.currency)}</p>
                                 </div>
                                 <button onClick={() => setSelectedDateForModal(null)} className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-lg text-2xl font-bold transition-all">×</button>
                             </div>
@@ -597,6 +800,16 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                                             Created by: {entry.createdBy || 'Unknown'}{entry.updatedBy ? ` | Updated by: ${entry.updatedBy}` : ''}
                                                         </div>
                                                     </div>
+                                                    {entry.deleted && (
+                                                        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800 space-y-1">
+                                                            <div><span className="font-semibold">Deleted by:</span> {entry.deletedBy || 'Unknown'}</div>
+                                                            <div><span className="font-semibold">Reason:</span> {entry.deletedReason || 'No reason provided'}</div>
+                                                            <div>
+                                                                <span className="font-semibold">Deleted at:</span>{' '}
+                                                                {entry.deletedAt ? new Date(entry.deletedAt).toLocaleString() : 'Unknown'}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     {entry.note && (
                                                         <div className="mt-2 text-sm text-slate-600 italic">
                                                             <span className="font-medium">Note:</span> {entry.note}
@@ -639,7 +852,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                         
                         <div className="p-6 bg-slate-50 rounded-b-2xl border-t-2 border-slate-200 flex justify-between items-center">
                             <div className="text-sm text-slate-600">
-                                <span className="font-bold">Total for this date:</span> {formatCurrency(entriesByDate[selectedDateForModal].reduce((sum, e) => sum + e.amount, 0), settings.currency)}
+                                <span className="font-bold">Active total for this date:</span> {formatCurrency(entriesByDate[selectedDateForModal].filter(e => !e.deleted).reduce((sum, e) => sum + e.amount, 0), settings.currency)}
                             </div>
                             <button onClick={() => setSelectedDateForModal(null)} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
                                 Close

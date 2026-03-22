@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Entry, Settings, SyncStatus, Method } from '../types';
 import { formatCurrency, getTodayEST, getNowEST, isEntryWindowOpen, formatMethod } from '../utils';
-import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase } from '../services/supabase';
+import { saveEntryToSupabase, markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, checkEntryDuplicateInSupabase, loadEntriesFromSupabase } from '../services/supabase';
 import { downloadReceipt, shareViaWhatsApp } from '../utils/receiptGenerator';
 
 interface DevelopmentFundProps {
@@ -270,6 +270,14 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         // Save to database first (multi-user mode)
         try {
             if (settings.supabaseUrl && settings.supabaseKey) {
+                const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, newEntry);
+                if (hasCloudDuplicate) {
+                    setDuplicateWarning(true);
+                    alert(`Duplicate blocked by cloud check for ${selectedMember.name} on ${newDate}.`);
+                    const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                    setEntries(refreshedEntries);
+                    return;
+                }
                 await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, newEntry);
             }
             // Then update local state
@@ -347,8 +355,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                     settings.supabaseUrl, 
                     settings.supabaseKey, 
                     entry,
-                    deleteReason,
-                    currentUser.username
+                    currentUser.username,
+                    deleteReason
                 );
                 
                 // Then mark as deleted in the entries table
@@ -426,6 +434,14 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             }
             for (const entry of prepared) {
                 if (settings.supabaseUrl && settings.supabaseKey) {
+                    const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+                    if (hasCloudDuplicate) {
+                        alert(`Duplicate blocked by cloud check for ${entry.memberName} on ${entry.date}.`);
+                        const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                        setEntries(refreshedEntries);
+                        setBulkSaving(false);
+                        return;
+                    }
                     await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
                 }
             }
