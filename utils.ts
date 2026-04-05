@@ -424,6 +424,9 @@ export function sanitizeEntryType(type: any): EntryType {
         'first-fruits': 'thanksgiving-offering',
         'thanks': 'thanksgiving-offering',
         'thanksgiving': 'thanksgiving-offering',
+        'lent': 'lent-donation',
+        'lentdonation': 'lent-donation',
+        'lent-donation': 'lent-donation',
         'tithes': 'tithe',
         'development': 'development-fund',
         'developmentfund': 'development-fund',
@@ -452,6 +455,7 @@ export function sanitizeEntryType(type: any): EntryType {
         'harvest-pledge',
         'harvest-launch',
         'day-born',
+        'lent-donation',
         'development-fund',
         'other'
     ];
