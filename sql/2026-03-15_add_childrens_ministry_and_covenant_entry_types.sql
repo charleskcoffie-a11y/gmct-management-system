@@ -35,6 +35,7 @@ ALTER TABLE entries
       'harvest',
       'harvest-launch',
       'day-born',
+      'lent-donation',
       'development-fund',
       'covenant',
       'childrens-ministry',

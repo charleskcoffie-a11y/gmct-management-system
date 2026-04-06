@@ -23,9 +23,6 @@ export interface Entry {
     updatedBy?: string;
     lastUpdated?: string; // ISO Timestamp
     deleted?: boolean;
-    deletedBy?: string;
-    deletedReason?: string;
-    deletedAt?: string; // ISO Timestamp
     createdAt?: string; // ISO Timestamp (creation time)
 }
 
@@ -103,18 +100,6 @@ export interface Settings {
     etransferProvider?: 'sendgrid' | 'mailgun' | 'resend' | 'generic';
     // Class Leader Access Codes
     classAccessCodes?: Record<string, string>; // Map of class number to access code, e.g. {"1": "alpha", "2": "beta"}
-    // Requisition approval limits (amount ranges)
-    requisitionApprovalLimits?: {
-        pastor: { min: number; max: number };
-        financeTeam: { min: number; max: number };
-    };
-    requisitionPastorLimits?: Array<{
-        username: string;
-        min: number;
-        max: number;
-        unlimited?: boolean;
-    }>;
-    requisitionFinanceApprovers?: string[];
 }
 
 export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader';
@@ -189,9 +174,6 @@ export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest
 
 export type RequisitionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'funded' | 'paid' | 'closed';
 export type ApprovalDecision = 'approved' | 'rejected';
-export type RequisitionPurchaseType = 'routine' | 'adhoc';
-export type RequisitionApproverRole = 'pastor' | 'finance-team' | 'admin';
-export type RequisitionSourceType = 'form' | 'pdf-upload';
 
 export interface RequisitionItem {
     id: string;
@@ -202,63 +184,27 @@ export interface RequisitionItem {
     accountCode?: string;
 }
 
-export interface RequisitionReceiptAttachment {
-    fileName: string;
-    contentType: string;
-    size: number;
-    dataUrl: string;
-    source?: 'file' | 'camera' | 'scan';
-    createdAt?: string;
-}
-
-export interface RequisitionUploadedPdf {
-    fileName: string;
-    contentType: string;
-    size: number;
-    dataUrl: string;
-    source?: 'file' | 'camera' | 'scan';
-    createdAt?: string;
-}
-
 export interface Requisition {
     id: string;
-    requisitionNumber?: string; // Formatted number for printing on checks (e.g., REQ-2026-001)
     requesterUsername: string;
-    requesterName: string;
-    dateCreated?: string; // ISO date YYYY-MM-DD when requisition was created
     title: string;
     purpose?: string;
-    payableTo?: string;
-    organizationCommittee?: string;
-    intendedFor?: string;
-    purchaseType?: RequisitionPurchaseType;
     fund?: string;
     neededBy?: string; // ISO date
     totalAmount: number;
     status: RequisitionStatus;
-    sourceType?: RequisitionSourceType;
-    requiredApproverRole?: RequisitionApproverRole;
-    requiredApproverUsername?: string;
-    completionAttachmentUrl?: string;
-    completionAttachmentAt?: string;
-    uploadedPdf?: RequisitionUploadedPdf;
-    receiptAttachments?: RequisitionReceiptAttachment[];
     createdAt?: string;
     updatedBy?: string;
     lastUpdated?: string;
     items?: RequisitionItem[];
-    approvals?: RequisitionApproval[];
 }
 
 export interface RequisitionApproval {
     id: string;
     requisitionId: string;
     approverUsername: string;
-    approverRole?: RequisitionApproverRole;
     decision: ApprovalDecision;
     note?: string;
-    signatureName: string;
-    signatureAt?: string;
     decidedAt?: string;
 }
 

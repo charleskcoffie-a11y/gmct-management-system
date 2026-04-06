@@ -9,7 +9,6 @@ let currentKey = '';
 
 export const getSupabaseClient = (url: string, key: string): SupabaseClient | null => {
     if (!url || !key) return null;
-    if (!/^https?:\/\//i.test(url)) return null;
     
     // Return existing instance if credentials haven't changed
     if (supabaseInstance && url === currentUrl && key === currentKey) {
@@ -35,7 +34,7 @@ export const getSupabaseClient = (url: string, key: string): SupabaseClient | nu
 // --- Connection Test ---
 export const testSupabaseConnection = async (url: string, key: string) => {
     try {
-        if (!url || !key || !/^https?:\/\//i.test(url)) {
+        if (!url || !key) {
              return { success: false, message: "URL and Key are required." };
         }
         
@@ -122,12 +121,10 @@ const mapMemberFromDB = (m: any): Member => {
     };
 };
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const mapEntryToDB = (e: Entry) => ({
     id: e.id,
     date: e.date,
-    member_id: e.memberID && UUID_REGEX.test(e.memberID) ? e.memberID : null,
+    member_id: e.memberID,
     member_name: e.memberName,
     type: e.type,
     fund: e.fund,
@@ -161,9 +158,6 @@ const mapEntryFromDB = (e: any): Entry => ({
     updatedBy: e.updated_by,
     lastUpdated: e.last_updated,
     deleted: e.deleted,
-    deletedBy: e.deleted_by,
-    deletedReason: e.deleted_reason,
-    deletedAt: e.deleted_at,
     createdAt: e.created_at
 });
 
@@ -246,19 +240,7 @@ const mapSettingsToDB = (s: Settings) => ({
     etransfer_inbound_secret: s.etransferInboundSecret,
     etransfer_provider: s.etransferProvider,
     class_access_codes: s.classAccessCodes ? JSON.stringify(s.classAccessCodes) : null,
-    requisition_approval_limits: s.requisitionApprovalLimits ? JSON.stringify(s.requisitionApprovalLimits) : null,
-    requisition_pastor_limits: s.requisitionPastorLimits ? JSON.stringify(s.requisitionPastorLimits) : null,
-    requisition_finance_approvers: s.requisitionFinanceApprovers ? JSON.stringify(s.requisitionFinanceApprovers) : null,
 });
-
-const normalizeApprovalLimits = (raw: any) => {
-    if (!raw || typeof raw !== 'object') return undefined;
-    const financeTeam = raw.financeTeam ?? raw.steward ?? raw.finance;
-    return {
-        pastor: raw.pastor,
-        financeTeam
-    };
-};
 
 const mapSettingsFromDB = (s: any): Settings => ({
     currency: s.currency || 'GH₵',
@@ -278,9 +260,6 @@ const mapSettingsFromDB = (s: any): Settings => ({
     etransferInboundSecret: s.etransfer_inbound_secret,
     etransferProvider: s.etransfer_provider,
     classAccessCodes: s.class_access_codes ? JSON.parse(s.class_access_codes) : undefined,
-    requisitionApprovalLimits: s.requisition_approval_limits ? normalizeApprovalLimits(JSON.parse(s.requisition_approval_limits)) : undefined,
-    requisitionPastorLimits: s.requisition_pastor_limits ? JSON.parse(s.requisition_pastor_limits) : undefined,
-    requisitionFinanceApprovers: s.requisition_finance_approvers ? JSON.parse(s.requisition_finance_approvers) : undefined,
 });
 
 // --- Sync Functions ---
@@ -350,28 +329,9 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
     const members = membersDB?.map(mapMemberFromDB) || [];
 
-    const entriesDB: any[] = [];
-    const entriesPageSize = 1000;
-    let entriesFrom = 0;
-
-    while (true) {
-        const { data: page, error: entErr } = await supabase
-            .from('entries')
-            .select('*')
-            .order('date', { ascending: false })
-            .order('id', { ascending: false })
-            .range(entriesFrom, entriesFrom + entriesPageSize - 1);
-
-        if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
-        if (!page || page.length === 0) break;
-
-        entriesDB.push(...page);
-
-        if (page.length < entriesPageSize) break;
-        entriesFrom += entriesPageSize;
-    }
-
-    const entries = entriesDB.map(mapEntryFromDB);
+    const { data: entriesDB, error: entErr } = await supabase.from('entries').select('*');
+    if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
+    const entries = entriesDB?.map(mapEntryFromDB) || [];
 
     const { data: usersDB, error: userErr } = await supabase.from('app_users').select('*');
     if (userErr) throw new Error(`Fetch Users failed: ${userErr.message}`);
@@ -443,71 +403,26 @@ export const markETransferReconciled = async (url: string, key: string, id: stri
 // --- Requisitions ---
 const mapRequisitionToDB = (r: Requisition) => ({
     id: r.id,
-    requisition_number: r.requisitionNumber || null,
     requester_username: r.requesterUsername,
-    requester_name: r.requesterName,
-    date_created: r.dateCreated || null,
     title: r.title,
     purpose: r.purpose,
-    payable_to: r.payableTo || null,
-    organization_committee: r.organizationCommittee || null,
-    intended_for: r.intendedFor,
-    purchase_type: r.purchaseType,
     fund: r.fund,
     needed_by: r.neededBy || null,
     total_amount: r.totalAmount,
     status: r.status,
-    source_type: r.sourceType || null,
-    required_approver_role: r.requiredApproverRole || null,
-    required_approver_username: r.requiredApproverUsername || null,
-    completion_attachment_url: r.completionAttachmentUrl || null,
-    completion_attachment_at: r.completionAttachmentAt || null,
-    uploaded_pdf: r.uploadedPdf || null,
-    receipt_attachment: r.receiptAttachments || null,
     updated_by: r.updatedBy || null,
     last_updated: r.lastUpdated || null,
 });
 
-const normalizeReceiptAttachment = (raw: any) => {
-    if (!raw) return undefined;
-    if (typeof raw === 'string') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed;
-            if (parsed && typeof parsed === 'object') return [parsed];
-            return undefined;
-        } catch {
-            return undefined;
-        }
-    }
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === 'object') return [raw];
-    return undefined;
-};
-
 const mapRequisitionFromDB = (r: any): Requisition => ({
     id: r.id,
-    requisitionNumber: r.requisition_number || undefined,
     requesterUsername: r.requester_username,
-    requesterName: r.requester_name || r.requester_username,
-    dateCreated: r.date_created || undefined,
     title: r.title,
     purpose: r.purpose || undefined,
-    payableTo: r.payable_to || undefined,
-    organizationCommittee: r.organization_committee || undefined,
-    intendedFor: r.intended_for || undefined,
-    purchaseType: r.purchase_type || undefined,
     fund: r.fund || undefined,
     neededBy: r.needed_by || undefined,
     totalAmount: parseFloat(r.total_amount || 0),
     status: r.status,
-    sourceType: r.source_type || undefined,
-    requiredApproverRole: r.required_approver_role || undefined,
-    requiredApproverUsername: r.required_approver_username || undefined,
-    completionAttachmentUrl: r.completion_attachment_url || undefined,
-    completionAttachmentAt: r.completion_attachment_at || undefined,
-    uploadedPdf: r.uploaded_pdf || undefined,
-    receiptAttachments: normalizeReceiptAttachment(r.receipt_attachment),
     createdAt: r.created_at || undefined,
     updatedBy: r.updated_by || undefined,
     lastUpdated: r.last_updated || undefined,
@@ -535,11 +450,8 @@ const mapApprovalToDB = (a: RequisitionApproval) => ({
     id: a.id,
     requisition_id: a.requisitionId,
     approver_username: a.approverUsername,
-    approver_role: a.approverRole || null,
     decision: a.decision,
     note: a.note || null,
-    signature_name: a.signatureName,
-    signature_at: a.signatureAt || null,
     decided_at: a.decidedAt || null,
 });
 
@@ -547,11 +459,8 @@ const mapApprovalFromDB = (a: any): RequisitionApproval => ({
     id: a.id,
     requisitionId: a.requisition_id,
     approverUsername: a.approver_username,
-    approverRole: a.approver_role || undefined,
     decision: a.decision,
     note: a.note || undefined,
-    signatureName: a.signature_name || '',
-    signatureAt: a.signature_at || undefined,
     decidedAt: a.decided_at || undefined,
 });
 
@@ -573,13 +482,6 @@ export const loadRequisitions = async (url: string, key: string): Promise<Requis
         items.forEach(i => { (byReq[i.requisitionId] ||= []).push(i); });
         reqs.forEach(r => { r.items = byReq[r.id] || []; });
     }
-    if (ids.length > 0) {
-        const { data: approvalsData } = await supabase.from('requisition_approvals').select('*').in('requisition_id', ids).order('decided_at', { ascending: false });
-        const approvals = (approvalsData || []).map(mapApprovalFromDB);
-        const byReq: Record<string, RequisitionApproval[]> = {};
-        approvals.forEach(a => { (byReq[a.requisitionId] ||= []).push(a); });
-        reqs.forEach(r => { r.approvals = byReq[r.id] || []; });
-    }
     return reqs;
 };
 
@@ -588,39 +490,17 @@ export const saveRequisition = async (url: string, key: string, req: Requisition
     if (!supabase) throw new Error('Invalid Supabase configuration');
     const { error } = await supabase.from('requisitions').upsert([mapRequisitionToDB(req)]);
     if (error) throw new Error(error.message);
-    const items = req.items || [];
-
-    const { error: deleteErr } = await supabase
-        .from('requisition_items')
-        .delete()
-        .eq('requisition_id', req.id);
-    if (deleteErr) throw new Error(deleteErr.message);
-
-    if (items.length > 0) {
-        const { error: itemErr } = await supabase.from('requisition_items').upsert(items.map(mapReqItemToDB));
+    if (req.items && req.items.length > 0) {
+        // Upsert items
+        const { error: itemErr } = await supabase.from('requisition_items').upsert(req.items.map(mapReqItemToDB));
         if (itemErr) throw new Error(itemErr.message);
     }
 };
 
-export const deleteRequisition = async (url: string, key: string, id: string) => {
+export const submitRequisition = async (url: string, key: string, id: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase.from('requisitions').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-};
-
-export const submitRequisition = async (url: string, key: string, id: string, requiredApproverRole?: string, requiredApproverUsername?: string, requisitionNumber?: string) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase.from('requisitions')
-        .update({
-            status: 'submitted',
-            required_approver_role: requiredApproverRole || null,
-            required_approver_username: requiredApproverUsername || null,
-            requisition_number: requisitionNumber || null,
-            last_updated: new Date().toISOString()
-        })
-        .eq('id', id);
+    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: new Date().toISOString() }).eq('id', id);
     if (error) throw new Error(error.message);
 };
 
@@ -631,26 +511,6 @@ export const decideRequisition = async (url: string, key: string, approval: Requ
     if (insErr) throw new Error(insErr.message);
     const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: new Date().toISOString() }).eq('id', approval.requisitionId);
     if (updErr) throw new Error(updErr.message);
-};
-
-export const uploadRequisitionAttachment = async (url: string, key: string, requisitionId: string, file: File) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    const ext = file.name.split('.').pop() || 'jpg';
-    const path = `${requisitionId}/completion-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('requisition-attachments').upload(path, file, { upsert: true });
-    if (error) throw new Error(error.message);
-    const { data } = supabase.storage.from('requisition-attachments').getPublicUrl(path);
-    return data.publicUrl;
-};
-
-export const saveRequisitionAttachment = async (url: string, key: string, requisitionId: string, attachmentUrl: string) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase.from('requisitions')
-        .update({ completion_attachment_url: attachmentUrl, completion_attachment_at: new Date().toISOString(), last_updated: new Date().toISOString() })
-        .eq('id', requisitionId);
-    if (error) throw new Error(error.message);
 };
 
 // --- Individual Entry Operations (for multi-user real-time collaboration) ---
@@ -695,64 +555,15 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
     return { success: true };
 };
 
-export const checkEntryDuplicateInSupabase = async (
-    url: string,
-    key: string,
-    entry: Pick<Entry, 'id' | 'date' | 'type' | 'memberID' | 'memberName'>
-): Promise<boolean> => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-
-    let query = supabase
-        .from('entries')
-        .select('id')
-        .eq('date', entry.date)
-        .eq('type', entry.type)
-        .or('deleted.is.null,deleted.eq.false')
-        .limit(20);
-
-    if (entry.memberID && UUID_REGEX.test(entry.memberID)) {
-        query = query.eq('member_id', entry.memberID);
-    } else {
-        const normalizedName = (entry.memberName || '').trim();
-        query = query.eq('member_name', normalizedName);
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(`Duplicate check failed: ${error.message}`);
-
-    return (data || []).some(row => row.id !== entry.id);
-};
-
 export const loadEntriesFromSupabase = async (url: string, key: string): Promise<Entry[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
-
-    const allRows: any[] = [];
-    const pageSize = 1000;
-    let from = 0;
-
-    while (true) {
-        const { data, error } = await supabase
-            .from('entries')
-            .select('*')
-            .order('date', { ascending: false })
-            .order('id', { ascending: false })
-            .range(from, from + pageSize - 1);
-
-        if (error) {
-            console.warn('Failed to load entries:', error.message);
-            return [];
-        }
-
-        if (!data || data.length === 0) break;
-        allRows.push(...data);
-
-        if (data.length < pageSize) break;
-        from += pageSize;
+    const { data, error } = await supabase.from('entries').select('*').order('date', { ascending: false });
+    if (error) {
+        console.warn('Failed to load entries:', error.message);
+        return [];
     }
-
-    return allRows.map(mapEntryFromDB);
+    return (data || []).map(mapEntryFromDB);
 };
 
 export const loadMembersFromSupabase = async (url: string, key: string): Promise<Member[]> => {
@@ -824,23 +635,6 @@ export const saveMonthLockToSupabase = async (url: string, key: string, lock: Mo
     return { success: true };
 };
 
-export const saveSundayLockToSupabase = async (url: string, key: string, lock: any) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error("Invalid Supabase configuration");
-
-    const lockData = {
-        id: lock.id,
-        date: lock.date,
-        locked: lock.locked,
-        locked_by: lock.lockedBy,
-        locked_at: lock.lockedAt,
-    };
-
-    const { error } = await supabase.from('sunday_locks').upsert([lockData]);
-    if (error) throw new Error(`Save Sunday lock failed: ${error.message}`);
-    return { success: true };
-};
-
 export const saveSettingsToSupabase = async (url: string, key: string, settings: Settings) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
@@ -875,55 +669,13 @@ export const deleteUserFromSupabase = async (url: string, key: string, username:
 };
 
 // --- Individual Member Delete ---
-export const deleteMemberFromSupabase = async (
-    url: string,
-    key: string,
-    memberId: string
-): Promise<{ success: true; mode: 'deleted' | 'deactivated' }> => {
+export const deleteMemberFromSupabase = async (url: string, key: string, memberId: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const { error: pledgeDeleteError } = await supabase
-        .from('harvest_pledges')
-        .delete()
-        .eq('member_id', memberId);
-
-    if (pledgeDeleteError && pledgeDeleteError.code !== '42P01') {
-        throw new Error(`Delete member failed while removing linked harvest pledges: ${pledgeDeleteError.message}`);
-    }
-
-    const { error: levyDeleteError } = await supabase
-        .from('member_levies')
-        .delete()
-        .eq('member_id', memberId);
-
-    if (levyDeleteError && levyDeleteError.code !== '42P01') {
-        throw new Error(`Delete member failed while removing linked levies: ${levyDeleteError.message}`);
-    }
-
     const { error } = await supabase.from('members').delete().eq('id', memberId);
-    if (!error) return { success: true, mode: 'deleted' };
-
-    const isFkConflict =
-        error.code === '23503' ||
-        /foreign key|constraint|still referenced|violates/i.test(`${error.message || ''} ${error.details || ''}`);
-
-    if (!isFkConflict) {
-        throw new Error(`Delete member failed: ${error.message}`);
-    }
-
-    const { error: deactivateError } = await supabase
-        .from('members')
-        .update({ active: false, last_updated: new Date().toISOString() })
-        .eq('id', memberId);
-
-    if (deactivateError) {
-        throw new Error(
-            `Delete member blocked by linked records, and fallback deactivation failed: ${deactivateError.message}`
-        );
-    }
-
-    return { success: true, mode: 'deactivated' };
+    if (error) throw new Error(`Delete member failed: ${error.message}`);
+    return { success: true };
 };
 
 // --- Harvest Pledge Functions ---
@@ -1025,25 +777,17 @@ export const saveHarvestPledgePayment = async (
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const basePayload = {
-        pledge_id: pledgeId,
-        payment_date: paymentDate,
-        amount: amount,
-        paid_by: paidBy,
-        created_at: new Date().toISOString()
-    };
-
-    let { error } = await supabase
+    const { error } = await supabase
         .from('harvest_pledge_payments')
-        .insert([{ ...basePayload, entry_id: paymentEntryId }]);
-
-    if (error && /entry_id/i.test(error.message) && /column/i.test(error.message)) {
-        const retry = await supabase
-            .from('harvest_pledge_payments')
-            .insert([{ ...basePayload, payment_entry_id: paymentEntryId }]);
-        error = retry.error;
-    }
-
+        .insert([{
+            pledge_id: pledgeId,
+            payment_entry_id: paymentEntryId,
+            payment_date: paymentDate,
+            amount: amount,
+            paid_by: paidBy,
+            created_at: new Date().toISOString()
+        }]);
+    
     if (error) throw new Error(`Save harvest pledge payment failed: ${error.message}`);
     return { success: true };
 };
@@ -1255,164 +999,31 @@ export const deleteWesleyHallReceipt = async (url: string, key: string, id: stri
 };
 
 // --- Attendance Functions ---
-type AttendanceMemberRow = {
-    id: string;
-    class_number: string;
-    attendance_date: string;
-    service_type: 'sunday' | 'bible-study';
-    member_id: string;
-    member_name?: string;
-    status: string;
-};
-
-type AttendanceSaveRow = {
-    date: string;
-    member_id: string;
-    status: string;
-    service_type?: 'sunday' | 'bible-study';
-    class_number?: string;
-};
-
-export const loadAttendanceForDate = async (
-    url: string,
-    key: string,
-    date: string,
-    serviceType: 'sunday' | 'bible-study' = 'sunday'
-) => {
+export const loadAttendanceForDate = async (url: string, key: string, date: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
     const { data, error } = await supabase
         .from('attendance')
-        .select(`
-            id,
-            class_number,
-            attendance_date,
-            service_type,
-            deleted,
-            member_attendance (
-                member_id,
-                member_name,
-                class_number,
-                status
-            )
-        `)
-        .eq('attendance_date', date)
-        .eq('service_type', serviceType)
-        .eq('deleted', false);
+        .select('*')
+        .eq('date', date);
     if (error) {
         console.warn('Load attendance failed:', error.message);
         return [];
     }
-
-    return (data || []).flatMap((session: any) =>
-        (session.member_attendance || []).map((member: any) => ({
-            id: session.id,
-            class_number: member.class_number || session.class_number,
-            attendance_date: session.attendance_date,
-            service_type: session.service_type,
-            member_id: member.member_id,
-            member_name: member.member_name,
-            status: member.status,
-        }))
-    ) as AttendanceMemberRow[];
+    return data || [];
 };
 
 export const saveAttendanceToSupabase = async (
     url: string,
     key: string,
-    records: AttendanceSaveRow[]
+    records: Array<{ date: string; member_id: string; status: string }>
 ) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
-
-    if (records.length === 0) return { success: true };
-
-    const groupedRecords = records.reduce((groups, record) => {
-        const attendanceDate = record.date;
-        const classNumber = record.class_number?.trim();
-        const serviceType = record.service_type || 'sunday';
-
-        if (!attendanceDate || !classNumber) {
-            throw new Error('Attendance records require date and class_number');
-        }
-
-        const groupKey = `${classNumber}::${attendanceDate}::${serviceType}`;
-        if (!groups.has(groupKey)) {
-            groups.set(groupKey, {
-                attendanceDate,
-                classNumber,
-                serviceType,
-                records: [] as AttendanceSaveRow[],
-            });
-        }
-
-        groups.get(groupKey)!.records.push(record);
-        return groups;
-    }, new Map<string, { attendanceDate: string; classNumber: string; serviceType: 'sunday' | 'bible-study'; records: AttendanceSaveRow[] }>());
-
-    for (const group of groupedRecords.values()) {
-        const memberIds = group.records.map(record => record.member_id);
-        const { data: members, error: membersError } = await supabase
-            .from('members')
-            .select('id, name, class_number')
-            .in('id', memberIds);
-
-        if (membersError) {
-            throw new Error(`Load members for attendance failed: ${membersError.message}`);
-        }
-
-        const memberMap = new Map((members || []).map((member: any) => [member.id, member]));
-        const presentCount = group.records.filter(record => record.status === 'present').length;
-        const absentCount = group.records.filter(record => record.status === 'absent').length;
-
-        const { data: attendanceSession, error: attendanceError } = await supabase
-            .from('attendance')
-            .upsert({
-                class_number: group.classNumber,
-                attendance_date: group.attendanceDate,
-                service_type: group.serviceType,
-                total_members_present: presentCount,
-                total_members_absent: absentCount,
-                deleted: false,
-                last_updated: new Date().toISOString(),
-            }, { onConflict: 'class_number,attendance_date,service_type' })
-            .select('id, class_number, attendance_date, service_type')
-            .single();
-
-        if (attendanceError || !attendanceSession) {
-            throw new Error(`Save attendance failed: ${attendanceError?.message || 'Unable to create attendance session'}`);
-        }
-
-        const { error: deleteError } = await supabase
-            .from('member_attendance')
-            .delete()
-            .eq('attendance_id', attendanceSession.id);
-
-        if (deleteError) {
-            throw new Error(`Clear existing attendance details failed: ${deleteError.message}`);
-        }
-
-        const memberAttendanceRows = group.records.map(record => {
-            const member = memberMap.get(record.member_id);
-            return {
-                attendance_id: attendanceSession.id,
-                member_id: record.member_id,
-                member_name: member?.name || 'Unknown Member',
-                class_number: record.class_number || member?.class_number || group.classNumber,
-                status: record.status,
-                last_updated: new Date().toISOString(),
-            };
-        });
-
-        const { error: detailError } = await supabase
-            .from('member_attendance')
-            .insert(memberAttendanceRows);
-
-        if (detailError) {
-            throw new Error(`Save member attendance failed: ${detailError.message}`);
-        }
-    }
-
+    const { error } = await supabase
+        .from('attendance')
+        .upsert(records, { onConflict: 'date,member_id' });
+    if (error) throw new Error(`Save attendance failed: ${error.message}`);
     return { success: true };
 };
 
@@ -1421,39 +1032,15 @@ export const loadAttendanceReport = async (url: string, key: string, startDate: 
     if (!supabase) return [];
     const { data, error } = await supabase
         .from('attendance')
-        .select(`
-            id,
-            class_number,
-            attendance_date,
-            service_type,
-            deleted,
-            member_attendance (
-                member_id,
-                member_name,
-                class_number,
-                status
-            )
-        `)
-        .gte('attendance_date', startDate)
-        .lte('attendance_date', endDate)
-        .eq('deleted', false)
-        .order('attendance_date', { ascending: false });
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false });
     if (error) {
         console.warn('Load attendance report failed:', error.message);
         return [];
     }
-
-    return (data || []).flatMap((session: any) =>
-        (session.member_attendance || []).map((member: any) => ({
-            id: session.id,
-            class_number: member.class_number || session.class_number,
-            attendance_date: session.attendance_date,
-            service_type: session.service_type,
-            member_id: member.member_id,
-            member_name: member.member_name,
-            status: member.status,
-        }))
-    ) as AttendanceMemberRow[];
+    return data || [];
 };
 
 // --- Asset Management Functions ---
@@ -1667,160 +1254,4 @@ export const saveAnnualLevyAmount = async (
         'Annual harvest levy amount per member',
         updatedBy
     );
-};
-
-// Class Leader Management
-export const saveClassLeaderToSupabase = async (url: string, key: string, leader: any) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    
-    const leaderData = {
-        id: leader.id,
-        username: leader.username,
-        password: leader.password,
-        class_number: leader.classNumber,
-        access_code: leader.accessCode,
-        full_name: leader.fullName,
-        phone: leader.phone,
-        email: leader.email,
-        active: leader.active,
-        created_by: leader.createdBy,
-        updated_by: leader.updatedBy,
-        last_updated: leader.lastUpdated,
-    };
-    
-    const { error } = await supabase
-        .from('class_leaders')
-        .upsert([leaderData]);
-    
-    if (error) throw new Error(`Save class leader failed: ${error.message}`);
-    return { success: true };
-};
-
-export const deleteClassLeaderFromSupabase = async (url: string, key: string, leaderId: string) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    
-    const { error } = await supabase
-        .from('class_leaders')
-        .delete()
-        .eq('id', leaderId);
-    
-    if (error) throw new Error(`Delete class leader failed: ${error.message}`);
-    return { success: true };
-};
-
-// Entry Deletion Logging
-export const logEntryDeletionToSupabase = async (
-    url: string,
-    key: string,
-    entry: any,
-    deletedBy: string,
-    reason?: string
-) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-
-    const normalizedMemberId = entry?.memberID && UUID_REGEX.test(entry.memberID) ? entry.memberID : null;
-    const normalizedReason = (reason || '').trim() || 'No reason provided';
-    const normalizedDeletedBy = (deletedBy || '').trim() || 'Unknown';
-
-    // Primary audit table used by the SQL migration/docs.
-    const auditLogEntry = {
-        entry_id: entry.id,
-        entry_type: entry.type,
-        member_id: normalizedMemberId,
-        member_name: entry.memberName || null,
-        amount: entry.type === 'count' ? null : entry.amount,
-        original_date: entry.date,
-        deletion_reason: normalizedReason,
-        deleted_by: normalizedDeletedBy,
-        deleted_at: new Date().toISOString(),
-        original_entry_data: entry,
-    };
-
-    const { error: auditError } = await supabase
-        .from('entry_deletions')
-        .insert([auditLogEntry]);
-
-    if (!auditError) return { success: true };
-
-    // Backward compatibility fallback for deployments still using `deletion_log`.
-    const legacyLogEntry = {
-        entry_id: entry.id,
-        entry_type: entry.type,
-        member_id: normalizedMemberId,
-        member_name: entry.memberName || null,
-        amount: entry.type === 'count' ? null : entry.amount,
-        count_value: entry.type === 'count' ? entry.amount : null,
-        fund: entry.fund,
-        method: entry.method,
-        date: entry.date,
-        note: entry.note,
-        deleted_by: normalizedDeletedBy,
-        deleted_at: new Date().toISOString(),
-        deletion_reason: normalizedReason,
-    };
-
-    const { error: legacyError } = await supabase
-        .from('deletion_log')
-        .insert([legacyLogEntry]);
-
-    if (legacyError) {
-        throw new Error(`Log entry deletion failed: ${legacyError.message}`);
-    }
-    return { success: true };
-};
-
-export const markEntryAsDeletedInSupabase = async (
-    url: string,
-    key: string,
-    entryId: string,
-    deletedBy?: string,
-    deleteReason?: string
-) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-
-    const updates: any = {
-        deleted: true,
-        deleted_at: new Date().toISOString(),
-    };
-
-    if (deletedBy) updates.deleted_by = deletedBy;
-    if (deleteReason) updates.deleted_reason = deleteReason;
-
-    const { error } = await supabase
-        .from('entries')
-        .update(updates)
-        .eq('id', entryId);
-    
-    if (error) throw new Error(`Mark entry as deleted failed: ${error.message}`);
-    return { success: true };
-};
-
-// Weekly History Management
-export const saveWeeklyHistoryToSupabase = async (url: string, key: string, record: any) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    
-    const { error } = await supabase
-        .from('weekly_history')
-        .upsert([mapHistoryToDB(record)]);
-    
-    if (error) throw new Error(`Save weekly history failed: ${error.message}`);
-    return { success: true };
-};
-
-export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, historyId: string) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    
-    const { error } = await supabase
-        .from('weekly_history')
-        .delete()
-        .eq('id', historyId);
-    
-    if (error) throw new Error(`Delete weekly history failed: ${error.message}`);
-    return { success: true };
 };

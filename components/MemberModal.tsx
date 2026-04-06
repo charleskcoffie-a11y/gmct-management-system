@@ -113,18 +113,6 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose, allo
                             <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <span className="text-indigo-600">📅</span> Date of Birth
                             </h3>
-                            <div className="mb-4">
-                                <label htmlFor="dateOfBirth" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Full Date of Birth (YYYY-MM-DD)</label>
-                                <input
-                                    id="dateOfBirth"
-                                    name="dateOfBirth"
-                                    type="date"
-                                    value={formData.dateOfBirth || ''}
-                                    onChange={handleChange}
-                                    className="w-full border-2 border-gray-200 rounded-lg py-2.5 px-4 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">Complete date of birth including year</p>
-                            </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label htmlFor="dobMonth" className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Birth Month</label>
@@ -184,7 +172,7 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, onSave, onClose, allo
                                     </select>
                                 </div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-2">Month and day fields for quick birthday lookups</p>
+                            <p className="text-xs text-gray-500 mt-2">We store month and day only</p>
                         </div>)}
 
                         {/* Contact Information Section */}
