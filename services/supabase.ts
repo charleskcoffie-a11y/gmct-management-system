@@ -72,6 +72,34 @@ const toTimestamp = (dateStr?: string) => {
     return dateStr;
 };
 
+const PAGE_SIZE = 1000;
+
+const fetchAllRows = async (
+    supabase: SupabaseClient,
+    table: string,
+    orderColumn?: string,
+    ascending: boolean = true
+) => {
+    const allRows: any[] = [];
+    let from = 0;
+
+    while (true) {
+        let query = supabase.from(table).select('*').range(from, from + PAGE_SIZE - 1);
+        if (orderColumn) {
+            query = query.order(orderColumn, { ascending });
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const rows = data || [];
+        allRows.push(...rows);
+        if (rows.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+    }
+
+    return allRows;
+};
+
 const mapMemberToDB = (m: Member) => ({
     id: m.id,
     name: m.name,
@@ -329,8 +357,12 @@ export const downloadDataFromSupabase = async (url: string, key: string) => {
     if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
     const members = membersDB?.map(mapMemberFromDB) || [];
 
-    const { data: entriesDB, error: entErr } = await supabase.from('entries').select('*');
-    if (entErr) throw new Error(`Fetch Entries failed: ${entErr.message}`);
+    let entriesDB: any[] = [];
+    try {
+        entriesDB = await fetchAllRows(supabase, 'entries', 'date', false);
+    } catch (entErr: any) {
+        throw new Error(`Fetch Entries failed: ${entErr.message}`);
+    }
     const entries = entriesDB?.map(mapEntryFromDB) || [];
 
     const { data: usersDB, error: userErr } = await supabase.from('app_users').select('*');
@@ -497,13 +529,6 @@ export const saveRequisition = async (url: string, key: string, req: Requisition
     }
 };
 
-export const submitRequisition = async (url: string, key: string, id: string) => {
-    const supabase = getSupabaseClient(url, key);
-    if (!supabase) throw new Error('Invalid Supabase configuration');
-    const { error } = await supabase.from('requisitions').update({ status: 'submitted', last_updated: new Date().toISOString() }).eq('id', id);
-    if (error) throw new Error(error.message);
-};
-
 export const decideRequisition = async (url: string, key: string, approval: RequisitionApproval, newStatus: 'approved' | 'rejected') => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
@@ -546,6 +571,83 @@ export const saveEntryToSupabase = async (url: string, key: string, entry: Entry
     return { success: true };
 };
 
+export const checkEntryDuplicateInSupabase = async (url: string, key: string, entry: Entry): Promise<boolean> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return false;
+    if (!entry.memberID || !entry.date || !entry.type) return false;
+
+    const { data, error } = await supabase
+        .from('entries')
+        .select('id')
+        .eq('member_id', entry.memberID)
+        .eq('date', entry.date)
+        .eq('type', entry.type)
+        .or('deleted.is.null,deleted.eq.false')
+        .limit(1);
+
+    if (error) {
+        console.warn('Duplicate check failed:', error.message);
+        return false;
+    }
+
+    if (!data || data.length === 0) return false;
+    return data.some((row: any) => row.id !== entry.id);
+};
+
+export const markEntryAsDeletedInSupabase = async (
+    url: string,
+    key: string,
+    entryId: string,
+    deletedBy: string,
+    deletedReason: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase
+        .from('entries')
+        .update({
+            deleted: true,
+            deleted_by: deletedBy || 'Unknown',
+            deleted_reason: deletedReason || null,
+            deleted_at: new Date().toISOString(),
+            updated_by: deletedBy || 'Unknown',
+            last_updated: new Date().toISOString(),
+        })
+        .eq('id', entryId);
+
+    if (error) throw new Error(`Mark entry as deleted failed: ${error.message}`);
+    return { success: true };
+};
+
+export const logEntryDeletionToSupabase = async (
+    url: string,
+    key: string,
+    entry: Entry,
+    deletedBy: string,
+    deletionReason: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const payload = {
+        entry_id: entry.id,
+        entry_type: entry.type,
+        member_id: entry.memberID || null,
+        member_name: entry.memberName || null,
+        amount: entry.amount ?? null,
+        original_date: entry.date || null,
+        deletion_reason: deletionReason || 'No reason provided',
+        deleted_by: deletedBy || 'Unknown',
+        deleted_at: new Date().toISOString(),
+        original_entry_data: entry,
+    };
+
+    const { error } = await supabase.from('entry_deletions').insert([payload]);
+    if (error) throw new Error(`Log entry deletion failed: ${error.message}`);
+    return { success: true };
+};
+
 export const deleteEntryFromSupabase = async (url: string, key: string, entryId: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
@@ -558,12 +660,13 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
 export const loadEntriesFromSupabase = async (url: string, key: string): Promise<Entry[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
-    const { data, error } = await supabase.from('entries').select('*').order('date', { ascending: false });
-    if (error) {
-        console.warn('Failed to load entries:', error.message);
+    try {
+        const data = await fetchAllRows(supabase, 'entries', 'date', false);
+        return (data || []).map(mapEntryFromDB);
+    } catch (error: any) {
+        console.warn('Failed to load entries:', error.message || error);
         return [];
     }
-    return (data || []).map(mapEntryFromDB);
 };
 
 export const loadMembersFromSupabase = async (url: string, key: string): Promise<Member[]> => {
@@ -635,6 +738,21 @@ export const saveMonthLockToSupabase = async (url: string, key: string, lock: Mo
     return { success: true };
 };
 
+export const saveSundayLockToSupabase = async (url: string, key: string, lock: any) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase.from('sunday_locks').upsert([{
+        date: lock.date,
+        is_locked: !!lock.isLocked,
+        locked_by: lock.lockedBy || null,
+        locked_at: lock.lockedAt || new Date().toISOString(),
+    }]);
+
+    if (error) throw new Error(`Save Sunday lock failed: ${error.message}`);
+    return { success: true };
+};
+
 export const saveSettingsToSupabase = async (url: string, key: string, settings: Settings) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
@@ -656,6 +774,83 @@ export const saveUserToSupabase = async (url: string, key: string, user: User, o
         const { error: delErr } = await supabase.from('app_users').delete().eq('username', originalUsername);
         if (delErr) throw new Error(`Cleanup old username failed: ${delErr.message}`);
     }
+    return { success: true };
+};
+
+export const submitRequisition = async (
+    url: string,
+    key: string,
+    id: string,
+    approverRole?: string,
+    approverUsername?: string,
+    requisitionNumber?: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const updatePayload: any = {
+        status: 'submitted',
+        last_updated: new Date().toISOString(),
+    };
+    if (approverRole) updatePayload.required_approver_role = approverRole;
+    if (approverUsername) updatePayload.required_approver_username = approverUsername;
+    if (requisitionNumber) updatePayload.requisition_number = requisitionNumber;
+
+    const { error } = await supabase.from('requisitions').update(updatePayload).eq('id', id);
+    if (error) throw new Error(error.message);
+    return { success: true };
+};
+
+export const deleteRequisition = async (url: string, key: string, requisitionId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error: itemErr } = await supabase.from('requisition_items').delete().eq('requisition_id', requisitionId);
+    if (itemErr) throw new Error(itemErr.message);
+
+    const { error } = await supabase.from('requisitions').delete().eq('id', requisitionId);
+    if (error) throw new Error(error.message);
+    return { success: true };
+};
+
+export const uploadRequisitionAttachment = async (
+    url: string,
+    key: string,
+    requisitionId: string,
+    file: File
+): Promise<string> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${requisitionId}/${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from('requisition-attachments')
+        .upload(path, file, { upsert: true });
+
+    if (uploadError) throw new Error(`Attachment upload failed: ${uploadError.message}`);
+
+    const { data } = supabase.storage.from('requisition-attachments').getPublicUrl(path);
+    if (!data?.publicUrl) throw new Error('Unable to resolve attachment public URL');
+    return data.publicUrl;
+};
+
+export const saveRequisitionAttachment = async (
+    url: string,
+    key: string,
+    requisitionId: string,
+    attachmentUrl: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase
+        .from('requisitions')
+        .update({ completion_attachment_url: attachmentUrl, completion_attachment_at: new Date().toISOString() })
+        .eq('id', requisitionId);
+
+    if (error) throw new Error(error.message);
     return { success: true };
 };
 
@@ -1041,6 +1236,74 @@ export const loadAttendanceReport = async (url: string, key: string, startDate: 
         return [];
     }
     return data || [];
+};
+
+export const saveWeeklyHistoryToSupabase = async (url: string, key: string, record: WeeklyHistoryRecord) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase.from('weekly_history').upsert([mapHistoryToDB(record)]);
+    if (error) throw new Error(`Save weekly history failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, id: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase.from('weekly_history').delete().eq('id', id);
+    if (error) throw new Error(`Delete weekly history failed: ${error.message}`);
+    return { success: true };
+};
+
+const mapClassLeaderToDB = (leader: any) => ({
+    id: leader.id,
+    username: leader.username,
+    password: leader.password,
+    class_number: leader.classNumber,
+    access_code: leader.accessCode,
+    full_name: leader.fullName || null,
+    phone: leader.phone || null,
+    email: leader.email || null,
+    active: leader.active !== false,
+    created_by: leader.createdBy || null,
+    updated_by: leader.updatedBy || null,
+    last_updated: leader.lastUpdated || new Date().toISOString(),
+    created_at: leader.createdAt || new Date().toISOString(),
+});
+
+const mapClassLeaderFromDB = (leader: any) => ({
+    id: leader.id,
+    username: leader.username,
+    password: leader.password,
+    classNumber: leader.class_number,
+    accessCode: leader.access_code,
+    fullName: leader.full_name || undefined,
+    phone: leader.phone || undefined,
+    email: leader.email || undefined,
+    active: leader.active !== false,
+    createdBy: leader.created_by || undefined,
+    updatedBy: leader.updated_by || undefined,
+    lastUpdated: leader.last_updated || undefined,
+    createdAt: leader.created_at || undefined,
+});
+
+export const saveClassLeaderToSupabase = async (url: string, key: string, leader: any) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase.from('class_leaders').upsert([mapClassLeaderToDB(leader)]);
+    if (error) throw new Error(`Save class leader failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteClassLeaderFromSupabase = async (url: string, key: string, leaderId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase.from('class_leaders').delete().eq('id', leaderId);
+    if (error) throw new Error(`Delete class leader failed: ${error.message}`);
+    return { success: true };
 };
 
 // --- Asset Management Functions ---

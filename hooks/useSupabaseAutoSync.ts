@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { Settings, Entry, Member, WeeklyHistoryRecord, User, SyncStatus, DevelopmentFundEntry, MonthLock, SundayLock, ClassLeader } from '../types';
-import { uploadDataToSupabase, downloadDataFromSupabase } from '../services/supabase';
+import { downloadDataFromSupabase } from '../services/supabase';
 
 // Helper to check if Supabase is configured
 const isConfigured = (settings: Settings) => {
@@ -33,8 +33,9 @@ export function useSupabaseAutoSync(
 ): SyncStatus {
     // Initialize state based on whether credentials exist
     const [status, setStatus] = useState<SyncStatus>(() => ({
-        state: isConfigured(settings) ? 'synced' : 'offline',
-        lastSynced: isConfigured(settings) ? new Date() : undefined
+        // Start in syncing state when configured so UI does not render stale local values first.
+        state: isConfigured(settings) ? 'syncing' : 'offline',
+        lastSynced: undefined
     }));
     
     const isFirstMount = useRef(true);
@@ -91,10 +92,12 @@ export function useSupabaseAutoSync(
                 setters.setSundayLocks?.(cloudSundayLocks);
                 setters.setClassLeaders?.(cloudClassLeaders);
                 if (setters.setSettings) setters.setSettings(cloudSettings);
+                hasInitialPulled.current = true;
                 setStatus({ state: 'synced', lastSynced: new Date() });
             } catch (e: any) {
                 console.error("Initial Sync Failed:", e);
                 // Even if pull fails, we might want to let the user work offline.
+                hasInitialPulled.current = true;
                 setStatus({ state: 'error', errorMessage: "Initial Pull Failed: " + e.message });
             }
         };
@@ -110,13 +113,19 @@ export function useSupabaseAutoSync(
             if (!setters) return;
             try {
                 const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const cloudEntries = cloudData.entries || [];
+                const cloudMembers = cloudData.members || [];
+                const cloudHistory = cloudData.history || [];
+                const cloudUsers = cloudData.users || [];
+                const cloudClassLeaders = cloudData.classLeaders || [];
+
                 // For multi-user, always trust the database as source of truth
-                setters.setEntries(cloudData.entries);
-                setters.setMembers(cloudData.members);
-                setters.setHistory(cloudData.history);
-                setters.setUsers(cloudData.users);
+                setters.setEntries(cloudEntries);
+                setters.setMembers(cloudMembers);
+                setters.setHistory(cloudHistory);
+                setters.setUsers(cloudUsers);
                 setters.setMonthLocks?.(cloudData.monthLocks || []);
-                setters.setClassLeaders?.(cloudData.classLeaders || []);
+                setters.setClassLeaders?.(cloudClassLeaders);
                 if (setters.setSettings) {
                     const cloudSettings = cloudData.settings
                         ? {

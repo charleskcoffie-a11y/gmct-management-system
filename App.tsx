@@ -1,48 +1,57 @@
 
 // App.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import Members from './components/Members';
-import Insights from './components/Insights';
-import SettingsTab from './components/Settings';
-import Login from './components/Login';
-import UsersTab from './components/Users';
-import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
-import WeeklyHistory from './components/WeeklyHistory';
-import UpcomingBirthdays from './components/UpcomingBirthdays';
-import ETransfers from './components/ETransfers';
-import Requisitions from './components/Requisitions';
-import MyApprovals from './components/MyApprovals';
-import Reports from './components/Reports';
 import ConfirmationModal from './components/ConfirmationModal';
-import DevelopmentFund from './components/DevelopmentFund';
-import NoName from './components/NoName';
-import FinancialControl from './components/FinancialControl';
-import HarvestPledges from './components/HarvestPledges';
-import Harvest from './components/Harvest';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
-import TaxReceipts from './components/TaxReceipts';
-import WesleyHall from './components/WesleyHall';
-import ClassAttendance from './components/ClassAttendance';
-import Assets from './components/Assets';
-import DayBorn from './components/DayBorn';
+import Login from './components/Login';
+import EntryWindowBanner from './components/EntryWindowBanner';
 import { ToastProvider } from './components/ToastProvider';
+import PasswordChangeModal from './components/PasswordChangeModal';
+import BulkChildrenMinistryModal from './components/BulkChildrenMinistryModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
-import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry } from './types';
+import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST, isEntryWindowOpen, formatMethod } from './utils';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, saveUserToSupabase, checkEntryDuplicateInSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
+import ProfileModal from './components/ProfileModal';
+
+// Lazy-load heavier pages to keep the initial bundle smaller
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Members = lazy(() => import('./components/Members'));
+const Insights = lazy(() => import('./components/Insights'));
+const SettingsTab = lazy(() => import('./components/Settings'));
+const UsersTab = lazy(() => import('./components/Users'));
+const Utilities = lazy(() => import('./components/Utilities'));
+const WeeklyHistory = lazy(() => import('./components/WeeklyHistory'));
+const UpcomingBirthdays = lazy(() => import('./components/UpcomingBirthdays'));
+const ETransfers = lazy(() => import('./components/ETransfers'));
+const Requisitions = lazy(() => import('./components/Requisitions'));
+const MyApprovals = lazy(() => import('./components/MyApprovals'));
+const Reports = lazy(() => import('./components/Reports'));
+const DevelopmentFund = lazy(() => import('./components/DevelopmentFund'));
+const NoName = lazy(() => import('./components/NoName'));
+const FinancialControl = lazy(() => import('./components/FinancialControl'));
+const BibleClassAttendanceSummary = lazy(() => import('./components/BibleClassAttendanceSummary'));
+const HarvestPledges = lazy(() => import('./components/HarvestPledges'));
+const Harvest = lazy(() => import('./components/Harvest'));
+const TaxReceipts = lazy(() => import('./components/TaxReceipts'));
+const WesleyHall = lazy(() => import('./components/WesleyHall'));
+const ClassAttendance = lazy(() => import('./components/ClassAttendance'));
+const Assets = lazy(() => import('./components/Assets'));
+const DayBorn = lazy(() => import('./components/DayBorn'));
 
 // Initial Data
 const INITIAL_USERS: User[] = [
     { username: 'Admin', password: 'GMCT', role: 'admin' },
+    // Shared class-leader account (uses class access codes as password)
+    { username: 'ClassLeader', role: 'class-leader' },
 ];
 const INITIAL_SETTINGS: Settings = {
     currency: DEFAULT_CURRENCY,
@@ -57,21 +66,47 @@ const INITIAL_SETTINGS: Settings = {
     charityNumber: '',
     signatureImage: undefined,
     logoUrl: undefined,
+    requisitionApprovalLimits: {
+        pastor: { min: 0, max: 500 },
+        financeTeam: { min: 501, max: 2000 },
+    },
+    requisitionPastorLimits: [],
+    requisitionFinanceApprovers: [],
 };
 
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
+type LoginRequest = { username: string; password?: string; skipPassword?: boolean; role?: UserRole };
 
-type LoginRequest = {
-    username: string;
-    password?: string;
-    skipPassword?: boolean;
+const normalizeEntryTypeKey = (value?: string): string => (value || '').toLowerCase().replace(/[^a-z]/g, '');
+const toNumericAmount = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const parsed = Number.parseFloat(value.replace(/[^0-9.,-]/g, '').replace(/,/g, ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
 };
+const isDeletedFlag = (deleted: unknown): boolean => deleted === true || deleted === 'true' || deleted === 1 || deleted === '1';
+const FINANCIAL_ENTRY_TYPES: EntryType[] = [
+    'tithe',
+    'offering',
+    'thanksgiving-offering',
+    'pledge',
+    'harvest-levy',
+    'day-born',
+    'lent-donation',
+    'covenant',
+    'development-fund',
+    'childrens-ministry',
+    'other',
+];
 
 const App: React.FC = () => {
     // --- State Management (Database-Driven - No localStorage for data) ---
     const [entries, setEntries] = useState<Entry[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+    const [classLeaders, setClassLeaders] = useState<ClassLeader[]>([]);
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
 
     const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
@@ -79,9 +114,11 @@ const App: React.FC = () => {
     const [noNameEntries, setNoNameEntries] = useState<NoNameEntry[]>([]);
     const [harvestEntries, setHarvestEntries] = useState<HarvestEntry[]>([]);
     const [harvestPledges, setHarvestPledges] = useState<HarvestPledge[]>([]);
+    const [requisitions, setRequisitions] = useState<Requisition[]>([]);
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useState<MonthLock[]>([]);
+    const [sundayLocks, setSundayLocks] = useState<SundayLock[]>([]);
 
 
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -97,6 +134,9 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [showChildrenMinistryModal, setShowChildrenMinistryModal] = useState(false);
+    const [userNotes, setUserNotes] = useLocalStorage<Record<string, string>>('gmct-user-notes', {});
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -110,17 +150,33 @@ const App: React.FC = () => {
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
     const [modalTypeFilter, setModalTypeFilter] = useState<EntryType | 'all'>('all');
+    const [modalDeletedFilter, setModalDeletedFilter] = useState<'all' | 'active' | 'deleted'>('all');
+    
+    // Financial Records year/month folder state
+    const [finRecordsExpandedYears, setFinRecordsExpandedYears] = useState<Set<string>>(new Set());
+    const [finRecordsExpandedMonths, setFinRecordsExpandedMonths] = useState<Set<string>>(new Set());
 
     // Navigation collapse state
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+    // Password change modal state
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, message: "" });
 
+    // Restrict statistician accounts to Weekly History only
+    useEffect(() => {
+        if (currentUser?.role === 'statistician' && activeTab !== 'weekly-history') {
+            setActiveTab('weekly-history');
+        }
+    }, [currentUser?.role, activeTab]);
+
     // --- Live Sync Hook ---
     const syncStatus = useSupabaseAutoSync(settings, {
-        entries, members, history: weeklyHistory, users, monthLocks
+        entries, members, history: weeklyHistory, users, monthLocks, sundayLocks, classLeaders
     }, {
-        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSettings
+        setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSundayLocks, setSettings, setClassLeaders
     });
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);
@@ -133,12 +189,13 @@ const App: React.FC = () => {
         if (!settings.supabaseUrl || !settings.supabaseKey) return;
         if (syncStatus.state !== 'synced') return; // Wait until synced
         
-        // Load all data from database in parallel
+        // Load all data from database in parallel with fallback error handling
         Promise.all([
-            loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey),
-            loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey),
-            loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey)
-        ]).then(([loadedMembers, loadedEntries, loadedPledges]) => {
+            loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Members load failed:', err); return []; }),
+            loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Entries load failed:', err); return []; }),
+            loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Harvest pledges load failed:', err); return []; }),
+            loadRequisitions(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Requisitions load failed:', err); return []; })
+        ]).then(([loadedMembers, loadedEntries, loadedPledges, loadedRequisitions]) => {
             if (loadedMembers && loadedMembers.length > 0) {
                 setMembers(loadedMembers);
             }
@@ -148,8 +205,32 @@ const App: React.FC = () => {
             if (loadedPledges && loadedPledges.length > 0) {
                 setHarvestPledges(loadedPledges);
             }
+            if (loadedRequisitions && loadedRequisitions.length > 0) {
+                setRequisitions(loadedRequisitions);
+            }
         }).catch(err => console.error('Failed to load data from database:', err));
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+
+    // --- Seed ClassLeader user to database if it doesn't exist ---
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+        if (users.length === 0) return; // Wait for users to load
+        
+        const hasClassLeader = users.some(u => u.username.toLowerCase() === 'classleader');
+        if (!hasClassLeader) {
+            const classLeaderUser: User = {
+                username: 'ClassLeader',
+                password: '',
+                role: 'class-leader'
+            };
+            saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, classLeaderUser)
+                .then(() => {
+                    setUsers(prev => [...prev, classLeaderUser]);
+                    console.log('ClassLeader user seeded to database');
+                })
+                .catch(err => console.warn('Failed to seed ClassLeader:', err));
+        }
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, users]);
     
     // --- Safe Close Protection ---
     useEffect(() => {
@@ -218,6 +299,14 @@ const App: React.FC = () => {
     
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
+    const membersByNameMap = useMemo(() => {
+        const map = new Map<string, Member>();
+        members.forEach(member => {
+            const key = (member.name || '').trim().toLowerCase();
+            if (key && !map.has(key)) map.set(key, member);
+        });
+        return map;
+    }, [members]);
 
     // Keep Day Born filter aligned with type selection
     useEffect(() => {
@@ -226,21 +315,50 @@ const App: React.FC = () => {
         }
     }, [typeFilter, dayBornFilter]);
 
+    // Lock date filters to today for data-entry role
+    useEffect(() => {
+        if (currentUser?.role === 'data-entry') {
+            const today = getTodayEST();
+            setStartDateFilter(today);
+            setEndDateFilter(today);
+        }
+    }, [currentUser]);
+
     const filteredAndSortedEntries = useMemo(() => {
+        const matchesTypeFilter = (entryType: string, filter: EntryType | 'all') => {
+            if (filter === 'all') return true;
+            if (filter === 'day-born') return normalizeEntryTypeKey(entryType) === 'dayborn';
+            return entryType === filter;
+        };
+
+        const getMemberDayBorn = (member?: Member) => {
+            if (!member) return undefined;
+            if (member.dayBorn) return member.dayBorn.toLowerCase().trim();
+            if (member.dateOfBirth) {
+                const dob = new Date(`${member.dateOfBirth}T00:00:00`);
+                if (!Number.isNaN(dob.getTime())) {
+                    return dob.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+                }
+            }
+            return undefined;
+        };
+
         const filtered = entries.filter(entry => {
             // Soft Delete check
-            if (entry.deleted && !showDeleted) return false;
+            if (isDeletedFlag(entry.deleted) && !showDeleted) return false;
             
             if (searchFilter && !entry.memberName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
-            if (typeFilter !== 'all' && entry.type !== typeFilter) return false;
-            if (startDateFilter && entry.date < startDateFilter) return false;
-            if (endDateFilter && entry.date > endDateFilter) return false;
+            if (!matchesTypeFilter(entry.type, typeFilter)) return false;
+
+            const entryDate = (entry.date || '').slice(0, 10);
+            if (startDateFilter && entryDate < startDateFilter) return false;
+            if (endDateFilter && entryDate > endDateFilter) return false;
             
-            const member = membersMap.get(entry.memberID);
+            const member = membersMap.get(entry.memberID) || membersByNameMap.get((entry.memberName || '').trim().toLowerCase());
             const entryClass = entry.classNumber || member?.classNumber;
             
             if (classFilter !== 'all' && entryClass !== classFilter) return false;
-            const memberDayBorn = member?.dayBorn ? member.dayBorn.toLowerCase() : undefined;
+            const memberDayBorn = getMemberDayBorn(member);
             if (typeFilter === 'day-born' && dayBornFilter !== 'all' && memberDayBorn !== dayBornFilter) return false;
             return true;
         });
@@ -263,7 +381,7 @@ const App: React.FC = () => {
             return 0;
         });
         return sortableEntries;
-    }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter, showDeleted, dayBornFilter]);
+    }, [entries, sortConfig, membersMap, membersByNameMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter, showDeleted, dayBornFilter]);
 
     // Group entries by date
     const entriesByDate = useMemo(() => {
@@ -281,16 +399,74 @@ const App: React.FC = () => {
         return Object.keys(entriesByDate).sort((a, b) => b.localeCompare(a)); // Descending order
     }, [entriesByDate]);
 
+    // Group dates by year and month for folder structure
+    const entriesByYearMonth = useMemo(() => {
+        const groups: { [year: string]: { [month: string]: string[] } } = {};
+        
+        sortedDates.forEach(date => {
+            const dateObj = new Date(date + 'T00:00:00');
+            const year = dateObj.getFullYear().toString();
+            const month = dateObj.toLocaleString('default', { month: 'long' });
+            
+            if (!groups[year]) groups[year] = {};
+            if (!groups[year][month]) groups[year][month] = [];
+            groups[year][month].push(date);
+        });
+        
+        return groups;
+    }, [sortedDates]);
+
+    // Auto-expand most recent year and month for financial records
+    useEffect(() => {
+        const years = Object.keys(entriesByYearMonth).sort((a, b) => parseInt(b) - parseInt(a));
+        if (years.length > 0 && finRecordsExpandedYears.size === 0) {
+            const mostRecentYear = years[0];
+            setFinRecordsExpandedYears(new Set([mostRecentYear]));
+            
+            const months = Object.keys(entriesByYearMonth[mostRecentYear]);
+            if (months.length > 0) {
+                const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const sortedMonths = months.sort((a, b) => monthOrder.indexOf(b) - monthOrder.indexOf(a));
+                setFinRecordsExpandedMonths(new Set([`${mostRecentYear}-${sortedMonths[0]}`]));
+            }
+        }
+    }, [entriesByYearMonth]);
+
+    const toggleFinRecordsYear = (year: string) => {
+        const newExpanded = new Set(finRecordsExpandedYears);
+        if (newExpanded.has(year)) {
+            newExpanded.delete(year);
+        } else {
+            newExpanded.add(year);
+        }
+        setFinRecordsExpandedYears(newExpanded);
+    };
+
+    const toggleFinRecordsMonth = (yearMonth: string) => {
+        const newExpanded = new Set(finRecordsExpandedMonths);
+        if (newExpanded.has(yearMonth)) {
+            newExpanded.delete(yearMonth);
+        } else {
+            newExpanded.add(yearMonth);
+        }
+        setFinRecordsExpandedMonths(newExpanded);
+    };
+
     // Financial Mini Dashboard Data
     const financialSummary = useMemo(() => {
         // Only calculate based on non-deleted entries for accuracy
-        const activeEntries = filteredAndSortedEntries.filter(e => !e.deleted);
-        const total = activeEntries.reduce((sum, e) => sum + e.amount, 0);
+        const activeEntries = filteredAndSortedEntries.filter(e => !isDeletedFlag(e.deleted));
+        const total = activeEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0);
         const count = activeEntries.length;
         
         const typeDistribution: Record<string, number> = {};
+        FINANCIAL_ENTRY_TYPES.forEach(type => {
+            typeDistribution[type] = 0;
+        });
+
         activeEntries.forEach(e => {
-            typeDistribution[e.type] = (typeDistribution[e.type] || 0) + e.amount;
+            const typeKey = normalizeEntryTypeKey(e.type) === 'dayborn' ? 'day-born' : e.type;
+            typeDistribution[typeKey] = (typeDistribution[typeKey] || 0) + toNumericAmount(e.amount);
         });
         
         const chartData = Object.entries(typeDistribution).map(([name, value]) => ({
@@ -304,54 +480,77 @@ const App: React.FC = () => {
     const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#8b5cf6'];
 
     // --- Handlers ---
-    const handleLogin = (request: LoginRequest) => {
-        const username = String(request?.username || '').trim();
-        const password = request?.password || '';
-        const skipPassword = request?.skipPassword || false;
-
-        if (!username) {
-            setLoginError('Invalid username or password.');
-            return;
-        }
-
+    const handleLogin = ({ username, password = '', skipPassword = false }: LoginRequest) => {
+        console.log('🔐 Login attempt:', { username, role: 'checking...' });
+        console.log('  classLeaders in state:', classLeaders.length, classLeaders);
+        const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
         const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (!foundUser) {
+        const classLeaderFallback = username.trim().toLowerCase() === 'classleader'
+            ? ({ username: 'ClassLeader', role: 'class-leader' as UserRole })
+            : null;
+        const user = foundUser || classLeaderFallback;
+
+        if (!user) {
             setLoginError('Invalid username or password.');
             return;
         }
 
-        // Special handling for class leaders: validate access codes from Settings
-        if (foundUser.role === 'class-leader') {
+        // Special handling for class leaders: authenticate using class_leaders table (preferred)
+        if (user.role === 'class-leader') {
             const raw = (password || '').trim();
-            let assignedClass = foundUser.assignedClass || foundUser.classLed;
+            const lower = normalize(raw);
 
-            // If exact password matches stored user password, accept as-is (admin override)
-            if (foundUser.password && password === foundUser.password) {
-                // keep assignedClass as stored (if any)
-            } else {
-                // Check if password matches any class access code
-                const classAccessCodes = settings.classAccessCodes || {};
-                let matchedClass: string | null = null;
+            // 0) If the username matches a specific class leader, validate their password and use their class
+            const matchedLeaderByUsername = classLeaders.find(cl => (cl.username || '').toLowerCase() === username.trim().toLowerCase());
+            if (matchedLeaderByUsername) {
+                if (!matchedLeaderByUsername.password || matchedLeaderByUsername.password !== raw) {
+                    setLoginError('Invalid password for class leader account.');
+                    return;
+                }
+                const assignedClass = matchedLeaderByUsername.classNumber;
+                if (!assignedClass) {
+                    setLoginError('Class leader has no assigned class. Contact admin.');
+                    return;
+                }
+                const sessionUser = { username: matchedLeaderByUsername.username, role: 'class-leader' as UserRole, assignedClass } as User;
+                setCurrentUser(sessionUser);
+                setLoginError(null);
+                setActiveTab('attendance');
+                return;
+            }
 
-                for (const [classNum, code] of Object.entries(classAccessCodes)) {
-                    if (code && raw === code) {
-                        const clsNum = parseInt(classNum, 10);
-                        if (clsNum >= 1 && clsNum <= settings.maxClasses) {
-                            matchedClass = String(clsNum);
-                            break;
+            // 1) Shared "ClassLeader" login: resolve class by matching an access code from class_leaders table
+            const matchedLeaderByAccessCode = classLeaders.find(cl => normalize(cl.accessCode) === lower);
+
+            let assignedClass = (user as User).assignedClass || (user as User).classLed;
+
+            // Admin override: exact password match on stored app user keeps assigned class
+            if (!(user as User).password || (user as User).password !== raw) {
+                if (matchedLeaderByAccessCode?.classNumber) {
+                    assignedClass = matchedLeaderByAccessCode.classNumber;
+                } else {
+                    // 2) Fallback patterns like "class1", "class 3", "class-7"
+                    const classMatch = lower.match(/class\s*-?\s*(\d{1,2})/);
+                    if (classMatch) {
+                        const clsNum = parseInt(classMatch[1], 10);
+                        if (clsNum >= 1 && clsNum <= settings.maxClasses) assignedClass = String(clsNum);
+                    } else {
+                        // 3) Accept direct numeric passwords (e.g., "1", "07")
+                        const numMatch = lower.match(/^(\d{1,2})$/);
+                        if (numMatch) {
+                            const clsNum = parseInt(numMatch[1], 10);
+                            if (clsNum >= 1 && clsNum <= settings.maxClasses) assignedClass = String(clsNum);
                         }
                     }
                 }
-
-                if (matchedClass) {
-                    assignedClass = matchedClass;
-                } else {
-                    setLoginError('Invalid class access code. Contact admin for your class code.');
-                    return;
-                }
             }
 
-            const sessionUser = { ...foundUser, assignedClass } as typeof foundUser;
+            if (!assignedClass) {
+                setLoginError('Invalid class access code. Contact admin for your class code.');
+                return;
+            }
+
+            const sessionUser = { ...user, assignedClass, role: 'class-leader' as UserRole } as User;
             setCurrentUser(sessionUser);
             setLoginError(null);
             setActiveTab('attendance');
@@ -359,21 +558,37 @@ const App: React.FC = () => {
         }
 
         // All other roles: require exact password match
+        if (!foundUser) {
+            setLoginError('Invalid username or password.');
+            return;
+        }
+
+        const skipAllowed = foundUser.role === 'data-entry';
         if (!skipPassword && foundUser.password !== password) {
             setLoginError('Invalid username or password.');
+            return;
+        }
+        if (skipPassword && !skipAllowed) {
+            setLoginError('Password required for this role.');
             return;
         }
 
         setCurrentUser(foundUser);
         setLoginError(null);
         // Intelligent Redirect based on Role
-        if (foundUser.role === 'admin' || foundUser.role === 'finance-chair') setActiveTab('home');
+        if (foundUser.role === 'admin' || foundUser.role === 'finance-chair' || foundUser.role === 'pastor') setActiveTab('home');
         else if (foundUser.role === 'finance-team') setActiveTab('records');
         else if (foundUser.role === 'data-entry') setActiveTab('records');
-        else if (foundUser.role === 'pastor') setActiveTab('insights');
-        else if (foundUser.role === 'statistician') setActiveTab('history');
+        else if (foundUser.role === 'statistician') setActiveTab('weekly-history');
         else setActiveTab('home');
     };
+
+    // Show profile modal automatically for finance-team and class-leader roles
+    useEffect(() => {
+        if (currentUser && (currentUser.role === 'finance-team' || currentUser.role === 'class-leader')) {
+            setShowProfileModal(true);
+        }
+    }, [currentUser]);
 
     const handleLogout = () => setCurrentUser(null);
 
@@ -391,13 +606,44 @@ const App: React.FC = () => {
         if (tab) setActiveTab(tab);
     };
 
+    const getMemberKey = (entry: Entry) => {
+        if (entry.memberID && entry.memberID.trim() !== '') return `id:${entry.memberID.trim().toLowerCase()}`;
+        if (entry.type === 'childrens-ministry') return 'childrens-ministry-collection';
+        const normalizedName = (entry.memberName || '').trim().toLowerCase();
+        return normalizedName ? `name:${normalizedName}` : 'name:';
+    };
+
+    const isDuplicateEntry = (entry: Entry) => {
+        const targetMemberKey = getMemberKey(entry);
+        return entries.some(e =>
+            e.id !== entry.id &&
+            !e.deleted &&
+            e.date === entry.date &&
+            e.type === entry.type &&
+            getMemberKey(e) === targetMemberKey
+        );
+    };
+
     const handleSaveEntry = async (entry: Entry) => {
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             return;
         }
 
+        if (isDuplicateEntry(entry)) {
+            alert(`Duplicate entry detected: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+            return;
+        }
+
         try {
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            if (hasCloudDuplicate) {
+                alert(`Duplicate entry blocked by cloud check: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+                return;
+            }
+
             await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
             // Reload entries from database
             const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
@@ -414,7 +660,20 @@ const App: React.FC = () => {
             return;
         }
 
+        if (isDuplicateEntry(entry)) {
+            alert(`Duplicate entry detected: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+            return;
+        }
+
         try {
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            if (hasCloudDuplicate) {
+                alert(`Duplicate entry blocked by cloud check: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+                return;
+            }
+
             await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
             // Reload entries from database
             const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
@@ -424,13 +683,32 @@ const App: React.FC = () => {
         }
     };
     
-    const handleDeleteEntry = (id: string) => {
-        setEntryToDeleteId(id);
-        setIsConfirmModalOpen(true);
+    const handleDeleteEntry = async (id: string) => {
+        // EntryModal already confirms and writes soft-delete to Supabase.
+        // Here we keep UI in sync immediately and then refresh from server.
+        setEntries(prev => prev.map(e => e.id === id ? { ...e, deleted: true } : e));
+
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
+            return;
+        }
+
+        try {
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            setEntries(updatedEntries);
+        } catch (error) {
+            console.error('Failed to refresh entries after delete:', error);
+        }
     };
 
     // Soft Delete Logic
     const confirmDeleteEntry = async () => {
+        const canDelete = currentUser && ['admin', 'finance-chair', 'finance-team'].includes(currentUser.role);
+        if (!canDelete) {
+            alert('Only Admin, Finance Chair, or Finance Team can delete entries.');
+            setIsConfirmModalOpen(false);
+            setEntryToDeleteId(null);
+            return;
+        }
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
             alert('Deletes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             setIsConfirmModalOpen(false);
@@ -444,7 +722,7 @@ const App: React.FC = () => {
                     ...entries[entryIndex],
                     deleted: true,
                     updatedBy: currentUser?.username || 'Unknown',
-                    lastUpdated: new Date().toISOString()
+                    lastUpdated: getNowEST()
                 };
 
                 try {
@@ -515,9 +793,13 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "harvest-pledge", "harvest", "harvest-launch", "day-born", "lent-donation", "development-fund", "covenant", "childrens-ministry", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
+        // Class leaders are restricted to attendance only
+        if (currentUser.role === 'class-leader' && activeTab !== 'attendance') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Class Leaders can only take attendance for their class.</div>;
+        }
         // Double check access before rendering restrictive tabs
         if (activeTab === 'utilities' && currentUser.role !== 'admin') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
@@ -525,11 +807,21 @@ const App: React.FC = () => {
         if (activeTab === 'users' && currentUser.role !== 'admin') {
              return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
         }
+        if (activeTab === 'settings' && currentUser.role !== 'admin') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin can access Settings.</div>;
+        }
         if (activeTab === 'tax-receipts' && !(currentUser.role === 'admin' || currentUser.role === 'finance-chair')) {
             return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin and Finance Chair can issue receipts.</div>;
         }
+        if (activeTab === 'requisitions' && currentUser.role === 'data-entry') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Requisitions are not available for Data Entry role.</div>;
+        }
+        if (activeTab === 'wesley-hall' && currentUser.role === 'data-entry') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Wesley Hall is not available for Data Entry role.</div>;
+        }
 
         const canWrite = syncStatus.state === 'synced';
+        const canViewFilteredTotals = currentUser.role !== 'data-entry';
 
         const handlePayPledge = (pledge: HarvestPledge, amount: number, paymentDate: string) => {
             if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') {
@@ -551,7 +843,7 @@ const App: React.FC = () => {
                 amount: amount,
                 note: `Harvest pledge payment (Pledge ID: ${pledge.id.substring(0, 8)})`,
                 createdBy: currentUser?.username,
-                createdAt: new Date().toISOString(),
+                createdAt: getNowEST(),
             };
 
             // Update pledge remaining amount
@@ -559,7 +851,7 @@ const App: React.FC = () => {
                 ...pledge,
                 remaining: Math.max(0, pledge.remaining - amount),
                 updatedBy: currentUser?.username,
-                lastUpdated: new Date().toISOString()
+                lastUpdated: getNowEST()
             };
 
             // Save to Supabase and reload data
@@ -581,12 +873,12 @@ const App: React.FC = () => {
             }
         };
         switch (activeTab) {
-            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks}/>;
+            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={requisitions}/>;
             case 'harvest':
                 return (
                     <Harvest 
                         members={members}
-                        entries={entries.filter(e => ['harvest-levy', 'harvest', 'harvest-pledge'].includes(e.type))}
+                        entries={entries.filter(e => ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch'].includes(e.type))}
                         setEntries={setEntries}
                         settings={settings}
                         currentUser={currentUser}
@@ -618,7 +910,7 @@ const App: React.FC = () => {
                 );
             case 'my-approvals':
                 return (
-                    <MyApprovals settings={settings} currentUser={currentUser} />
+                    <MyApprovals settings={settings} currentUser={currentUser} onDecisionSaved={refreshRequisitions} />
                 );
             case 'records':
                 return (
@@ -640,14 +932,28 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                                 {/* Hide Create Button for Pastor */}
-                                {currentUser.role !== 'pastor' && (
-                                    <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} disabled={!canWrite} title={!canWrite ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!canWrite ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}>
+                                {(() => {
+                                    const allowedRoles = ['admin','finance-chair','finance-team','data-entry'];
+                                    const canSee = currentUser && allowedRoles.includes(currentUser.role);
+                                    const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair';
+                                    const disabled = !canWrite || (!windowStatus.isOpen && !canOverride);
+                                    const title = !canWrite ? 'Requires cloud connection' : (!windowStatus.isOpen && !canOverride ? `${windowStatus.reason}. ${windowStatus.nextOpenTime}` : undefined);
+                                    return canSee ? (
+                                        <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} disabled={disabled} title={title} className={`bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:from-green-600 hover:to-emerald-700 hover:scale-105'}`}>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-90 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                                         </svg>
                                         Record Contribution
-                                    </button>
-                                )}
+                                        </button>
+                                    ) : null;
+                                })()}
+                                <button onClick={() => setShowChildrenMinistryModal(true)} disabled={!canWrite} title={!canWrite ? 'Requires cloud connection' : undefined} className={`bg-gradient-to-br from-yellow-500 to-amber-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all ${!canWrite ? 'opacity-60 cursor-not-allowed' : 'hover:from-yellow-600 hover:to-amber-600 hover:scale-105'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-12 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.5 1.5H5.75A2.75 2.75 0 003 4.25v11.5A2.75 2.75 0 005.75 18.5h8.5A2.75 2.75 0 0017 15.75V8M10.5 1.5v4.5M10.5 1.5L17 8M6 10h5M6 13h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                </svg>
+                                Children's Ministry Collection
+                                </button>
                             </div>
                         </div>
 
@@ -671,16 +977,28 @@ const App: React.FC = () => {
                                     {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
                                 </select>
                             </div>
-                            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 Start Date</label>
-                                    <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                            {currentUser?.role === 'data-entry' ? (
+                                <div className="lg:col-span-2 flex items-end">
+                                    <div className="w-full bg-blue-100 border-2 border-blue-400 rounded-lg px-4 py-3 flex items-center gap-3">
+                                        <span className="text-2xl">📅</span>
+                                        <div>
+                                            <div className="text-xs font-bold uppercase text-blue-600">Viewing Today Only</div>
+                                            <div className="text-base font-bold text-blue-900">{getTodayEST()}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 End Date</label>
-                                    <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                            ) : (
+                                <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 Start Date</label>
+                                        <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold uppercase text-blue-700 mb-1">📅 End Date</label>
+                                        <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium"/>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                             <div className="lg:col-span-1">
                                 <label className="block text-sm font-bold uppercase text-blue-700 mb-1 flex items-center gap-2">🧬 Day Born <span className="text-[11px] font-semibold text-blue-500">(active when Type is Day Born)</span></label>
                                 <select
@@ -702,7 +1020,7 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Mini Dashboard */}
-                        {financialSummary.total > 0 && (
+                        {canViewFilteredTotals && financialSummary.total > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="col-span-1 bg-gradient-to-br from-orange-300 to-amber-400 p-6 rounded-xl shadow-lg border-2 border-orange-300 flex flex-col justify-center transform hover:scale-105 transition">
                                     <h3 className="text-white font-bold text-sm uppercase tracking-wider">💰 Filtered Total</h3>
@@ -734,7 +1052,7 @@ const App: React.FC = () => {
                         )}
 
                         <div className="bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden">
-                            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair') && (
+                            {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team') && (
                                 <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-2 border-b-2 border-red-300 flex justify-end">
                                     <label className="flex items-center gap-2 text-xs font-bold uppercase text-red-700 cursor-pointer">
                                         <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
@@ -742,56 +1060,148 @@ const App: React.FC = () => {
                                     </label>
                                 </div>
                             )}
-                           <div className="max-h-[60vh] overflow-y-auto p-6 space-y-4">
+                           <div className="max-h-[75vh] overflow-y-auto p-6 space-y-4">
                                {sortedDates.length === 0 ? (
                                    <div className="text-center py-16 text-slate-400">
                                        <div className="text-6xl mb-4">📭</div>
                                        <p className="text-xl font-bold">No records found</p>
-                                       <p className="text-sm mt-2">Try adjusting your filters</p>
+                                       <p className="text-sm mt-2">{currentUser?.role === 'data-entry' ? 'No entries have been recorded for today.' : 'Try adjusting your filters'}</p>
+                                   </div>
+                               ) : currentUser?.role === 'data-entry' ? (
+                                   /* Data-entry: flat list showing only today's entries — no year/month folder tree */
+                                   <div className="space-y-3">
+                                       {sortedDates.map(date => {
+                                           const dateEntries = entriesByDate[date];
+                                           const activeEntries = dateEntries.filter(e => !isDeletedFlag(e.deleted));
+                                           const activeTotal = activeEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0);
+                                           return (
+                                               <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
+                                                   <button
+                                                       onClick={() => {
+                                                           setSelectedDateForModal(date);
+                                                           setModalClassFilter('all');
+                                                           setModalTypeFilter('all');
+                                                       }}
+                                                       className="w-full p-4 flex items-center justify-between hover:bg-blue-100 transition-colors text-left"
+                                                   >
+                                                       <div className="flex items-center gap-3">
+                                                           <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg p-3 shadow-md">
+                                                               <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
+                                                               <div className="text-xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
+                                                           </div>
+                                                           <div>
+                                                               <h3 className="text-lg font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric' })}</h3>
+                                                               <p className="text-xs text-slate-600 mt-0.5 font-medium">{activeEntries.length} contribution{activeEntries.length !== 1 ? 's' : ''}</p>
+                                                           </div>
+                                                       </div>
+                                                       <div className="text-right">
+                                                           <div className="text-xl font-bold text-green-600">{formatCurrency(activeTotal, settings.currency)}</div>
+                                                           <div className="text-xs text-blue-600 font-semibold mt-1 flex items-center gap-1">
+                                                               Click to view
+                                                               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                               </svg>
+                                                           </div>
+                                                       </div>
+                                                   </button>
+                                               </div>
+                                           );
+                                       })}
                                    </div>
                                ) : (
-                                   sortedDates.map(date => {
-                                       const dateEntries = entriesByDate[date];
-                                       const dateTotal = dateEntries.reduce((sum, e) => sum + e.amount, 0);
-                                       const hasDeleted = dateEntries.some(e => e.deleted);
-                                       
-                                       return (
-                                           <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
-                                               <button 
-                                                   onClick={() => {
-                                                       setSelectedDateForModal(date);
-                                                       setModalClassFilter('all');
-                                                       setModalTypeFilter('all');
-                                                   }}
-                                                   className="w-full p-5 flex items-center justify-between hover:bg-blue-100 transition-colors text-left"
-                                               >
-                                                   <div className="flex items-center gap-4">
-                                                       <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-xl p-4 shadow-md">
-                                                           <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
-                                                           <div className="text-2xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
-                                                           <div className="text-xs">{new Date(date + 'T00:00:00').getFullYear()}</div>
-                                                       </div>
-                                                       <div>
-                                                           <div className="flex items-center gap-3">
-                                                               <h3 className="text-xl font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
-                                                               {hasDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">Has Deleted</span>}
+                                   Object.keys(entriesByYearMonth).sort((a, b) => parseInt(b) - parseInt(a)).map(year => (
+                                       <div key={year} className="mb-4">
+                                           {/* Year Folder */}
+                                           <button
+                                               onClick={() => toggleFinRecordsYear(year)}
+                                               className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl px-6 py-3 shadow-lg hover:shadow-xl transition-all mb-3"
+                                           >
+                                               <span className="text-2xl">{finRecordsExpandedYears.has(year) ? '📂' : '📁'}</span>
+                                               <span className="text-xl font-bold">{year}</span>
+                                               <span className="ml-auto text-base font-semibold bg-white/20 px-3 py-1 rounded-full">
+                                                   {Object.values(entriesByYearMonth[year]).flat().length} dates
+                                               </span>
+                                               <span className="text-xl">{finRecordsExpandedYears.has(year) ? '▼' : '▶'}</span>
+                                           </button>
+
+                                           {/* Months within Year */}
+                                           {finRecordsExpandedYears.has(year) && Object.keys(entriesByYearMonth[year]).map(month => {
+                                               const monthKey = `${year}-${month}`;
+                                               const dates = entriesByYearMonth[year][month];
+                                               
+                                               return (
+                                                   <div key={monthKey} className="ml-8 mb-3">
+                                                       {/* Month Folder */}
+                                                       <button
+                                                           onClick={() => toggleFinRecordsMonth(monthKey)}
+                                                           className="w-full flex items-center gap-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl px-5 py-2.5 shadow-md hover:shadow-lg transition-all mb-2"
+                                                       >
+                                                           <span className="text-xl">{finRecordsExpandedMonths.has(monthKey) ? '📂' : '📁'}</span>
+                                                           <span className="text-lg font-bold">{month}</span>
+                                                           <span className="ml-auto text-sm font-semibold bg-white/20 px-2.5 py-0.5 rounded-full">
+                                                               {dates.length} dates
+                                                           </span>
+                                                           <span className="text-lg">{finRecordsExpandedMonths.has(monthKey) ? '▼' : '▶'}</span>
+                                                       </button>
+
+                                                       {/* Dates in Month */}
+                                                       {finRecordsExpandedMonths.has(monthKey) && (
+                                                           <div className="ml-8 space-y-3">
+                                                               {dates.map(date => {
+                                                                   const dateEntries = entriesByDate[date];
+                                                                   const activeEntries = dateEntries.filter(e => !isDeletedFlag(e.deleted));
+                                                                   const deletedEntries = dateEntries.filter(e => isDeletedFlag(e.deleted));
+                                                                   const activeTotal = activeEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0);
+                                                                   const deletedTotal = deletedEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0);
+                                                                   
+                                                                   return (
+                                                                       <div key={date} className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden">
+                                                                           <button 
+                                                                               onClick={() => {
+                                                                                   setSelectedDateForModal(date);
+                                                                                   setModalClassFilter('all');
+                                                                                   setModalTypeFilter('all');
+                                                                               }}
+                                                                               className="w-full p-4 flex items-center justify-between hover:bg-blue-100 transition-colors text-left"
+                                                                           >
+                                                                               <div className="flex items-center gap-3">
+                                                                                   <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg p-3 shadow-md">
+                                                                                       <div className="text-xs font-bold uppercase">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}</div>
+                                                                                       <div className="text-xl font-bold">{new Date(date + 'T00:00:00').getDate()}</div>
+                                                                                   </div>
+                                                                                   <div>
+                                                                                       <div className="flex items-center gap-2">
+                                                                                           <h3 className="text-lg font-bold text-slate-800">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric' })}</h3>
+                                                                                           {deletedEntries.length > 0 && showDeleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold">{deletedEntries.length} Deleted</span>}
+                                                                                       </div>
+                                                                                       <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                                                                                           {activeEntries.length} active{deletedEntries.length > 0 && showDeleted ? ` + ${deletedEntries.length} deleted` : ''}
+                                                                                       </p>
+                                                                                   </div>
+                                                                               </div>
+                                                                               <div className="text-right">
+                                                                                   <div className="text-xl font-bold text-green-600">{formatCurrency(activeTotal, settings.currency)}</div>
+                                                                                   {deletedEntries.length > 0 && showDeleted && (
+                                                                                       <div className="text-xs text-red-600 font-semibold line-through">{formatCurrency(deletedTotal, settings.currency)} deleted</div>
+                                                                                   )}
+                                                                                   <div className="text-xs text-blue-600 font-semibold mt-1 flex items-center gap-1">
+                                                                                       Click to view
+                                                                                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                                                           <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                                                       </svg>
+                                                                                   </div>
+                                                                               </div>
+                                                                           </button>
+                                                                       </div>
+                                                                   );
+                                                               })}
                                                            </div>
-                                                           <p className="text-sm text-slate-600 mt-1 font-medium">{dateEntries.length} contribution{dateEntries.length !== 1 ? 's' : ''}</p>
-                                                       </div>
+                                                       )}
                                                    </div>
-                                                   <div className="text-right">
-                                                       <div className="text-2xl font-bold text-green-600">{formatCurrency(dateTotal, settings.currency)}</div>
-                                                       <div className="text-sm text-blue-600 font-semibold mt-1 flex items-center gap-1">
-                                                           Click to view details
-                                                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                                               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                                           </svg>
-                                                       </div>
-                                                   </div>
-                                               </button>
-                                           </div>
-                                       );
-                                   })
+                                               );
+                                           })}
+                                       </div>
+                                   ))
                                )}
                            </div>
                         </div>
@@ -805,7 +1215,7 @@ const App: React.FC = () => {
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
                                                 <h2 className="text-2xl font-bold">{new Date(selectedDateForModal + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
-                                                <p className="text-blue-100 mt-1">{entriesByDate[selectedDateForModal].length} contribution{entriesByDate[selectedDateForModal].length !== 1 ? 's' : ''} • Total: {formatCurrency(entriesByDate[selectedDateForModal].reduce((sum, e) => sum + e.amount, 0), settings.currency)}</p>
+                                                <p className="text-blue-100 mt-1">{entriesByDate[selectedDateForModal].filter(e => !isDeletedFlag(e.deleted)).length} active contribution{entriesByDate[selectedDateForModal].filter(e => !isDeletedFlag(e.deleted)).length !== 1 ? 's' : ''} • Active Total: {formatCurrency(entriesByDate[selectedDateForModal].filter(e => !isDeletedFlag(e.deleted)).reduce((sum, e) => sum + toNumericAmount(e.amount), 0), settings.currency)}</p>
                                             </div>
                                             <button onClick={() => setSelectedDateForModal(null)} className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-lg text-2xl font-bold transition-all">×</button>
                                         </div>
@@ -836,13 +1246,27 @@ const App: React.FC = () => {
                                                     {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>)}
                                                 </select>
                                             </div>
+                                            {showDeleted && (
+                                                <div className="flex items-center gap-3">
+                                                    <label className="text-sm font-bold text-blue-100">Show:</label>
+                                                    <select 
+                                                        value={modalDeletedFilter} 
+                                                        onChange={e => setModalDeletedFilter(e.target.value as 'all' | 'active' | 'deleted')}
+                                                        className="border-2 border-blue-400 bg-white/95 text-slate-800 rounded-lg px-4 py-2 font-semibold focus:ring-2 focus:ring-white focus:border-white transition-all"
+                                                    >
+                                                        <option value="all">All Entries</option>
+                                                        <option value="active">Active Only</option>
+                                                        <option value="deleted">Deleted Only</option>
+                                                    </select>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     
                                     {/* Modal Body - Scrollable */}
                                     <div className="flex-1 overflow-y-auto p-6">
-                                        <div className="space-y-3">
-                                            {entriesByDate[selectedDateForModal]
+                                        {(() => {
+                                            const modalEntries = entriesByDate[selectedDateForModal]
                                                 .filter(entry => {
                                                     // Filter by class
                                                     if (modalClassFilter !== 'all') {
@@ -852,75 +1276,184 @@ const App: React.FC = () => {
                                                     }
                                                     // Filter by type
                                                     if (modalTypeFilter !== 'all' && entry.type !== modalTypeFilter) return false;
+                                                    // Filter by deleted status
+                                                    if (modalDeletedFilter === 'active' && isDeletedFlag(entry.deleted)) return false;
+                                                    if (modalDeletedFilter === 'deleted' && !isDeletedFlag(entry.deleted)) return false;
                                                     return true;
-                                                })
-                                                .map((entry, idx) => {
-                                                const member = membersMap.get(entry.memberID);
-                                                const displayClass = entry.classNumber || member?.classNumber || '-';
-                                                const isLocked = isMonthLocked(entry.date, monthLocks);
-                                                const canEdit = !entry.deleted && currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair') && canWrite;
-                                                
-                                                return (
-                                                    <div key={entry.id} className={`rounded-xl border-2 p-5 transition-all ${entry.deleted ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md'}`}>
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center gap-3 mb-2">
-                                                                    <h3 className="text-lg font-bold text-slate-800">{entry.memberName}</h3>
-                                                                    {entry.deleted && <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">DELETED</span>}
-                                                                    {isLocked && <span title="Month Locked">🔒</span>}
-                                                                </div>
-                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Member #:</span>
-                                                                        <span className="ml-1 font-bold text-slate-700">{member?.memberNumber || '-'}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Class:</span>
-                                                                        <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Type:</span>
-                                                                        <span className="ml-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold capitalize">{entry.type.replace(/-/g, ' ')}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-slate-500 font-medium">Method:</span>
-                                                                        <span className="ml-1 font-semibold text-slate-700 capitalize">{entry.method}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {entry.note && (
-                                                                    <div className="mt-2 text-sm text-slate-600 italic">
-                                                                        <span className="font-medium">Note:</span> {entry.note}
-                                                                    </div>
-                                                                )}
+                                                });
+                                            const filteredTotal = modalEntries.filter(e => !isDeletedFlag(e.deleted)).reduce((sum, e) => sum + toNumericAmount(e.amount), 0);
+                                            const filteredCount = modalEntries.length;
+                                            
+                                            const activeEntries = modalEntries.filter(e => !isDeletedFlag(e.deleted));
+                                            const deletedEntries = modalEntries.filter(e => isDeletedFlag(e.deleted));
+                                            
+                                            return (
+                                                <>
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                                        {canViewFilteredTotals && (
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xs font-bold uppercase text-slate-500">Filtered Total</span>
+                                                                <span className="text-2xl font-extrabold text-green-600">{formatCurrency(filteredTotal, settings.currency)}</span>
                                                             </div>
-                                                            <div className="text-right ml-4">
-                                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(entry.amount, settings.currency)}</div>
-                                                                {canEdit && (
-                                                                    <button 
-                                                                        onClick={() => { 
-                                                                            setSelectedEntry(entry); 
-                                                                            setIsModalOpen(true); 
-                                                                            setSelectedDateForModal(null);
-                                                                        }} 
-                                                                        disabled={!canWrite}
-                                                                        title={!canWrite ? 'Requires cloud connection' : undefined}
-                                                                        className={`mt-2 font-bold text-sm ${!canWrite ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
-                                                                    >
-                                                                        Edit
-                                                                    </button>
-                                                                )}
+                                                        )}
+                                                        <span className="text-sm font-semibold text-slate-600">{filteredCount} entr{filteredCount === 1 ? 'y' : 'ies'}</span>
+                                                    </div>
+                                                    {/* Active Entries Section */}
+                                                    {activeEntries.length > 0 && (
+                                                        <div className="space-y-3 mb-6">
+                                                            {activeEntries.map((entry, idx) => {
+                                                                const member = membersMap.get(entry.memberID);
+                                                                const displayClass = entry.classNumber || member?.classNumber || '-';
+                                                                const isLocked = isMonthLocked(entry.date, monthLocks);
+                                                                const canEdit = currentUser.role !== 'pastor' && (!isLocked || currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team') && canWrite;
+                                                                
+                                                                return (
+                                                                    <div key={entry.id} className="rounded-xl border-2 p-5 transition-all bg-gradient-to-r from-slate-50 to-blue-50 border-slate-200 hover:shadow-md">
+                                                                        <div className="flex justify-between items-start">
+                                                                            <div className="flex-1">
+                                                                                <div className="flex items-center gap-3 mb-2">
+                                                                                    <h3 className="text-lg font-bold text-slate-800">{entry.memberName}</h3>
+                                                                                    {isLocked && <span title="Month Locked">🔒</span>}
+                                                                                </div>
+                                                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Member #:</span>
+                                                                                        <span className="ml-1 font-bold text-slate-700">{member?.memberNumber || '-'}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Class:</span>
+                                                                                        <span className="ml-1 font-bold text-slate-700">{displayClass}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Type:</span>
+                                                                                        <span className="ml-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold capitalize">{entry.type.replace(/-/g, ' ')}</span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-slate-500 font-medium">Method:</span>
+                                                                                        <span className="ml-1 font-semibold text-slate-700 capitalize">{formatMethod(entry.method)}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                {entry.note && (
+                                                                                    <div className="mt-2 text-sm text-slate-600 italic">
+                                                                                        <span className="font-medium">Note:</span> {entry.note}
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className="mt-3 text-xs text-slate-700 bg-slate-100 p-2 rounded border border-slate-200">
+                                                                                    <span className="font-semibold">Last edited by:</span> {entry.updatedBy || entry.createdBy || 'Unknown'}
+                                                                                    <span className="mx-2 text-slate-400">•</span>
+                                                                                    <span className="font-semibold">Updated:</span> {entry.lastUpdated ? new Date(entry.lastUpdated).toLocaleString() : '—'}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-right ml-4">
+                                                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(toNumericAmount(entry.amount), settings.currency)}</div>
+                                                                                {(() => {
+                                                                                    if (!canEdit) return null;
+                                                                                    // Data-entry cannot edit at all
+                                                                                    if (currentUser?.role === 'data-entry') return null;
+                                                                                    // Check window status for edits
+                                                                                    const windowStatus = isEntryWindowOpen(settings.entryWindow);
+                                                                                    const canOverride = currentUser?.role === 'admin' || currentUser?.role === 'finance-chair' || currentUser?.role === 'finance-team';
+                                                                                    const disabled = !canWrite || (!windowStatus.isOpen && !canOverride);
+                                                                                    const title = !canWrite ? 'Requires cloud connection' : (!windowStatus.isOpen && !canOverride ? `Editing is locked. ${windowStatus.reason}` : undefined);
+                                                                                    return (
+                                                                                        <button 
+                                                                                            onClick={() => { 
+                                                                                                setSelectedEntry(entry); 
+                                                                                                setIsModalOpen(true); 
+                                                                                                setSelectedDateForModal(null);
+                                                                                            }} 
+                                                                                            disabled={disabled}
+                                                                                            title={title}
+                                                                                            className={`mt-2 font-bold text-sm ${disabled ? 'text-blue-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline'}`}
+                                                                                        >
+                                                                                            Edit
+                                                                                        </button>
+                                                                                    );
+                                                                                })()}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Deleted Entries Section */}
+                                                    {deletedEntries.length > 0 && showDeleted && (
+                                                        <div className="border-t-4 border-red-300 pt-4">
+                                                            <div className="bg-gradient-to-r from-red-100 to-pink-100 px-4 py-3 rounded-lg mb-3 flex items-center justify-between">
+                                                                <span className="text-red-700 font-bold text-sm uppercase flex items-center gap-2">
+                                                                    🗑️ Deleted Entries ({deletedEntries.length})
+                                                                </span>
+                                                                <span className="text-red-600 text-sm font-semibold">
+                                                                    Total: {formatCurrency(deletedEntries.reduce((s,e)=>s+toNumericAmount(e.amount),0), settings.currency)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="space-y-3">
+                                                                {deletedEntries.map((entry) => {
+                                                                    const member = membersMap.get(entry.memberID);
+                                                                    const displayClass = entry.classNumber || member?.classNumber || '-';
+                                                                    
+                                                                    return (
+                                                                        <div key={entry.id} className="rounded-xl border-2 p-5 transition-all bg-red-50 border-red-200 opacity-75">
+                                                                            <div className="flex justify-between items-start">
+                                                                                <div className="flex-1">
+                                                                                    <div className="flex items-center gap-3 mb-2">
+                                                                                        <h3 className="text-lg font-bold text-red-500 line-through">{entry.memberName}</h3>
+                                                                                        <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold">DELETED</span>
+                                                                                    </div>
+                                                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Member #:</span>
+                                                                                            <span className="ml-1 font-bold text-red-500 line-through">{member?.memberNumber || '-'}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Class:</span>
+                                                                                            <span className="ml-1 font-bold text-red-500 line-through">{displayClass}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Type:</span>
+                                                                                            <span className="ml-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold capitalize line-through">{entry.type.replace(/-/g, ' ')}</span>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-red-400 font-medium">Method:</span>
+                                                                                            <span className="ml-1 font-semibold text-red-500 capitalize line-through">{formatMethod(entry.method)}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {entry.note && (
+                                                                                        <div className="mt-2 text-sm text-red-600 italic line-through">
+                                                                                            <span className="font-medium">Note:</span> {entry.note}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="mt-3 text-xs text-red-700 bg-red-100 p-2 rounded">
+                                                                                        <div className="font-semibold">Deleted by: {entry.deletedBy || 'Unknown'}</div>
+                                                                                        <div className="italic">Reason: "{entry.deletedReason || 'No reason provided'}"</div>
+                                                                                    </div>
+                                                                                    <div className="mt-2 text-xs text-red-700 bg-red-100 p-2 rounded border border-red-200">
+                                                                                        <span className="font-semibold">Last edited by:</span> {entry.updatedBy || entry.createdBy || 'Unknown'}
+                                                                                        <span className="mx-2 text-red-300">•</span>
+                                                                                        <span className="font-semibold">Updated:</span> {entry.lastUpdated ? new Date(entry.lastUpdated).toLocaleString() : '—'}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="text-right ml-4">
+                                                                                    <div className="text-2xl font-bold text-red-500 line-through">{formatCurrency(toNumericAmount(entry.amount), settings.currency)}</div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                     
                                     {/* Modal Footer */}
                                     <div className="p-6 bg-slate-50 rounded-b-2xl border-t-2 border-slate-200 flex justify-between items-center">
                                         <div className="text-sm text-slate-600">
-                                            <span className="font-bold">Total for this date:</span> {formatCurrency(entriesByDate[selectedDateForModal].reduce((sum, e) => sum + e.amount, 0), settings.currency)}
+                                            <span className="font-bold">Active total for this date:</span> {formatCurrency(entriesByDate[selectedDateForModal].filter(e => !isDeletedFlag(e.deleted)).reduce((sum, e) => sum + toNumericAmount(e.amount), 0), settings.currency)}
                                         </div>
                                         <button onClick={() => setSelectedDateForModal(null)} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
                                             Close
@@ -931,7 +1464,7 @@ const App: React.FC = () => {
                         )}
                     </div>
                 );
-            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} />;
+            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} currentUser={currentUser} />;
             case 'harvest-pledges':
                 return (
                     <HarvestPledges 
@@ -940,11 +1473,12 @@ const App: React.FC = () => {
                         setPledges={setHarvestPledges}
                         settings={settings}
                         onPayPledge={handlePayPledge}
+                        currentUser={currentUser}
                     />
                 );
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
-            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} currentUser={currentUser} settings={settings} />;
-            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} />;
+            case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} sundayLocks={sundayLocks} setSundayLocks={setSundayLocks} currentUser={currentUser} settings={settings} />;
+            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} currentUser={currentUser} />;
             case 'day-born':
                 return (
                     <DayBorn
@@ -961,7 +1495,7 @@ const App: React.FC = () => {
                 return (
                     <Insights
                         // Use the full active dataset (not the Records tab filters)
-                        entries={entries.filter(e => !e.deleted)}
+                        entries={entries.filter(e => !isDeletedFlag(e.deleted))}
                         harvestEntries={harvestEntries.filter(h => !h.deleted)}
                         settings={settings}
                     />
@@ -969,7 +1503,7 @@ const App: React.FC = () => {
             case 'tax-receipts':
                 return (
                     <TaxReceipts
-                        entries={entries.filter(e => !e.deleted)}
+                        entries={entries.filter(e => !isDeletedFlag(e.deleted))}
                         harvestEntries={harvestEntries.filter(h => !h.deleted)}
                         members={members}
                         settings={settings}
@@ -984,7 +1518,7 @@ const App: React.FC = () => {
                     />
                 );
             case 'attendance':
-                return (
+                return currentUser.role === 'class-leader' ? (
                     <ClassAttendance
                         members={members}
                         setMembers={setMembers}
@@ -992,6 +1526,10 @@ const App: React.FC = () => {
                         currentUser={currentUser}
                         syncStatus={syncStatus}
                     />
+                ) : (
+                    <Suspense fallback={<div className="p-8 text-slate-500">Loading Attendance Summary...</div>}>
+                        <BibleClassAttendanceSummary settings={settings} syncStatus={syncStatus} />
+                    </Suspense>
                 );
             case 'assets':
                 return (
@@ -1007,8 +1545,14 @@ const App: React.FC = () => {
                         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
                             <h3 className="text-lg font-bold">📅 Weekly History</h3>
                         </div>
-                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />
+                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
                     </div>
+                );
+            case 'bible-class-attendance':
+                return (
+                    <Suspense fallback={<div className="p-8 text-slate-500">Loading Bible Class Attendance...</div>}>
+                        <BibleClassAttendanceSummary settings={settings} syncStatus={syncStatus} />
+                    </Suspense>
                 );
             case 'upcoming-birthdays':
                 return (
@@ -1021,7 +1565,7 @@ const App: React.FC = () => {
             // 'history' moved under Reports tab
             case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} targetSection={reportsTarget} onConsumeTarget={() => setReportsTarget(null)} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} syncStatus={syncStatus} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} allData={{
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} classLeaders={classLeaders} setClassLeaders={setClassLeaders} allData={{
                 entries,
                 members,
                 weeklyHistory,
@@ -1073,6 +1617,16 @@ const App: React.FC = () => {
         }
     };
 
+    const refreshRequisitions = async () => {
+        if (!settings.supabaseUrl || !settings.supabaseKey) return;
+        try {
+            const updatedRequisitions = await loadRequisitions(settings.supabaseUrl, settings.supabaseKey);
+            setRequisitions(updatedRequisitions);
+        } catch (err) {
+            console.warn('Failed to refresh requisitions:', err);
+        }
+    };
+
     const navSections = [
         {
             id: 'financial',
@@ -1086,21 +1640,22 @@ const App: React.FC = () => {
                 { id: 'development-fund', label: 'Development Fund', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'harvest', label: 'Harvest', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
                 { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
-                { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair'] },
-                { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
+                { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair', 'finance-team'] },
+                { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-                { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor'] },
-                { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team'] },
+                { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
+                { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
+                { id: 'settings', label: 'Settings', roles: ['admin'] },
             ]
         },
         {
             id: 'members',
             label: 'Members & Attendance',
             icon: '👥',
-            roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor', 'class-leader'],
+            roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'class-leader'],
             items: [
-                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'statistician', 'pastor'] },
+                { id: 'members', label: 'Member Directory', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'attendance', label: 'Class Attendance', roles: ['admin', 'pastor', 'class-leader'] },
             ]
         },
@@ -1110,10 +1665,11 @@ const App: React.FC = () => {
             icon: '📊',
             roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'],
             items: [
-                { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'history', targetSection: 'financial-report-section' },
+                { id: 'reports', label: 'Financial Report', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'history', targetSection: 'financial-report-section' },
                 { id: 'reports-weekly', label: 'Weekly History', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'weekly-history' },
-                { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'upcoming-birthdays' },
-                { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'e-transfers' },
+                { id: 'reports-bible-class', label: 'Bible Class Attendance', roles: ['admin', 'finance-chair', 'finance-team', 'pastor', 'statistician'], tab: 'bible-class-attendance' },
+                { id: 'reports-birthdays', label: 'Upcoming Birthdays', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'upcoming-birthdays' },
+                { id: 'reports-etransfers', label: 'E-Transfers', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'], tab: 'e-transfers' },
             ]
         },
         {
@@ -1150,7 +1706,7 @@ const App: React.FC = () => {
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
             <div className="w-full px-4 sm:px-6 lg:px-8">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings}/>
+                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings} onPasswordChange={() => setIsPasswordModalOpen(true)}/>
                 {syncStatus.state !== 'synced' && (
                     <div className="no-print mt-2 mb-4 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-sm flex items-center gap-2"
                         style={{
@@ -1165,8 +1721,8 @@ const App: React.FC = () => {
                         {syncStatus.state !== 'syncing' && syncStatus.state !== 'error' && 'Read-only — waiting for cloud connection.'}
                     </div>
                 )}
-                <main className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                    <aside className="lg:col-span-1 no-print">
+                <main className={`grid grid-cols-1 ${isSidebarCollapsed ? 'lg:grid-cols-1' : 'lg:grid-cols-5'} gap-8`}>
+                    <aside className={`no-print ${isSidebarCollapsed ? 'hidden lg:hidden' : 'lg:col-span-1'}`}>
                         <nav className="relative overflow-y-auto max-h-[80vh] rounded-2xl shadow-xl border border-slate-800/60 p-5 sticky top-6 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900 no-print">
                             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_40%),radial-gradient(ellipse_at_bottom_right,rgba(236,72,153,0.12),transparent_35%)]"></div>
                             <div className="relative space-y-4">
@@ -1243,10 +1799,53 @@ const App: React.FC = () => {
                             </div>
                         </nav>
                     </aside>
-                    <section className="lg:col-span-4">{renderTabContent()}</section>
+                    <section className={isSidebarCollapsed ? 'lg:col-span-1' : 'lg:col-span-4'}>
+                        <div className="no-print sticky top-4 z-30 mb-4 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setIsSidebarCollapsed(prev => !prev)}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white/95 backdrop-blur text-slate-700 font-semibold shadow-sm hover:bg-slate-50 transition-colors"
+                            >
+                                <span>{isSidebarCollapsed ? '☰' : '⇤'}</span>
+                                <span>{isSidebarCollapsed ? 'Show Navigation' : 'Collapse Navigation'}</span>
+                            </button>
+                        </div>
+                        <Suspense fallback={<div className="p-10 text-center text-slate-500">Loading page...</div>}>
+                                <div className="px-6 pt-4">
+                                    <EntryWindowBanner settings={settings} currentUser={currentUser} />
+                                </div>
+                            {renderTabContent()}
+                        </Suspense>
+                    </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} existingEntries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => { setIsConfirmModalOpen(false); setEntryToDeleteId(null); }} onConfirm={confirmDeleteEntry} title="Confirm Deletion" message="Are you sure you want to delete this financial entry? It will be marked as deleted in the system." confirmButtonText="Delete Entry" />
+                {showChildrenMinistryModal && (
+                    <BulkChildrenMinistryModal
+                        settings={settings}
+                        existingEntries={entries}
+                        onSave={handleSaveEntry}
+                        onClose={() => setShowChildrenMinistryModal(false)}
+                    />
+                )}
+                {isPasswordModalOpen && currentUser && (
+                    <PasswordChangeModal 
+                        currentUser={currentUser}
+                        users={users}
+                        setUsers={setUsers}
+                        settings={settings}
+                        onClose={() => setIsPasswordModalOpen(false)}
+                    />
+                )}
+                {showProfileModal && currentUser && (
+                    <ProfileModal
+                        currentUser={currentUser}
+                        note={userNotes[currentUser.username.toLowerCase()] || ''}
+                        onSaveNote={(val) => setUserNotes(prev => ({ ...prev, [currentUser.username.toLowerCase()]: val }))}
+                        onChangePassword={() => { setShowProfileModal(false); setIsPasswordModalOpen(true); }}
+                        onClose={() => setShowProfileModal(false)}
+                    />
+                )}
                 <KeyboardShortcuts onNavigate={handleNavigate} />
             </div>
         </div>
