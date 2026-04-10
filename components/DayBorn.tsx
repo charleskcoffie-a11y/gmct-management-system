@@ -571,8 +571,8 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                             </button>
                         </div>
                         {!isEntriesCollapsed && (
-                            <>
-                        <div className="p-4 border-b border-green-100 bg-green-50/50">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        <div className="sticky top-0 z-10 p-4 border-b border-green-100 bg-green-50/95 backdrop-blur-sm">
                             <div className="flex flex-wrap items-end gap-3">
                                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                                     <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-red-300 text-red-600 focus:ring-red-500"/>
@@ -581,13 +581,13 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                             </div>
                         </div>
                         {dateFilteredEntries.length === 0 ? (
-                            <div className="flex-1 flex items-center justify-center py-12">
+                            <div className="flex items-center justify-center py-12 px-4">
                                 <p className="text-gray-500 text-center">
                                     {isDateFiltered ? 'No entries for the selected date' : `No entries yet for ${selectedDay}`}
                                 </p>
                             </div>
                         ) : (
-                            <div className="p-4 space-y-2">
+                                <div className="p-4 space-y-2">
                                 {dateFilteredEntries.map(entry => {
                                     const allowedRoles = ['admin','finance-chair','finance-team'];
                                     const canEditRole = currentUser && allowedRoles.includes(currentUser.role);
@@ -621,9 +621,9 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                                         </div>
                                     );
                                 })}
-                            </div>
+                                </div>
                         )}
-                            </>
+                            </div>
                         )}
                     </div>
                     )}
