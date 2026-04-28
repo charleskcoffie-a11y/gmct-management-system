@@ -249,6 +249,17 @@ const mapLockFromDB = (l: any): MonthLock => ({
     lockedAt: l.locked_at
 });
 
+const parseJsonText = <T>(value: any, fallback: T): T => {
+    if (value == null || value === '') return fallback;
+    if (typeof value === 'object') return value as T;
+    if (typeof value !== 'string') return fallback;
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return fallback;
+    }
+};
+
 const mapSettingsToDB = (s: Settings) => ({
     id: 'app_settings', // Single row for app-wide settings
     currency: s.currency,
@@ -267,28 +278,40 @@ const mapSettingsToDB = (s: Settings) => ({
     etransfer_notification_email: s.etransferNotificationEmail,
     etransfer_inbound_secret: s.etransferInboundSecret,
     etransfer_provider: s.etransferProvider,
+    requisition_approval_limits: (s as any).requisitionApprovalLimits ? JSON.stringify((s as any).requisitionApprovalLimits) : null,
+    requisition_pastor_limits: (s as any).requisitionPastorLimits ? JSON.stringify((s as any).requisitionPastorLimits) : null,
+    requisition_finance_approvers: (s as any).requisitionFinanceApprovers ? JSON.stringify((s as any).requisitionFinanceApprovers) : null,
     class_access_codes: s.classAccessCodes ? JSON.stringify(s.classAccessCodes) : null,
 });
 
-const mapSettingsFromDB = (s: any): Settings => ({
-    currency: s.currency || 'GH₵',
-    maxClasses: s.max_classes || 14,
-    enforceDirectory: s.enforce_directory !== false,
-    supabaseUrl: s.supabase_url || '',
-    supabaseKey: s.supabase_key || '',
-    logoUrl: s.logo_url,
-    orgName: s.org_name,
-    orgAddress: s.org_address,
-    orgPhone: s.org_phone,
-    orgEmail: s.org_email,
-    charityNumber: s.charity_number,
-    signatureImage: s.signature_image,
-    annualLevyAmount: s.annual_levy_amount,
-    etransferNotificationEmail: s.etransfer_notification_email,
-    etransferInboundSecret: s.etransfer_inbound_secret,
-    etransferProvider: s.etransfer_provider,
-    classAccessCodes: s.class_access_codes ? JSON.parse(s.class_access_codes) : undefined,
-});
+const mapSettingsFromDB = (s: any): Settings => {
+    const requisitionApprovalLimits = parseJsonText(s.requisition_approval_limits, undefined as any);
+    const requisitionPastorLimits = parseJsonText(s.requisition_pastor_limits, [] as any[]);
+    const requisitionFinanceApprovers = parseJsonText(s.requisition_finance_approvers, [] as string[]);
+
+    return ({
+        currency: s.currency || 'GH₵',
+        maxClasses: s.max_classes || 14,
+        enforceDirectory: s.enforce_directory !== false,
+        supabaseUrl: s.supabase_url || '',
+        supabaseKey: s.supabase_key || '',
+        logoUrl: s.logo_url,
+        orgName: s.org_name,
+        orgAddress: s.org_address,
+        orgPhone: s.org_phone,
+        orgEmail: s.org_email,
+        charityNumber: s.charity_number,
+        signatureImage: s.signature_image,
+        annualLevyAmount: s.annual_levy_amount,
+        etransferNotificationEmail: s.etransfer_notification_email,
+        etransferInboundSecret: s.etransfer_inbound_secret,
+        etransferProvider: s.etransfer_provider,
+        requisitionApprovalLimits,
+        requisitionPastorLimits,
+        requisitionFinanceApprovers,
+        classAccessCodes: parseJsonText(s.class_access_codes, undefined as any),
+    } as Settings);
+};
 
 // --- Sync Functions ---
 
@@ -436,12 +459,26 @@ export const markETransferReconciled = async (url: string, key: string, id: stri
 const mapRequisitionToDB = (r: Requisition) => ({
     id: r.id,
     requester_username: r.requesterUsername,
+    requester_name: (r as any).requesterName || r.requesterUsername || null,
+    date_created: (r as any).dateCreated || null,
     title: r.title,
     purpose: r.purpose,
+    payable_to: (r as any).payableTo || null,
+    organization_committee: (r as any).organizationCommittee || null,
+    intended_for: (r as any).intendedFor || (r as any).requiredApproverUsername || null,
+    purchase_type: (r as any).purchaseType || null,
     fund: r.fund,
     needed_by: r.neededBy || null,
     total_amount: r.totalAmount,
     status: r.status,
+    source_type: (r as any).sourceType || null,
+    required_approver_role: (r as any).requiredApproverRole || null,
+    required_approver_username: (r as any).requiredApproverUsername || null,
+    completion_attachment_url: (r as any).completionAttachmentUrl || null,
+    completion_attachment_at: (r as any).completionAttachmentAt || null,
+    uploaded_pdf: (r as any).uploadedPdf || null,
+    receipt_attachment: (r as any).receiptAttachments || null,
+    requisition_number: (r as any).requisitionNumber || null,
     updated_by: r.updatedBy || null,
     last_updated: r.lastUpdated || null,
 });
@@ -449,16 +486,30 @@ const mapRequisitionToDB = (r: Requisition) => ({
 const mapRequisitionFromDB = (r: any): Requisition => ({
     id: r.id,
     requesterUsername: r.requester_username,
+    requesterName: r.requester_name || r.requester_username || undefined,
+    dateCreated: r.date_created || undefined,
     title: r.title,
     purpose: r.purpose || undefined,
+    payableTo: r.payable_to || undefined,
+    organizationCommittee: r.organization_committee || undefined,
+    intendedFor: r.intended_for || r.required_approver_username || undefined,
+    purchaseType: r.purchase_type || undefined,
     fund: r.fund || undefined,
     neededBy: r.needed_by || undefined,
     totalAmount: parseFloat(r.total_amount || 0),
     status: r.status,
+    sourceType: r.source_type || undefined,
+    requiredApproverRole: r.required_approver_role || undefined,
+    requiredApproverUsername: r.required_approver_username || undefined,
+    completionAttachmentUrl: r.completion_attachment_url || undefined,
+    completionAttachmentAt: r.completion_attachment_at || undefined,
+    uploadedPdf: parseJsonText(r.uploaded_pdf, undefined as any),
+    receiptAttachments: parseJsonText(r.receipt_attachment, undefined as any),
+    requisitionNumber: r.requisition_number || undefined,
     createdAt: r.created_at || undefined,
     updatedBy: r.updated_by || undefined,
     lastUpdated: r.last_updated || undefined,
-});
+} as Requisition);
 
 const mapReqItemToDB = (i: RequisitionItem) => ({
     id: i.id,
@@ -482,8 +533,11 @@ const mapApprovalToDB = (a: RequisitionApproval) => ({
     id: a.id,
     requisition_id: a.requisitionId,
     approver_username: a.approverUsername,
+    approver_role: (a as any).approverRole || null,
     decision: a.decision,
     note: a.note || null,
+    signature_name: (a as any).signatureName || null,
+    signature_at: (a as any).signatureAt || null,
     decided_at: a.decidedAt || null,
 });
 
@@ -491,10 +545,13 @@ const mapApprovalFromDB = (a: any): RequisitionApproval => ({
     id: a.id,
     requisitionId: a.requisition_id,
     approverUsername: a.approver_username,
+    approverRole: a.approver_role || undefined,
     decision: a.decision,
     note: a.note || undefined,
+    signatureName: a.signature_name || undefined,
+    signatureAt: a.signature_at || undefined,
     decidedAt: a.decided_at || undefined,
-});
+} as RequisitionApproval);
 
 export const loadRequisitions = async (url: string, key: string): Promise<Requisition[]> => {
     const supabase = getSupabaseClient(url, key);
@@ -513,6 +570,16 @@ export const loadRequisitions = async (url: string, key: string): Promise<Requis
         const byReq: Record<string, RequisitionItem[]> = {};
         items.forEach(i => { (byReq[i.requisitionId] ||= []).push(i); });
         reqs.forEach(r => { r.items = byReq[r.id] || []; });
+
+        const { data: approvalsData } = await supabase
+            .from('requisition_approvals')
+            .select('*')
+            .in('requisition_id', ids)
+            .order('decided_at', { ascending: false });
+        const approvals = (approvalsData || []).map(mapApprovalFromDB);
+        const approvalsByReq: Record<string, RequisitionApproval[]> = {};
+        approvals.forEach(a => { (approvalsByReq[a.requisitionId] ||= []).push(a); });
+        reqs.forEach(r => { (r as any).approvals = approvalsByReq[r.id] || []; });
     }
     return reqs;
 };
