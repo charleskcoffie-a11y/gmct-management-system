@@ -146,6 +146,8 @@ const App: React.FC = () => {
     const [dayBornFilter, setDayBornFilter] = useState<'all' | 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'>('all');
     const [startDateFilter, setStartDateFilter] = useState('');
     const [endDateFilter, setEndDateFilter] = useState('');
+    const [balanceDateFilter, setBalanceDateFilter] = useState('');
+    const [isBalancePanelCollapsed, setIsBalancePanelCollapsed] = useState(true);
     const [showDeleted, setShowDeleted] = useState(false);
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
     const [modalClassFilter, setModalClassFilter] = useState<string>('all');
@@ -476,6 +478,45 @@ const App: React.FC = () => {
 
         return { total, count, chartData };
     }, [filteredAndSortedEntries]);
+
+    const dailyMethodBreakdown = useMemo(() => {
+        const normalizeMethodForBalance = (method?: string): 'cash' | 'check' | 'e-transfer' | 'other' => {
+            const normalized = (method || '').toLowerCase().trim();
+            if (normalized === 'cash') return 'cash';
+            if (normalized === 'check' || normalized === 'cheque') return 'check';
+            if (normalized === 'e-transfer' || normalized === 'etransfer' || normalized === 'transfer') return 'e-transfer';
+            return 'other';
+        };
+
+        const sourceDate = currentUser?.role === 'data-entry' ? getTodayEST() : balanceDateFilter;
+        const selectedDate = sourceDate || (startDateFilter && startDateFilter === endDateFilter ? startDateFilter : '');
+        const activeEntries = filteredAndSortedEntries.filter(e => !isDeletedFlag(e.deleted));
+        const dateEntries = selectedDate
+            ? activeEntries.filter(e => (e.date || '').slice(0, 10) === selectedDate)
+            : [];
+
+        const byMethod = {
+            cash: { amount: 0, count: 0 },
+            'e-transfer': { amount: 0, count: 0 },
+            check: { amount: 0, count: 0 },
+        };
+
+        dateEntries.forEach(entry => {
+            const method = normalizeMethodForBalance(entry.method);
+            const amount = toNumericAmount(entry.amount);
+            if (method === 'cash' || method === 'e-transfer' || method === 'check') {
+                byMethod[method].amount += amount;
+                byMethod[method].count += 1;
+            }
+        });
+
+        return {
+            selectedDate,
+            total: dateEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0),
+            totalCount: dateEntries.length,
+            ...byMethod,
+        };
+    }, [filteredAndSortedEntries, balanceDateFilter, startDateFilter, endDateFilter, currentUser?.role]);
 
     const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#8b5cf6'];
 
@@ -1018,6 +1059,68 @@ const App: React.FC = () => {
                                 </select>
                             </div>
                         </div>
+
+                        {canViewFilteredTotals && (
+                            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-5 rounded-xl shadow-lg border-2 border-emerald-200 space-y-4">
+                                <button
+                                    onClick={() => setIsBalancePanelCollapsed(prev => !prev)}
+                                    className="w-full flex items-center justify-between rounded-lg bg-white/70 border border-emerald-200 px-4 py-3 text-left hover:bg-white transition"
+                                >
+                                    <div>
+                                        <div className="text-sm font-bold uppercase text-emerald-700">🧮 Daily Balancing Breakdown</div>
+                                        <div className="text-xs text-emerald-700/80 mt-1">Cash, E-Transfer, Cheque totals for a selected date</div>
+                                    </div>
+                                    <span className="text-emerald-700 font-bold text-lg">{isBalancePanelCollapsed ? '▼' : '▲'}</span>
+                                </button>
+
+                                {!isBalancePanelCollapsed && (
+                                    <>
+                                        <div className="flex flex-wrap items-end gap-4">
+                                            <div>
+                                                <label className="block text-sm font-bold uppercase text-emerald-700 mb-1">Balancing Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={currentUser?.role === 'data-entry' ? getTodayEST() : balanceDateFilter}
+                                                    onChange={e => setBalanceDateFilter(e.target.value)}
+                                                    disabled={currentUser?.role === 'data-entry'}
+                                                    className={`block border-2 rounded-lg shadow-sm py-2.5 px-3 font-medium ${currentUser?.role === 'data-entry' ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed' : 'border-emerald-300 focus:ring-emerald-400 focus:border-emerald-400'}`}
+                                                />
+                                            </div>
+                                            <div className="text-sm text-emerald-700 font-semibold">
+                                                {dailyMethodBreakdown.selectedDate
+                                                    ? `Showing breakdown for ${dailyMethodBreakdown.selectedDate}`
+                                                    : 'Select a balancing date (or set Start Date = End Date)'}
+                                            </div>
+                                        </div>
+
+                                        {dailyMethodBreakdown.selectedDate && (
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                                <div className="bg-white rounded-lg border border-emerald-200 p-3">
+                                                    <div className="text-xs font-bold uppercase text-slate-500">Total Entries</div>
+                                                    <div className="text-xl font-extrabold text-emerald-700">{dailyMethodBreakdown.totalCount}</div>
+                                                    <div className="text-xs text-slate-600">{formatCurrency(dailyMethodBreakdown.total, settings.currency)}</div>
+                                                </div>
+                                                <div className="bg-white rounded-lg border border-emerald-200 p-3">
+                                                    <div className="text-xs font-bold uppercase text-slate-500">Cash</div>
+                                                    <div className="text-xl font-extrabold text-emerald-700">{dailyMethodBreakdown.cash.count}</div>
+                                                    <div className="text-xs text-slate-600">{formatCurrency(dailyMethodBreakdown.cash.amount, settings.currency)}</div>
+                                                </div>
+                                                <div className="bg-white rounded-lg border border-emerald-200 p-3">
+                                                    <div className="text-xs font-bold uppercase text-slate-500">E-Transfer</div>
+                                                    <div className="text-xl font-extrabold text-emerald-700">{dailyMethodBreakdown['e-transfer'].count}</div>
+                                                    <div className="text-xs text-slate-600">{formatCurrency(dailyMethodBreakdown['e-transfer'].amount, settings.currency)}</div>
+                                                </div>
+                                                <div className="bg-white rounded-lg border border-emerald-200 p-3">
+                                                    <div className="text-xs font-bold uppercase text-slate-500">Cheque</div>
+                                                    <div className="text-xl font-extrabold text-emerald-700">{dailyMethodBreakdown.check.count}</div>
+                                                    <div className="text-xs text-slate-600">{formatCurrency(dailyMethodBreakdown.check.amount, settings.currency)}</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
 
                         {/* Mini Dashboard */}
                         {canViewFilteredTotals && financialSummary.total > 0 && (
