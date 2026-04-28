@@ -133,6 +133,16 @@ export default function Requisitions({ settings, currentUser }: Props) {
     return 'Unassigned';
   };
 
+  const getApproverUsername = (req: Requisition): string | undefined => {
+    return req.requiredApproverUsername || req.intendedFor || req.approvals?.[0]?.approverUsername;
+  };
+
+  const getApproverDisplay = (req: Requisition): string => {
+    const approverUsername = getApproverUsername(req);
+    const roleLabel = approverLabel(req.requiredApproverRole);
+    return approverUsername ? `${roleLabel} - ${approverUsername}` : roleLabel;
+  };
+
   const resolveApproverTarget = (amount: number, requesterUsername: string): { role: RequisitionApproverRole; username?: string } => {
     const limits = settings.requisitionApprovalLimits;
     if (limits) {
@@ -801,8 +811,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
               <div>
                 <div className="text-xs font-bold text-slate-600 uppercase">Approver</div>
                 <div className="text-sm font-semibold text-indigo-700 mt-1">
-                  {approverLabel(r.requiredApproverRole)}
-                  {r.requiredApproverUsername ? ` - ${r.requiredApproverUsername}` : ''}
+                  {getApproverDisplay(r)}
                 </div>
               </div>
             </div>
@@ -905,8 +914,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                                     <div>
                                       <div className="text-xs font-bold text-slate-600 uppercase">Approver</div>
                                       <div className="text-sm font-semibold text-indigo-700 mt-1">
-                                        {approverLabel(r.requiredApproverRole)}
-                                        {r.requiredApproverUsername ? ` - ${r.requiredApproverUsername}` : ''}
+                                        {getApproverDisplay(r)}
                                       </div>
                                     </div>
                                   </div>
@@ -983,7 +991,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Approver</label>
-                  <div className="text-lg font-semibold text-indigo-700 mt-1">{approverLabel(editing.requiredApproverRole)}{editing.requiredApproverUsername ? ` - ${editing.requiredApproverUsername}` : ''}</div>
+                  <div className="text-lg font-semibold text-indigo-700 mt-1">{getApproverDisplay(editing)}</div>
                 </div>
               </div>
 
