@@ -1,5 +1,5 @@
 
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "harvest-launch" | "day-born" | "lent-donation" | "development-fund" | "covenant" | "childrens-ministry" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "pledge" | "harvest-levy" | "harvest-pledge" | "harvest" | "harvest-launch" | "womens-harvest" | "mens-harvest" | "youth-harvest" | "organizational-anniversary" | "day-born" | "lent-donation" | "development-fund" | "covenant" | "childrens-ministry" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {

@@ -93,6 +93,10 @@ const FINANCIAL_ENTRY_TYPES: EntryType[] = [
     'thanksgiving-offering',
     'pledge',
     'harvest-levy',
+    'womens-harvest',
+    'mens-harvest',
+    'youth-harvest',
+    'organizational-anniversary',
     'day-born',
     'lent-donation',
     'covenant',
@@ -834,7 +838,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "mens-harvest", "youth-harvest", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
         // Class leaders are restricted to attendance only
