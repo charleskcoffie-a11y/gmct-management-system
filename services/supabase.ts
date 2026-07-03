@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, OrganizationFundOrganization, OrganizationFundTransaction } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -552,6 +552,147 @@ const mapApprovalFromDB = (a: any): RequisitionApproval => ({
     signatureAt: a.signature_at || undefined,
     decidedAt: a.decided_at || undefined,
 } as RequisitionApproval);
+
+// --- Organization Funds ---
+const mapOrganizationFundOrganizationFromDB = (row: any): OrganizationFundOrganization => ({
+    id: row.id,
+    name: row.name,
+    isActive: !!row.is_active,
+    createdBy: row.created_by || undefined,
+    updatedBy: row.updated_by || undefined,
+    createdAt: row.created_at || undefined,
+    updatedAt: row.updated_at || undefined,
+});
+
+const mapOrganizationFundOrganizationToDB = (org: OrganizationFundOrganization) => ({
+    id: org.id,
+    name: org.name,
+    is_active: org.isActive,
+    created_by: org.createdBy || null,
+    updated_by: org.updatedBy || null,
+    created_at: org.createdAt || new Date().toISOString(),
+    updated_at: org.updatedAt || new Date().toISOString(),
+});
+
+const mapOrganizationFundTransactionFromDB = (row: any): OrganizationFundTransaction => ({
+    id: row.id,
+    organizationId: row.organization_id,
+    organizationNameSnapshot: row.organization_name_snapshot,
+    type: row.tx_type,
+    status: row.status,
+    amount: parseFloat(row.amount || 0),
+    date: row.tx_date,
+    submittedBy: row.submitted_by,
+    enteredBy: row.entered_by,
+    note: row.note || undefined,
+    approvedBy: row.approved_by || undefined,
+    approverSignatureName: row.approver_signature_name || undefined,
+    approvedAt: row.approved_at || undefined,
+    createdAt: row.created_at || undefined,
+    updatedAt: row.updated_at || undefined,
+});
+
+const mapOrganizationFundTransactionToDB = (tx: OrganizationFundTransaction) => ({
+    id: tx.id,
+    organization_id: tx.organizationId,
+    organization_name_snapshot: tx.organizationNameSnapshot,
+    tx_type: tx.type,
+    status: tx.status,
+    amount: tx.amount,
+    tx_date: tx.date,
+    submitted_by: tx.submittedBy,
+    entered_by: tx.enteredBy,
+    note: tx.note || null,
+    approved_by: tx.approvedBy || null,
+    approver_signature_name: tx.approverSignatureName || null,
+    approved_at: tx.approvedAt || null,
+    created_at: tx.createdAt || new Date().toISOString(),
+    updated_at: tx.updatedAt || new Date().toISOString(),
+});
+
+export const loadOrganizationFundOrganizations = async (url: string, key: string, includeInactive = false): Promise<OrganizationFundOrganization[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+
+    let query = supabase
+        .from('organization_funds_organizations')
+        .select('*')
+        .order('name', { ascending: true });
+
+    if (!includeInactive) query = query.eq('is_active', true);
+
+    const { data, error } = await query;
+    if (error) {
+        console.warn('Failed to load organization funds organizations:', error.message);
+        return [];
+    }
+
+    return (data || []).map(mapOrganizationFundOrganizationFromDB);
+};
+
+export const saveOrganizationFundOrganization = async (url: string, key: string, org: OrganizationFundOrganization) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase
+        .from('organization_funds_organizations')
+        .upsert([mapOrganizationFundOrganizationToDB(org)]);
+
+    if (error) throw new Error(`Save organization failed: ${error.message}`);
+    return { success: true };
+};
+
+export const setOrganizationFundOrganizationActive = async (
+    url: string,
+    key: string,
+    organizationId: string,
+    isActive: boolean,
+    updatedBy?: string
+) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase
+        .from('organization_funds_organizations')
+        .update({
+            is_active: isActive,
+            updated_by: updatedBy || null,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', organizationId);
+
+    if (error) throw new Error(`Update organization active state failed: ${error.message}`);
+    return { success: true };
+};
+
+export const loadOrganizationFundTransactions = async (url: string, key: string): Promise<OrganizationFundTransaction[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+        .from('organization_funds_transactions')
+        .select('*')
+        .order('tx_date', { ascending: false });
+
+    if (error) {
+        console.warn('Failed to load organization funds transactions:', error.message);
+        return [];
+    }
+
+    return (data || []).map(mapOrganizationFundTransactionFromDB);
+};
+
+export const saveOrganizationFundTransaction = async (url: string, key: string, tx: OrganizationFundTransaction) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase
+        .from('organization_funds_transactions')
+        .upsert([mapOrganizationFundTransactionToDB(tx)]);
+
+    if (error) throw new Error(`Save organization funds transaction failed: ${error.message}`);
+    return { success: true };
+};
 
 export const loadRequisitions = async (url: string, key: string): Promise<Requisition[]> => {
     const supabase = getSupabaseClient(url, key);

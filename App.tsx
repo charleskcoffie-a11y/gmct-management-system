@@ -46,6 +46,7 @@ const WesleyHall = lazy(() => import('./components/WesleyHall'));
 const ClassAttendance = lazy(() => import('./components/ClassAttendance'));
 const Assets = lazy(() => import('./components/Assets'));
 const DayBorn = lazy(() => import('./components/DayBorn'));
+const OrganizationFunds = lazy(() => import('./components/OrganizationFunds'));
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -864,6 +865,9 @@ const App: React.FC = () => {
         if (activeTab === 'wesley-hall' && currentUser.role === 'data-entry') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Wesley Hall is not available for Data Entry role.</div>;
         }
+        if (activeTab === 'organization-funds' && !['admin', 'finance-chair', 'finance-team', 'pastor'].includes(currentUser.role)) {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Organization Funds is available only to Admin, Finance, and Pastor roles.</div>;
+        }
 
         const canWrite = syncStatus.state === 'synced';
         const canViewFilteredTotals = currentUser.role !== 'data-entry';
@@ -956,6 +960,10 @@ const App: React.FC = () => {
             case 'my-approvals':
                 return (
                     <MyApprovals settings={settings} currentUser={currentUser} onDecisionSaved={refreshRequisitions} />
+                );
+            case 'organization-funds':
+                return (
+                    <OrganizationFunds settings={settings} currentUser={currentUser} canWrite={canWrite} />
                 );
             case 'records':
                 return (
@@ -1750,6 +1758,7 @@ const App: React.FC = () => {
                 { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair', 'finance-team'] },
                 { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
+                { id: 'organization-funds', label: 'Organization Funds', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
