@@ -170,7 +170,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'requisitions' | 'my-approvals' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'organization-funds' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'requisitions' | 'my-approvals' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
 
 export type RequisitionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'funded' | 'paid' | 'closed';
 export type ApprovalDecision = 'approved' | 'rejected';
@@ -312,4 +312,35 @@ export interface AssetMaintenance {
     notes?: string;
     createdBy?: string;
     createdAt?: string; // ISO Timestamp
+}
+
+export type OrganizationFundStatus = 'posted' | 'pending' | 'approved' | 'rejected';
+export type OrganizationFundEntryType = 'deposit' | 'withdrawal';
+
+export interface OrganizationFundOrganization {
+    id: string;
+    name: string;
+    isActive: boolean;
+    createdBy?: string;
+    updatedBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface OrganizationFundTransaction {
+    id: string;
+    organizationId: string;
+    organizationNameSnapshot: string;
+    type: OrganizationFundEntryType;
+    status: OrganizationFundStatus;
+    amount: number;
+    date: string;
+    submittedBy: string;
+    enteredBy: string;
+    note?: string;
+    approvedBy?: string;
+    approverSignatureName?: string;
+    approvedAt?: string;
+    createdAt?: string;
+    updatedAt?: string;
 }
