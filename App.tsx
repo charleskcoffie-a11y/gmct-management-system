@@ -927,7 +927,14 @@ const App: React.FC = () => {
                 return (
                     <Harvest 
                         members={members}
-                        entries={entries.filter(e => ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch'].includes(e.type))}
+                        entries={entries.filter(e => {
+                            const type = (e.type || '').toLowerCase();
+                            const note = (e.note || '').toLowerCase();
+                            const group = (e.groupName || '').toLowerCase();
+                            const combined = `${type} ${note} ${group}`;
+                            return ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest'].includes(type)
+                                || ['harvest', 'levy', 'pledge', 'launch', 'men', 'women', 'youth'].some(keyword => combined.includes(keyword));
+                        })}
                         setEntries={setEntries}
                         settings={settings}
                         currentUser={currentUser}

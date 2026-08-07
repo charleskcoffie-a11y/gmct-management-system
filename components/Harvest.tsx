@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useToast } from './ToastProvider';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import type { Entry, Member, Settings, SyncStatus, User } from '../types';
@@ -28,6 +28,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [searchFilter, setSearchFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
     const [showDuplicatesPanel, setShowDuplicatesPanel] = useState(false);
+    const [showSummary, setShowSummary] = useState(true);
     const [acceptedDuplicateKeys, setAcceptedDuplicateKeys] = useLocalStorage<string[]>('gmct-harvest-accepted-duplicates', []);
     const [collapsedYears, setCollapsedYears] = useState<Set<string>>(new Set());
     const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
@@ -39,7 +40,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [deleteError, setDeleteError] = useState('');
 
     // Harvest types to filter
-    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch'] as const;
+    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest'] as const;
 
     // Form state
     const [formData, setFormData] = useState<Entry>({
@@ -57,6 +58,9 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     });
     const harvestCategories = [
         { value: 'harvest-levy', label: 'Harvest Levy' },
+        { value: 'mens-harvest', label: "Men's Harvest" },
+        { value: 'womens-harvest', label: "Women's Harvest" },
+        { value: 'youth-harvest', label: 'Youth Harvest' },
         { value: 'harvest', label: 'Harvest Sales' },
         { value: 'harvest-pledge', label: 'Harvest Pledge' },
         { value: 'harvest-launch', label: 'Harvest Launch' }
@@ -161,6 +165,104 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         return groups;
     }, [entriesByDate, sortedDates]);
 
+    const getNormalizedTokens = (value: string) =>
+        (value || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+
+    const getHarvestSummaryKey = (entry: Entry) => {
+        const rawType = (entry.type || '').toLowerCase();
+
+        // Explicitly-typed entries always map to their own category — never re-classify by note/group
+        if (rawType === 'harvest-launch') return 'harvest-launch';
+        if (rawType === 'harvest-levy') return 'harvest-levy';
+        if (rawType === 'harvest-pledge') return 'harvest-pledge';
+        if (rawType === 'womens-harvest') return 'womens-harvest';
+        if (rawType === 'mens-harvest') return 'mens-harvest';
+        if (rawType === 'youth-harvest') return 'youth-harvest';
+
+        // Generic 'harvest' type: sub-classify by note/group/fund
+        const rawNote = (entry.note || '').toLowerCase();
+        const rawGroup = (entry.groupName || '').toLowerCase();
+        const rawFund = (entry.fund || '').toLowerCase();
+        const combinedTokens = [
+            ...getNormalizedTokens(rawNote),
+            ...getNormalizedTokens(rawGroup),
+            ...getNormalizedTokens(rawFund)
+        ];
+        if (combinedTokens.includes('womens') || combinedTokens.includes('women')) return 'womens-harvest';
+        if (combinedTokens.includes('mens') || combinedTokens.includes('men')) return 'mens-harvest';
+        if (combinedTokens.includes('youth')) return 'youth-harvest';
+
+        return entry.type;
+    };
+
+    const isHarvestEntryLike = (entry: Entry) => {
+        const rawType = (entry.type || '').toLowerCase();
+        const rawNote = (entry.note || '').toLowerCase();
+        const rawGroup = (entry.groupName || '').toLowerCase();
+        const rawFund = (entry.fund || '').toLowerCase();
+        const combinedText = `${rawType} ${rawNote} ${rawGroup} ${rawFund}`;
+        const combinedTokens = getNormalizedTokens(combinedText);
+
+        if (harvestTypes.includes(rawType as any)) return true;
+        if (['womens-harvest', 'mens-harvest', 'youth-harvest'].some(type => combinedTokens.includes(type.replace(/-/g, '')))) return true;
+        return ['harvest', 'levy', 'pledge', 'launch'].some(keyword => combinedTokens.includes(keyword));
+    };
+
+    const getDuplicateGroupKey = (entry: Entry) => {
+        const memberKey = entry.memberID || (entry.memberName || '').trim().toLowerCase();
+        return `${entry.date}__${entry.type}__${memberKey}`;
+    };
+
+    useEffect(() => {
+        if (!entries.length) return;
+
+        const reactivationTargets = entries.filter(entry => {
+            if (!harvestTypes.includes(entry.type as any)) return false;
+            if (!entry.deleted) return false;
+            const isAcceptedDuplicate = entry.deletedReason === 'Accepted as duplicate' || entry.deletedReason?.includes('Accepted as duplicate');
+            const isInAcceptedList = acceptedDuplicateKeys.includes(getDuplicateGroupKey(entry));
+            return isAcceptedDuplicate || isInAcceptedList;
+        });
+
+        if (reactivationTargets.length === 0) return;
+
+        const restoreEntries = async () => {
+            const restoredEntries = entries.map(entry => {
+                const target = reactivationTargets.find(item => item.id === entry.id);
+                if (!target) return entry;
+                return {
+                    ...entry,
+                    deleted: false,
+                    deletedReason: undefined,
+                    deletedBy: undefined,
+                    deletedAt: undefined,
+                };
+            });
+
+            setEntries(restoredEntries);
+
+            if (settings.supabaseUrl && settings.supabaseKey && syncStatus?.state === 'synced') {
+                for (const entry of reactivationTargets) {
+                    const savedEntry = {
+                        ...entry,
+                        deleted: false,
+                        deletedReason: undefined,
+                        deletedBy: undefined,
+                        deletedAt: undefined,
+                    };
+                    await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, savedEntry);
+                }
+            }
+        };
+
+        void restoreEntries();
+    }, [acceptedDuplicateKeys, entries, settings.supabaseUrl, settings.supabaseKey, syncStatus?.state]);
+
     // Summary totals for currently applied filters (independent of showDeleted toggle)
     const summary = useMemo(() => {
         const matchingEntries = entries.filter(entry => {
@@ -180,7 +282,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         const activeTotal = activeEntries.reduce((sum, e) => sum + e.amount, 0);
         const deletedTotal = deletedEntries.reduce((sum, e) => sum + e.amount, 0);
         const activeByType = activeEntries.reduce((acc, entry) => {
-            const key = entry.type;
+            const key = getHarvestSummaryKey(entry);
             acc[key] = (acc[key] || 0) + entry.amount;
             return acc;
         }, {} as Record<string, number>);
@@ -200,8 +302,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         const groups = new Map<string, Entry[]>();
 
         activeHarvestEntries.forEach(entry => {
-            const memberKey = entry.memberID || entry.memberName.trim().toLowerCase();
-            const key = `${entry.date}__${entry.type}__${memberKey}`;
+            const key = getDuplicateGroupKey(entry);
             const current = groups.get(key) || [];
             current.push(entry);
             groups.set(key, current);
@@ -277,12 +378,12 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             if (existing.type !== entryToSave.type) return false;
             if (existing.memberID !== entryToSave.memberID) return false;
             if (existing.id === entryToSave.id) return false;
+            if (existing.amount !== entryToSave.amount) return false;
             return true;
         });
 
         if (localDuplicate) {
-            showToast('Duplicate blocked: same member, date, and category already exists.', 'error');
-            return;
+            showToast('Possible duplicate detected. It will be flagged for verification instead of being blocked.', 'warning');
         }
 
         try {
@@ -295,7 +396,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
 
             const { data: dbPotentialDupes, error: dupeCheckError } = await supabase
                 .from('entries')
-                .select('id')
+                .select('id, amount, note, group_name')
                 .eq('date', entryToSave.date)
                 .eq('type', entryToSave.type)
                 .eq('member_id', entryToSave.memberID)
@@ -307,12 +408,12 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 return;
             }
 
-            const dbHasDuplicate = (dbPotentialDupes || []).some(row => row.id !== entryToSave.id);
+            const dbHasDuplicate = (dbPotentialDupes || []).some(row => {
+                if (row.id === entryToSave.id) return false;
+                return Number(row.amount) === Number(entryToSave.amount);
+            });
             if (dbHasDuplicate) {
-                showToast('Duplicate blocked by cloud check: same member, date, and category already exists.', 'error');
-                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
-                setEntries(refreshedEntries);
-                return;
+                showToast('Possible duplicate detected in the cloud record. It has been flagged for verification.', 'warning');
             }
 
             await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
@@ -322,6 +423,38 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             showToast('Harvest entry saved successfully', 'success');
         } catch (error: any) {
             showToast(`Failed to save harvest entry: ${error.message}`, 'error');
+        }
+    };
+
+    const handleVerifyAndAcceptDuplicateGroup = async (group: { key: string; entries: Entry[] }) => {
+        if (!group.entries.length) return;
+
+        try {
+            const updatedEntries = group.entries.map(entry => ({
+                ...entry,
+                deleted: false,
+                deletedReason: undefined,
+                deletedBy: undefined,
+                deletedAt: undefined,
+            }));
+
+            if (settings.supabaseUrl && settings.supabaseKey && syncStatus?.state === 'synced') {
+                for (const entry of updatedEntries) {
+                    await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+                }
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                setEntries(refreshedEntries);
+            } else {
+                setEntries(prev => prev.map(item => {
+                    const matching = updatedEntries.find(entry => entry.id === item.id);
+                    return matching ? { ...item, ...matching } : item;
+                }));
+            }
+
+            setAcceptedDuplicateKeys(prev => prev.includes(group.key) ? prev : [...prev, group.key]);
+            showToast('Duplicate group verified and accepted. Both contributions remain active and are included in the totals.', 'success');
+        } catch (error: any) {
+            showToast(`Failed to resolve duplicate group: ${error.message}`, 'error');
         }
     };
 
@@ -515,39 +648,62 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
 
             {/* Summary */}
             <div className="bg-gradient-to-br from-amber-300 to-orange-400 p-6 rounded-xl shadow-lg border-2 border-amber-200">
-                <h3 className="text-white font-bold text-sm uppercase tracking-wider">🌾 Harvest Final Total (Excludes Deleted)</h3>
-                <p className="text-4xl font-bold text-white mt-2 drop-shadow">{formatCurrency(summary.activeTotal, settings.currency)}</p>
-                <p className="text-amber-50 text-sm mt-1 font-semibold">Active: {summary.activeCount} contribution{summary.activeCount !== 1 ? 's' : ''}</p>
-                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                    <div className="bg-white/20 rounded-lg p-2 text-white">
-                        <div className="font-bold uppercase tracking-wide">Deleted</div>
-                        <div className="text-sm font-bold">{formatCurrency(summary.deletedTotal, settings.currency)}</div>
-                        <div>{summary.deletedCount} record{summary.deletedCount !== 1 ? 's' : ''}</div>
+                <button type="button" onClick={() => setShowSummary(prev => !prev)} className="w-full text-left">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 className="text-white font-bold text-sm uppercase tracking-wider">🌾 Harvest Final Total (Excludes Deleted)</h3>
+                            <p className="text-4xl font-bold text-white mt-2 drop-shadow">{formatCurrency(summary.activeTotal, settings.currency)}</p>
+                            <p className="text-amber-50 text-sm mt-1 font-semibold">Active: {summary.activeCount} contribution{summary.activeCount !== 1 ? 's' : ''}</p>
+                        </div>
+                        <span className="text-2xl font-bold text-white/90">{showSummary ? '−' : '+'}</span>
                     </div>
-                    <div className="bg-white/20 rounded-lg p-2 text-white">
-                        <div className="font-bold uppercase tracking-wide">Gross</div>
-                        <div className="text-sm font-bold">{formatCurrency(summary.grossTotal, settings.currency)}</div>
-                        <div>For audit only</div>
+                </button>
+                {showSummary && (
+                    <div className="mt-4 space-y-3">
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Deleted</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.deletedTotal, settings.currency)}</div>
+                                <div>{summary.deletedCount} record{summary.deletedCount !== 1 ? 's' : ''}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Gross</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.grossTotal, settings.currency)}</div>
+                                <div>For audit only</div>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 text-xs">
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Harvest Levy</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-levy'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Men's Harvest</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['mens-harvest'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Women's Harvest</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['womens-harvest'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Youth Harvest</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['youth-harvest'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Harvest Launch</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-launch'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Harvest Pledge</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-pledge'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Harvest</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest'] || 0, settings.currency)}</div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                    <div className="bg-white/20 rounded-lg p-2 text-white">
-                        <div className="font-bold uppercase tracking-wide">Harvest Levy</div>
-                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-levy'] || 0, settings.currency)}</div>
-                    </div>
-                    <div className="bg-white/20 rounded-lg p-2 text-white">
-                        <div className="font-bold uppercase tracking-wide">Harvest Launch</div>
-                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-launch'] || 0, settings.currency)}</div>
-                    </div>
-                    <div className="bg-white/20 rounded-lg p-2 text-white">
-                        <div className="font-bold uppercase tracking-wide">Harvest Pledge</div>
-                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-pledge'] || 0, settings.currency)}</div>
-                    </div>
-                    <div className="bg-white/20 rounded-lg p-2 text-white">
-                        <div className="font-bold uppercase tracking-wide">Harvest</div>
-                        <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest'] || 0, settings.currency)}</div>
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Duplicate Entries Audit */}
@@ -592,10 +748,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                             {canVerify && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => {
-                                                        setAcceptedDuplicateKeys(prev => prev.includes(group.key) ? prev : [...prev, group.key]);
-                                                        showToast('Duplicate group verified and accepted.', 'success');
-                                                    }}
+                                                    onClick={() => handleVerifyAndAcceptDuplicateGroup(group)}
                                                     className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded"
                                                     title="Verify and accept this duplicate group"
                                                 >
