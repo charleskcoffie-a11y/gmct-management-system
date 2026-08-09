@@ -483,18 +483,24 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                                                 setDeleteError('Reason is required.');
                                                                 return;
                                                             }
-                                                            
+
                                                             try {
+                                                                let deletionLogWarning = '';
+
                                                                 // Log deletion to database
                                                                 if (settings.supabaseUrl && settings.supabaseKey) {
-                                                                    await logEntryDeletionToSupabase(
-                                                                        settings.supabaseUrl,
-                                                                        settings.supabaseKey,
-                                                                        entry,
-                                                                        currentUser?.username || 'Unknown',
-                                                                        deleteReason
-                                                                    );
-                                                                    
+                                                                    try {
+                                                                        await logEntryDeletionToSupabase(
+                                                                            settings.supabaseUrl,
+                                                                            settings.supabaseKey,
+                                                                            entry,
+                                                                            currentUser?.username || 'Unknown',
+                                                                            deleteReason
+                                                                        );
+                                                                    } catch (logError: any) {
+                                                                        deletionLogWarning = logError?.message || 'Deletion log could not be saved.';
+                                                                    }
+
                                                                     // Mark entry as deleted in database
                                                                     await markEntryAsDeletedInSupabase(
                                                                         settings.supabaseUrl,
@@ -521,12 +527,16 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                                                 onDelete(entry.id);
                                                                 
                                                                 // Show success message and close modal
-                                                                showToast(`✓ Entry deleted successfully by ${currentUser?.username || 'Unknown'}`, 'success', 3000);
+                                                                if (deletionLogWarning) {
+                                                                    showToast(`✓ Entry deleted, but the audit log could not be saved: ${deletionLogWarning}`, 'warning', 5000);
+                                                                } else {
+                                                                    showToast(`✓ Entry deleted successfully by ${currentUser?.username || 'Unknown'}`, 'success', 3000);
+                                                                }
                                                                 setTimeout(() => {
                                                                     onClose();
                                                                 }, 500);
                                                             } catch (error: any) {
-                                                                showToast(`Failed to log deletion: ${error.message}`, 'error', 5000);
+                                                                showToast(`Failed to delete entry: ${error.message}`, 'error', 5000);
                                                             }
                                                         }}
                                                         className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
