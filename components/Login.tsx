@@ -32,6 +32,17 @@ const financeRoles: UserRole[] = ['finance-team'];
 
 const hiddenRoles: UserRole[] = ['finance-chair'];
 
+// Keep primary login categories visible even if cloud user sync is incomplete.
+const defaultVisibleRoles: UserRole[] = ['admin', 'finance-team', 'data-entry', 'pastor', 'class-leader'];
+
+const fallbackUsers: User[] = [
+    { username: 'Admin', password: 'GMCT', role: 'admin' },
+    { username: 'FinanceTeam', password: 'GMCT', role: 'finance-team' },
+    { username: 'Pastor', password: 'GMCT', role: 'pastor' },
+    { username: 'DataEntry', password: 'GMCT', role: 'data-entry' },
+    { username: 'ClassLeader', role: 'class-leader' },
+];
+
 // Map roles to their icons and colors
 const roleIconMap: Record<UserRole, { icon: React.ReactNode; color: string; bgColor: string }> = {
     admin: {
@@ -79,17 +90,21 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
     const [showUserModal, setShowUserModal] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
 
-    // Ensure ClassLeader option is always available even if not yet in Supabase
-    const userOptions: User[] = useMemo(() => (
-        users.some(u => u.username.toLowerCase() === 'classleader')
-            ? users
-            : [...users, { username: 'ClassLeader', role: 'class-leader' as UserRole }]
-    ), [users]);
+    // Keep emergency local users available when cloud users are empty/restricted.
+    const userOptions: User[] = useMemo(() => {
+        const merged = [...users];
+        for (const fallback of fallbackUsers) {
+            const exists = merged.some(u => u.username.toLowerCase() === fallback.username.toLowerCase());
+            if (!exists) merged.push(fallback);
+        }
+        return merged;
+    }, [users]);
 
-    const roles = useMemo(
-        () => Array.from(new Set(userOptions.map(u => u.role))).filter(r => !hiddenRoles.includes(r)),
-        [userOptions]
-    );
+    const roles = useMemo(() => {
+        const fromUsers = userOptions.map(u => u.role);
+        const merged = Array.from(new Set([...defaultVisibleRoles, ...fromUsers]));
+        return merged.filter(r => !hiddenRoles.includes(r));
+    }, [userOptions]);
 
     const getUsersForRole = (role: UserRole | null) => {
         if (!role) return [];
@@ -115,6 +130,10 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
 
         // For class leaders, show username/password form like other roles
         const roleUsers = getUsersForRole(role);
+        if (roleUsers.length === 0) {
+            setLocalError(`No ${roleLabels[role]} user configured. Contact Admin.`);
+            return;
+        }
         setSelectedUser(roleUsers[0]?.username || '');
         setShowUserModal(true);
     };

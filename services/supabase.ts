@@ -207,6 +207,18 @@ const mapDevFundFromDB = (d: any): DevelopmentFundEntry => ({
     createdBy: d.created_by
 });
 
+const normalizeUserRoleFromDB = (raw: any): UserRole => {
+    const role = String(raw || '').trim().toLowerCase().replace(/_/g, '-').replace(/\s+/g, '-');
+    if (role === 'admin' || role === 'administrator') return 'admin';
+    if (role === 'finance-team' || role === 'financeteam' || role === 'finance') return 'finance-team';
+    if (role === 'finance-chair' || role === 'financechair') return 'finance-chair';
+    if (role === 'data-entry' || role === 'dataentry' || role === 'data-entry-team') return 'data-entry';
+    if (role === 'pastor') return 'pastor';
+    if (role === 'statistician' || role === 'statistics') return 'statistician';
+    if (role === 'class-leader' || role === 'classleader' || role === 'class-lead') return 'class-leader';
+    return 'admin';
+};
+
 const mapUserToDB = (u: User) => ({
     username: u.username,
     password: u.password,
@@ -217,7 +229,7 @@ const mapUserToDB = (u: User) => ({
 const mapUserFromDB = (u: any): User => ({
     username: u.username,
     password: u.password,
-    role: u.role,
+    role: normalizeUserRoleFromDB(u.role),
     classLed: u.class_led
 });
 

@@ -1,6 +1,12 @@
 /* Minimal CSS to prevent 404 error and allow for future custom styles */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
-  /* You can add global styles here if needed */
+  margin: 0;
 }
 
 /* Custom Scrollbar */

@@ -80,6 +80,7 @@ export function useSupabaseAutoSync(
                 const cloudMembers = cloudData.members || [];
                 const cloudHistory = cloudData.history || [];
                 const cloudUsers = cloudData.users || [];
+                const usersToApply = cloudUsers.length > 0 ? cloudUsers : data.users;
                 const cloudLocks = cloudData.monthLocks || [];
                 const cloudSundayLocks = cloudData.sundayLocks || [];
                 const cloudClassLeaders = cloudData.classLeaders || [];
@@ -87,7 +88,7 @@ export function useSupabaseAutoSync(
                 setters.setEntries(cloudEntries);
                 setters.setMembers(cloudMembers);
                 setters.setHistory(cloudHistory);
-                setters.setUsers(cloudUsers);
+                setters.setUsers(usersToApply);
                 setters.setMonthLocks?.(cloudLocks);
                 setters.setSundayLocks?.(cloudSundayLocks);
                 setters.setClassLeaders?.(cloudClassLeaders);
@@ -117,13 +118,14 @@ export function useSupabaseAutoSync(
                 const cloudMembers = cloudData.members || [];
                 const cloudHistory = cloudData.history || [];
                 const cloudUsers = cloudData.users || [];
+                const usersToApply = cloudUsers.length > 0 ? cloudUsers : data.users;
                 const cloudClassLeaders = cloudData.classLeaders || [];
 
                 // For multi-user, always trust the database as source of truth
                 setters.setEntries(cloudEntries);
                 setters.setMembers(cloudMembers);
                 setters.setHistory(cloudHistory);
-                setters.setUsers(cloudUsers);
+                setters.setUsers(usersToApply);
                 setters.setMonthLocks?.(cloudData.monthLocks || []);
                 setters.setClassLeaders?.(cloudClassLeaders);
                 if (setters.setSettings) {

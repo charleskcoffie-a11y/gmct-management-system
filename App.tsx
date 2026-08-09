@@ -51,6 +51,9 @@ const OrganizationFunds = lazy(() => import('./components/OrganizationFunds'));
 // Initial Data
 const INITIAL_USERS: User[] = [
     { username: 'Admin', password: 'GMCT', role: 'admin' },
+    { username: 'FinanceTeam', password: 'GMCT', role: 'finance-team' },
+    { username: 'Pastor', password: 'GMCT', role: 'pastor' },
+    { username: 'DataEntry', password: 'GMCT', role: 'data-entry' },
     // Shared class-leader account (uses class access codes as password)
     { username: 'ClassLeader', role: 'class-leader' },
 ];
