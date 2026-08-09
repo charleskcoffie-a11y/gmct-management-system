@@ -97,6 +97,7 @@ const FINANCIAL_ENTRY_TYPES: EntryType[] = [
     'womens-harvest',
     'mens-harvest',
     'youth-harvest',
+    'youth-harvest-levy',
     'organizational-anniversary',
     'day-born',
     'lent-donation',
@@ -839,7 +840,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "mens-harvest", "youth-harvest", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "mens-harvest", "youth-harvest", "youth-harvest-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
         // Class leaders are restricted to attendance only
@@ -932,7 +933,7 @@ const App: React.FC = () => {
                             const note = (e.note || '').toLowerCase();
                             const group = (e.groupName || '').toLowerCase();
                             const combined = `${type} ${note} ${group}`;
-                            return ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest'].includes(type)
+                            return ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest', 'youth-harvest-levy'].includes(type)
                                 || ['harvest', 'levy', 'pledge', 'launch', 'men', 'women', 'youth'].some(keyword => combined.includes(keyword));
                         })}
                         setEntries={setEntries}

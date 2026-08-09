@@ -40,7 +40,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [deleteError, setDeleteError] = useState('');
 
     // Harvest types to filter
-    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest'] as const;
+    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest', 'youth-harvest-levy'] as const;
 
     // Form state
     const [formData, setFormData] = useState<Entry>({
@@ -60,6 +60,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         { value: 'harvest-levy', label: 'Harvest Levy' },
         { value: 'mens-harvest', label: "Men's Harvest" },
         { value: 'womens-harvest', label: "Women's Harvest" },
+        { value: 'youth-harvest-levy', label: 'Youth Harvest Levy' },
         { value: 'youth-harvest', label: 'Youth Harvest' },
         { value: 'harvest', label: 'Harvest Sales' },
         { value: 'harvest-pledge', label: 'Harvest Pledge' },
@@ -182,6 +183,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         if (rawType === 'harvest-pledge') return 'harvest-pledge';
         if (rawType === 'womens-harvest') return 'womens-harvest';
         if (rawType === 'mens-harvest') return 'mens-harvest';
+        if (rawType === 'youth-harvest-levy') return 'youth-harvest-levy';
         if (rawType === 'youth-harvest') return 'youth-harvest';
 
         // Generic 'harvest' type: sub-classify by note/group/fund
@@ -195,6 +197,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         ];
         if (combinedTokens.includes('womens') || combinedTokens.includes('women')) return 'womens-harvest';
         if (combinedTokens.includes('mens') || combinedTokens.includes('men')) return 'mens-harvest';
+        if (combinedTokens.includes('youth') && combinedTokens.includes('levy')) return 'youth-harvest-levy';
         if (combinedTokens.includes('youth')) return 'youth-harvest';
 
         return entry.type;
@@ -209,7 +212,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         const combinedTokens = getNormalizedTokens(combinedText);
 
         if (harvestTypes.includes(rawType as any)) return true;
-        if (['womens-harvest', 'mens-harvest', 'youth-harvest'].some(type => combinedTokens.includes(type.replace(/-/g, '')))) return true;
+        if (['womens-harvest', 'mens-harvest', 'youth-harvest', 'youth-harvest-levy'].some(type => combinedTokens.includes(type.replace(/-/g, '')))) return true;
         return ['harvest', 'levy', 'pledge', 'launch'].some(keyword => combinedTokens.includes(keyword));
     };
 
@@ -672,7 +675,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                 <div>For audit only</div>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 text-xs">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-8 gap-2 text-xs">
                             <div className="bg-white/20 rounded-lg p-2 text-white">
                                 <div className="font-bold uppercase tracking-wide">Harvest Levy</div>
                                 <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-levy'] || 0, settings.currency)}</div>
@@ -684,6 +687,10 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                             <div className="bg-white/20 rounded-lg p-2 text-white">
                                 <div className="font-bold uppercase tracking-wide">Women's Harvest</div>
                                 <div className="text-sm font-bold">{formatCurrency(summary.activeByType['womens-harvest'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Youth Harvest Levy</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['youth-harvest-levy'] || 0, settings.currency)}</div>
                             </div>
                             <div className="bg-white/20 rounded-lg p-2 text-white">
                                 <div className="font-bold uppercase tracking-wide">Youth Harvest</div>
