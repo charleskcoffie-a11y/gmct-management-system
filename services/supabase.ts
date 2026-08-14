@@ -1358,11 +1358,11 @@ const mapWesleyHallToDB = (r: WesleyHallReceipt) => ({
     id: r.id,
     date: r.date,
     amount: r.amount,
-    notes: r.notes,
-    created_by: r.createdBy,
-    updated_by: r.updatedBy,
+    notes: r.notes ?? null,
+    created_by: r.createdBy ?? null,
+    updated_by: r.updatedBy ?? null,
     last_updated: toTimestamp(r.lastUpdated),
-    deleted: r.deleted,
+    deleted: r.deleted ?? false,
     created_at: r.createdAt || new Date().toISOString(),
 });
 
