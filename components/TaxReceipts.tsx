@@ -81,22 +81,26 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const classOptions = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
 
     const combinedEntries = useMemo(() => {
-        const harvestAsEntries: Entry[] = harvestEntries.map(h => ({
-            id: h.id,
-            date: h.date,
-            memberID: h.memberID,
-            memberName: h.memberName,
-            classNumber: h.classNumber,
+        const safeEntries = Array.isArray(entries) ? entries : [];
+        const safeHarvestEntries = Array.isArray(harvestEntries) ? harvestEntries : [];
+
+        const harvestAsEntries: Entry[] = safeHarvestEntries.map(h => ({
+            id: h?.id || '',
+            date: typeof h?.date === 'string' ? h.date : '',
+            memberID: h?.memberID || '',
+            memberName: h?.memberName || 'Unknown Member',
+            classNumber: h?.classNumber || '',
             type: 'harvest-levy',
             fund: 'harvest levy',
             method: 'other',
-            amount: h.amount,
-            note: h.note,
-            createdAt: h.createdAt,
-            deleted: h.deleted,
+            amount: Number(h?.amount) || 0,
+            note: h?.note || '',
+            createdAt: h?.createdAt || '',
+            deleted: !!h?.deleted,
         }));
 
-        return [...entries, ...harvestAsEntries]
+        return [...safeEntries, ...harvestAsEntries]
+            .filter((e): e is Entry => !!e && typeof e === 'object' && typeof e.date === 'string' && e.date.length >= 8)
             .filter(e => !e.deleted)
             .map(e => ({ ...e, type: sanitizeEntryType(e.type) }));
     }, [entries, harvestEntries]);
@@ -104,7 +108,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const availableYears = useMemo(() => {
         const years = new Set<string>();
         combinedEntries.forEach(e => {
-            if (e.date) years.add(e.date.substring(0, 4));
+            if (typeof e?.date === 'string' && e.date.length >= 4) {
+                years.add(e.date.substring(0, 4));
+            }
         });
         if (!years.has(currentYear)) years.add(currentYear);
         return Array.from(years).sort((a, b) => b.localeCompare(a));
@@ -118,19 +124,22 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
         const totals = new Map<string, MemberTotals>();
 
         for (const e of combinedEntries) {
-            if (!e.date.startsWith(year)) continue;
-            const member = membersById.get(e.memberID);
+            if (!e?.date || typeof e.date !== 'string' || !e.date.startsWith(year)) continue;
+            const memberId = e.memberID || '';
+            if (!memberId) continue;
+
+            const member = membersById.get(memberId);
             const classNumber = member?.classNumber || e.classNumber;
             if (selectedClass !== 'all' && classNumber !== selectedClass) continue;
 
-            const existing = totals.get(e.memberID) || {
-                memberId: e.memberID,
+            const existing = totals.get(memberId) || {
+                memberId,
                 memberName: member?.name || e.memberName || 'Unknown Member',
                 memberNumber: member?.memberNumber,
                 classNumber,
                 total: 0,
                 entries: [],
-                serial: makeSerial(e.memberID, year),
+                serial: makeSerial(memberId, year),
                 quarterlyBreakdown: { 'Jan-Mar': 0, 'Apr-Jun': 0, 'Jul-Sep': 0, 'Oct-Dec': 0 },
                 categoriesBreakdown: {},
             };
@@ -149,7 +158,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
             const categoryKey = e.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             existing.categoriesBreakdown[categoryKey] = (existing.categoriesBreakdown[categoryKey] || 0) + e.amount;
 
-            totals.set(e.memberID, existing);
+            totals.set(memberId, existing);
         }
 
         return Array.from(totals.values())
@@ -216,6 +225,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                     {filteredTotals.map(member => {
                         const m = membersById.get(member.memberId);
                         const memberAddress = m?.address || '';
+                        const hasOfficialAddress = Boolean(memberAddress && memberAddress.trim().length > 0);
                         const categoriesEntries = Object.entries(member.categoriesBreakdown).sort((a, b) => b[1] - a[1]);
                         const issueDate = new Date().toISOString().split('T')[0];
                         
@@ -246,7 +256,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                             <div className="text-[10px] flex-1">
                                                 <p className="font-bold text-slate-900">{member.memberName.toUpperCase()}</p>
                                                 <p className="text-slate-600">ID: {member.memberNumber || member.memberId.substring(0, 8)}</p>
-                                                <p className="text-slate-700 text-[10px]">{memberAddress || 'No address on file'}</p>
+                                                <p className={`text-[10px] ${hasOfficialAddress ? 'text-slate-700' : 'text-red-700 font-bold'}`}>
+                                                    {hasOfficialAddress ? memberAddress : 'No official address on file — receipt is not official'}
+                                                </p>
                                                 <p className="text-slate-600">Issue Date: {issueDate}</p>
                                             </div>
                                             <div className="flex-shrink-0">
@@ -274,7 +286,19 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                         );
                         
                         return (
-                        <div key={member.memberId} className="bg-white rounded-lg shadow-lg border-2 border-slate-300 p-2 receipt-card">
+                        <div key={member.memberId} className={`bg-white rounded-lg shadow-lg border-2 p-2 receipt-card ${hasOfficialAddress ? 'border-slate-300' : 'border-red-300 bg-red-50/40'}`}>
+                            {!hasOfficialAddress && (
+                                <div className="mb-2 rounded border border-red-300 bg-red-50 text-red-700 text-[9px] font-extrabold uppercase tracking-wide px-2 py-1 text-center">
+                                    NOTE: NOT OFFICIAL — Missing donor address. Update member profile with the official mailing address before issuing this receipt.
+                                </div>
+                            )}
+                            {!hasOfficialAddress && (
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-30 print:opacity-100">
+                                    <span className="transform rotate-45 border-2 border-red-500 px-8 py-2 text-[28px] font-black uppercase tracking-[0.25em] text-red-500/90">
+                                        Not Official
+                                    </span>
+                                </div>
+                            )}
                             {/* SECTION 1 - CRA Copy */}
                             <SummarySection copyLabel="CRA Copy - Official Tax Receipt" />
                             
@@ -333,12 +357,6 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                     </div>
                                 </div>
 
-                                {/* CRA Information */}
-                                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-2 text-[9px] text-slate-700">
-                                    <p className="font-bold text-yellow-900">Canada Revenue Agency Information</p>
-                                    <p>For information on registered charities: www.canada.ca/charities-giving</p>
-                                </div>
-
                                 {/* Footer */}
                                 <div className="mt-2 text-center text-[8px] text-slate-400">
                                     <span>Auto-generated: {new Date().toISOString()}</span>
@@ -390,6 +408,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                     
                     /* Force one receipt per page with tight fit */
                     .receipt-card {
+                        position: relative !important;
                         page-break-after: always !important;
                         break-after: page !important;
                         page-break-inside: avoid !important;
@@ -403,6 +422,22 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                         overflow: hidden !important;
                         transform: scale(0.95);
                         transform-origin: top left;
+                    }
+
+                    .receipt-card .absolute {
+                        position: absolute !important;
+                    }
+
+                    .receipt-card .pointer-events-none {
+                        pointer-events: none !important;
+                    }
+
+                    .receipt-card .opacity-30 {
+                        opacity: 0.30 !important;
+                    }
+
+                    .receipt-card .print\:opacity-100 {
+                        opacity: 1 !important;
                     }
                     
                     .receipt-card:first-child {
