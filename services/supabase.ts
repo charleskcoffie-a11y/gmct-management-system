@@ -710,6 +710,19 @@ export const saveOrganizationFundTransaction = async (url: string, key: string, 
     return { success: true };
 };
 
+export const deleteOrganizationFundTransaction = async (url: string, key: string, transactionId: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    const { error } = await supabase
+        .from('organization_funds_transactions')
+        .delete()
+        .eq('id', transactionId);
+
+    if (error) throw new Error(`Delete organization funds transaction failed: ${error.message}`);
+    return { success: true };
+};
+
 export const loadRequisitions = async (url: string, key: string): Promise<Requisition[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
