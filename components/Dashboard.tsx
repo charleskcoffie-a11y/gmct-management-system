@@ -2,7 +2,7 @@
 // components/Dashboard.tsx
 import React, { useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import type { Entry, Settings, User, Member, MonthLock, SundayLock, Requisition } from '../types';
+import type { Entry, Settings, User, Member, MonthLock, SundayLock, Requisition, ParkingReceipt, WesleyHallReceipt } from '../types';
 import { formatCurrency, capitalize, isMonthLocked } from '../utils';
 import ChartModal from './ChartModal';
 
@@ -14,9 +14,11 @@ interface DashboardProps {
     monthLocks?: MonthLock[];
     sundayLocks?: SundayLock[];
     requisitions?: Requisition[];
+    parkingReceipts?: ParkingReceipt[];
+    wesleyHallReceipts?: WesleyHallReceipt[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [], sundayLocks = [], requisitions = [] }) => {
+const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, currentUser, monthLocks = [], sundayLocks = [], requisitions = [], parkingReceipts = [], wesleyHallReceipts = [] }) => {
     const [expandedChart, setExpandedChart] = useState<'trend' | 'pie' | null>(null);
     const [debugExpanded, setDebugExpanded] = useState(false);
     
@@ -34,16 +36,23 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
     
     // --- Data Processing ---
     const activeEntries = entries.filter(e => !e.deleted);
-    const totalContribution = activeEntries.reduce((acc, entry) => acc + entry.amount, 0);
-    const totalEntries = activeEntries.length;
+    const activeParkingReceipts = parkingReceipts.filter(receipt => !receipt.deleted);
+    const activeWesleyHallReceipts = wesleyHallReceipts.filter(receipt => !receipt.deleted);
+    const totalContribution = activeEntries.reduce((acc, entry) => acc + entry.amount, 0)
+        + activeParkingReceipts.reduce((acc, receipt) => acc + receipt.amount, 0)
+        + activeWesleyHallReceipts.reduce((acc, receipt) => acc + receipt.amount, 0);
+    const totalEntries = activeEntries.length + activeParkingReceipts.length + activeWesleyHallReceipts.length;
 
     const contributionByType: Record<string, number> = {};
     for (const entry of activeEntries) {
         contributionByType[entry.type] = (contributionByType[entry.type] || 0) + entry.amount;
     }
+    contributionByType.parking = activeParkingReceipts.reduce((sum, receipt) => sum + receipt.amount, 0);
+    contributionByType['wesley-hall'] = activeWesleyHallReceipts.reduce((sum, receipt) => sum + receipt.amount, 0);
 
     const pieData = useMemo(() => {
         return Object.entries(contributionByType)
+            .filter(([, value]) => value > 0)
             .map(([name, value]) => ({
                 name: capitalize(name.replace('-', ' ')),
                 value,
@@ -82,6 +91,16 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
             }
         }
 
+        for (const receipt of [...activeParkingReceipts, ...activeWesleyHallReceipts]) {
+            const entryYear = parseInt(receipt.date.substring(0, 4));
+            const month = receipt.date.substring(5, 7);
+            if (entryYear === currentYear) {
+                currentYearData[month] = (currentYearData[month] || 0) + receipt.amount;
+            } else if (entryYear === currentYear - 1) {
+                previousYearData[month] = (previousYearData[month] || 0) + receipt.amount;
+            }
+        }
+
         // Aggregate previous year
         for (const entry of activeEntries) {
             const entryYear = parseInt(entry.date.substring(0, 4));
@@ -100,7 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
             'Current Year': currentYearData[month] || 0,
             'Previous Year': previousYearData[month] || 0,
         }));
-    }, [activeEntries]);
+    }, [activeEntries, activeParkingReceipts, activeWesleyHallReceipts]);
 
     // --- Notification / Alerts Logic ---
     const notifications = useMemo(() => {
@@ -381,50 +400,47 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                         </button>
                     </div>
                     {pieData.length > 0 ? (
-                        <div style={{ width: '100%', height: 320 }}>
-                            <ResponsiveContainer>
-                                <PieChart>
-                                    <Pie
-                                        data={pieData}
-                                        cx="50%"
-                                        cy="50%"
-                                        labelLine={false}
-                                        outerRadius={110}
-                                        innerRadius={60}
-                                        fill="#8884d8"
-                                        dataKey="value"
-                                        nameKey="name"
-                                        isAnimationActive={true}
-                                        animationDuration={1200}
-                                        label={({ name, value, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                                    >
-                                        {pieData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={`url(#pieGradient${index})`} />
-                                        ))}
-                                    </Pie>
-                                    {/* Gradients for each slice */}
-                                    <defs>
-                                        {pieData.map((entry, index) => (
-                                            <linearGradient id={`pieGradient${index}`} key={index} x1="0" y1="0" x2="1" y2="1">
-                                                <stop offset="0%" stopColor={COLORS[index % COLORS.length]} stopOpacity="0.8" />
-                                                <stop offset="100%" stopColor={COLORS[(index+1) % COLORS.length]} stopOpacity="0.9" />
-                                            </linearGradient>
-                                        ))}
-                                    </defs>
-                                    <Tooltip formatter={(value: number) => formatCurrency(value, settings.currency)} />
-                                    {/* Custom Legend */}
-                                    <Legend content={() => (
-                                        <div className="flex flex-wrap gap-4 justify-center mt-4">
+                        <div className="w-full">
+                            <div className="h-56 w-full">
+                                <ResponsiveContainer>
+                                    <PieChart>
+                                        <Pie
+                                            data={pieData}
+                                            cx="50%"
+                                            cy="50%"
+                                            outerRadius={86}
+                                            innerRadius={48}
+                                            fill="#8884d8"
+                                            dataKey="value"
+                                            nameKey="name"
+                                            isAnimationActive={true}
+                                            animationDuration={1200}
+                                        >
                                             {pieData.map((entry, index) => (
-                                                <div key={entry.name} className="flex items-center gap-2 text-sm font-semibold">
-                                                    <span className="inline-block w-4 h-4 rounded-full" style={{ background: `linear-gradient(135deg, ${COLORS[index % COLORS.length]}, ${COLORS[(index+1) % COLORS.length]})` }}></span>
-                                                    <span>{entry.name}</span>
-                                                </div>
+                                                <Cell key={`cell-${index}`} fill={`url(#pieGradient${index})`} />
                                             ))}
-                                        </div>
-                                    )} />
-                                </PieChart>
-                            </ResponsiveContainer>
+                                        </Pie>
+                                        <defs>
+                                            {pieData.map((entry, index) => (
+                                                <linearGradient id={`pieGradient${index}`} key={index} x1="0" y1="0" x2="1" y2="1">
+                                                    <stop offset="0%" stopColor={COLORS[index % COLORS.length]} stopOpacity="0.8" />
+                                                    <stop offset="100%" stopColor={COLORS[(index+1) % COLORS.length]} stopOpacity="0.9" />
+                                                </linearGradient>
+                                            ))}
+                                        </defs>
+                                        <Tooltip formatter={(value: number) => formatCurrency(value, settings.currency)} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="grid max-h-28 grid-cols-2 gap-x-3 gap-y-2 overflow-y-auto px-2 mt-4">
+                                {pieData.map((entry, index) => (
+                                    <div key={entry.name} className="flex min-w-0 items-center gap-2 text-xs font-semibold">
+                                        <span className="inline-block h-3 w-3 flex-shrink-0 rounded-full" style={{ background: `linear-gradient(135deg, ${COLORS[index % COLORS.length]}, ${COLORS[(index+1) % COLORS.length]})` }}></span>
+                                        <span className="truncate">{entry.name}</span>
+                                        <span className="ml-auto flex-shrink-0 text-slate-500">{((entry.value / totalContribution) * 100).toFixed(1)}%</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     ) : (
                         <p className="text-slate-500 text-center py-12">No contributions recorded yet.</p>
@@ -435,7 +451,7 @@ const Dashboard: React.FC<DashboardProps> = ({ entries, members, settings, curre
                 {(currentUser.role === 'admin' || currentUser.role === 'finance-chair' || currentUser.role === 'finance-team' || currentUser.role === 'pastor') && (
                     <div className="bg-white p-4 rounded-2xl shadow-2xl border-2 border-cyan-200">
                         <h3 className="text-lg font-bold text-cyan-800 mb-4 px-2 flex items-center gap-2">
-                            <svg className="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>
+                            <svg className="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 10c-4.418 0-8-1.79-8-4V6a2 2 0 012-2h12a2 2 0 012 2v8c0 2.21-3.582 4-8 4z" /></svg>
                             Recent Entries
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">

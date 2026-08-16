@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, OrganizationFundOrganization, OrganizationFundTransaction } from '../types';
+import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ParkingReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, OrganizationFundOrganization, OrganizationFundTransaction } from '../types';
 
 // --- Singleton Client Helper ---
 let supabaseInstance: SupabaseClient | null = null;
@@ -279,6 +279,8 @@ const mapSettingsToDB = (s: Settings) => ({
     enforce_directory: s.enforceDirectory,
     supabase_url: s.supabaseUrl,
     supabase_key: s.supabaseKey,
+    wesley_hall_monthly_target: s.wesleyHallMonthlyTarget ?? 2500,
+    parking_monthly_target: s.parkingMonthlyTarget ?? 2500,
     logo_url: s.logoUrl,
     org_name: s.orgName,
     org_address: s.orgAddress,
@@ -307,6 +309,8 @@ const mapSettingsFromDB = (s: any): Settings => {
         enforceDirectory: s.enforce_directory !== false,
         supabaseUrl: s.supabase_url || '',
         supabaseKey: s.supabase_key || '',
+        wesleyHallMonthlyTarget: s.wesley_hall_monthly_target ?? 2500,
+        parkingMonthlyTarget: s.parking_monthly_target ?? 2500,
         logoUrl: s.logo_url,
         orgName: s.org_name,
         orgAddress: s.org_address,
@@ -1402,6 +1406,24 @@ export const saveWesleyHallReceipt = async (url: string, key: string, receipt: W
     return { success: true };
 };
 
+export const updateWesleyHallReceipt = async (url: string, key: string, receipt: WesleyHallReceipt) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('wesley_hall_receipts')
+        .update({
+            date: receipt.date,
+            amount: receipt.amount,
+            notes: receipt.notes ?? null,
+            updated_by: receipt.updatedBy ?? null,
+            last_updated: toTimestamp(receipt.lastUpdated),
+            deleted: receipt.deleted ?? false,
+        })
+        .eq('id', receipt.id);
+    if (error) throw new Error(`Update Wesley Hall receipt failed: ${error.message}`);
+    return { success: true };
+};
+
 export const deleteWesleyHallReceipt = async (url: string, key: string, id: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
@@ -1410,6 +1432,85 @@ export const deleteWesleyHallReceipt = async (url: string, key: string, id: stri
         .delete()
         .eq('id', id);
     if (error) throw new Error(`Delete Wesley Hall receipt failed: ${error.message}`);
+    return { success: true };
+};
+
+// --- Parking Receipts ---
+
+const mapParkingToDB = (r: ParkingReceipt) => ({
+    id: r.id,
+    date: r.date,
+    amount: r.amount,
+    notes: r.notes ?? null,
+    created_by: r.createdBy ?? null,
+    updated_by: r.updatedBy ?? null,
+    last_updated: toTimestamp(r.lastUpdated),
+    deleted: r.deleted ?? false,
+    created_at: r.createdAt || new Date().toISOString(),
+});
+
+const mapParkingFromDB = (r: any): ParkingReceipt => ({
+    id: r.id,
+    date: r.date,
+    amount: parseFloat(r.amount),
+    notes: r.notes,
+    createdBy: r.created_by,
+    updatedBy: r.updated_by,
+    lastUpdated: r.last_updated,
+    deleted: r.deleted,
+    createdAt: r.created_at,
+});
+
+export const loadParkingReceipts = async (url: string, key: string): Promise<ParkingReceipt[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('parking_receipts')
+        .select('*')
+        .order('date', { ascending: false });
+    if (error) {
+        console.warn('Load parking receipts failed:', error.message);
+        return [];
+    }
+    return (data || []).map(mapParkingFromDB);
+};
+
+export const saveParkingReceipt = async (url: string, key: string, receipt: ParkingReceipt) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('parking_receipts')
+        .upsert([mapParkingToDB(receipt)]);
+    if (error) throw new Error(`Save parking receipt failed: ${error.message}`);
+    return { success: true };
+};
+
+export const updateParkingReceipt = async (url: string, key: string, receipt: ParkingReceipt) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('parking_receipts')
+        .update({
+            date: receipt.date,
+            amount: receipt.amount,
+            notes: receipt.notes ?? null,
+            updated_by: receipt.updatedBy ?? null,
+            last_updated: toTimestamp(receipt.lastUpdated),
+            deleted: receipt.deleted ?? false,
+        })
+        .eq('id', receipt.id);
+    if (error) throw new Error(`Update parking receipt failed: ${error.message}`);
+    return { success: true };
+};
+
+export const deleteParkingReceipt = async (url: string, key: string, id: string) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('parking_receipts')
+        .delete()
+        .eq('id', id);
+    if (error) throw new Error(`Delete parking receipt failed: ${error.message}`);
     return { success: true };
 };
 

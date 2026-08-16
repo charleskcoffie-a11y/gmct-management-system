@@ -336,6 +336,8 @@ export function sanitizeSettings(raw: any): Settings {
         enforceDirectory: typeof raw.enforceDirectory === 'boolean' ? raw.enforceDirectory : true,
         supabaseUrl: normalizeSupabaseUrl(raw.supabaseUrl),
         supabaseKey: normalizeSupabaseKey(raw.supabaseKey),
+        wesleyHallMonthlyTarget: typeof raw.wesleyHallMonthlyTarget === 'number' && !isNaN(raw.wesleyHallMonthlyTarget) ? raw.wesleyHallMonthlyTarget : 2500,
+        parkingMonthlyTarget: typeof raw.parkingMonthlyTarget === 'number' && !isNaN(raw.parkingMonthlyTarget) ? raw.parkingMonthlyTarget : 2500,
         logoUrl: raw.logoUrl ? sanitizeString(raw.logoUrl) : undefined,
         orgName: sanitizeString(raw.orgName),
         orgAddress: sanitizeString(raw.orgAddress),

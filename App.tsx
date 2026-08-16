@@ -15,10 +15,10 @@ import BulkChildrenMinistryModal from './components/BulkChildrenMinistryModal';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST, isEntryWindowOpen, formatMethod } from './utils';
-import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition } from './types';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition, ParkingReceipt, WesleyHallReceipt } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, saveUserToSupabase, checkEntryDuplicateInSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, loadParkingReceipts, loadWesleyHallReceipts, saveUserToSupabase, checkEntryDuplicateInSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 import ProfileModal from './components/ProfileModal';
 
@@ -43,6 +43,7 @@ const HarvestPledges = lazy(() => import('./components/HarvestPledges'));
 const Harvest = lazy(() => import('./components/Harvest'));
 const TaxReceipts = lazy(() => import('./components/TaxReceipts'));
 const WesleyHall = lazy(() => import('./components/WesleyHall'));
+const Parking = lazy(() => import('./components/Parking'));
 const ClassAttendance = lazy(() => import('./components/ClassAttendance'));
 const Assets = lazy(() => import('./components/Assets'));
 const DayBorn = lazy(() => import('./components/DayBorn'));
@@ -124,6 +125,8 @@ const App: React.FC = () => {
     const [harvestEntries, setHarvestEntries] = useState<HarvestEntry[]>([]);
     const [harvestPledges, setHarvestPledges] = useState<HarvestPledge[]>([]);
     const [requisitions, setRequisitions] = useState<Requisition[]>([]);
+    const [parkingReceipts, setParkingReceipts] = useState<ParkingReceipt[]>([]);
+    const [wesleyHallReceipts, setWesleyHallReceipts] = useState<WesleyHallReceipt[]>([]);
     
     // New State for Month Locks
     const [monthLocks, setMonthLocks] = useState<MonthLock[]>([]);
@@ -205,8 +208,10 @@ const App: React.FC = () => {
             loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Members load failed:', err); return []; }),
             loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Entries load failed:', err); return []; }),
             loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Harvest pledges load failed:', err); return []; }),
-            loadRequisitions(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Requisitions load failed:', err); return []; })
-        ]).then(([loadedMembers, loadedEntries, loadedPledges, loadedRequisitions]) => {
+            loadRequisitions(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Requisitions load failed:', err); return []; }),
+            loadParkingReceipts(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Parking receipts load failed:', err); return []; }),
+            loadWesleyHallReceipts(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Wesley Hall receipts load failed:', err); return []; })
+        ]).then(([loadedMembers, loadedEntries, loadedPledges, loadedRequisitions, loadedParkingReceipts, loadedWesleyHallReceipts]) => {
             if (loadedMembers && loadedMembers.length > 0) {
                 setMembers(loadedMembers);
             }
@@ -219,8 +224,22 @@ const App: React.FC = () => {
             if (loadedRequisitions && loadedRequisitions.length > 0) {
                 setRequisitions(loadedRequisitions);
             }
+            setParkingReceipts(loadedParkingReceipts || []);
+            setWesleyHallReceipts(loadedWesleyHallReceipts || []);
         }).catch(err => console.error('Failed to load data from database:', err));
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+
+    useEffect(() => {
+        if (activeTab !== 'records' || !settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+
+        Promise.all([
+            loadParkingReceipts(settings.supabaseUrl, settings.supabaseKey),
+            loadWesleyHallReceipts(settings.supabaseUrl, settings.supabaseKey),
+        ]).then(([loadedParkingReceipts, loadedWesleyHallReceipts]) => {
+            setParkingReceipts(loadedParkingReceipts);
+            setWesleyHallReceipts(loadedWesleyHallReceipts);
+        }).catch(err => console.warn('Shared income receipts refresh failed:', err));
+    }, [activeTab, settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
 
     // --- Seed ClassLeader user to database if it doesn't exist ---
     useEffect(() => {
@@ -467,8 +486,18 @@ const App: React.FC = () => {
     const financialSummary = useMemo(() => {
         // Only calculate based on non-deleted entries for accuracy
         const activeEntries = filteredAndSortedEntries.filter(e => !isDeletedFlag(e.deleted));
-        const total = activeEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0);
-        const count = activeEntries.length;
+        const matchesSharedReceiptFilters = (receipt: ParkingReceipt | WesleyHallReceipt) => {
+            const receiptDate = (receipt.date || '').slice(0, 10);
+            if (startDateFilter && receiptDate < startDateFilter) return false;
+            if (endDateFilter && receiptDate > endDateFilter) return false;
+            return searchFilter.trim() === '' && classFilter === 'all' && typeFilter === 'all';
+        };
+        const activeParkingReceipts = parkingReceipts.filter(receipt => !isDeletedFlag(receipt.deleted) && matchesSharedReceiptFilters(receipt));
+        const activeWesleyHallReceipts = wesleyHallReceipts.filter(receipt => !isDeletedFlag(receipt.deleted) && matchesSharedReceiptFilters(receipt));
+        const parkingTotal = activeParkingReceipts.reduce((sum, receipt) => sum + toNumericAmount(receipt.amount), 0);
+        const wesleyHallTotal = activeWesleyHallReceipts.reduce((sum, receipt) => sum + toNumericAmount(receipt.amount), 0);
+        const total = activeEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0) + parkingTotal + wesleyHallTotal;
+        const count = activeEntries.length + activeParkingReceipts.length + activeWesleyHallReceipts.length;
         
         const typeDistribution: Record<string, number> = {};
         FINANCIAL_ENTRY_TYPES.forEach(type => {
@@ -479,6 +508,8 @@ const App: React.FC = () => {
             const typeKey = normalizeEntryTypeKey(e.type) === 'dayborn' ? 'day-born' : e.type;
             typeDistribution[typeKey] = (typeDistribution[typeKey] || 0) + toNumericAmount(e.amount);
         });
+        typeDistribution.parking = parkingTotal;
+        typeDistribution['wesley-hall'] = wesleyHallTotal;
         
         const chartData = Object.entries(typeDistribution).map(([name, value]) => ({
             name: capitalize(name.replace(/-/g, ' ')),
@@ -486,7 +517,7 @@ const App: React.FC = () => {
         })).sort((a, b) => b.value - a.value);
 
         return { total, count, chartData };
-    }, [filteredAndSortedEntries]);
+    }, [filteredAndSortedEntries, parkingReceipts, wesleyHallReceipts, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter]);
 
     const dailyMethodBreakdown = useMemo(() => {
         const normalizeMethodForBalance = (method?: string): 'cash' | 'check' | 'e-transfer' | 'other' => {
@@ -869,6 +900,9 @@ const App: React.FC = () => {
         if (activeTab === 'wesley-hall' && currentUser.role === 'data-entry') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Wesley Hall is not available for Data Entry role.</div>;
         }
+        if (activeTab === 'parking' && currentUser.role === 'data-entry') {
+            return <div className="p-8 text-center text-slate-500">Access Denied. Parking is not available for Data Entry role.</div>;
+        }
         if (activeTab === 'organization-funds' && !['admin', 'finance-chair', 'finance-team', 'pastor'].includes(currentUser.role)) {
             return <div className="p-8 text-center text-slate-500">Access Denied. Organization Funds is available only to Admin, Finance, and Pastor roles.</div>;
         }
@@ -926,7 +960,7 @@ const App: React.FC = () => {
             }
         };
         switch (activeTab) {
-            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={requisitions}/>;
+            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={requisitions} parkingReceipts={parkingReceipts} wesleyHallReceipts={wesleyHallReceipts}/>;
             case 'harvest':
                 return (
                     <Harvest 
@@ -1643,6 +1677,14 @@ const App: React.FC = () => {
                         syncStatus={syncStatus}
                     />
                 );
+            case 'parking':
+                return (
+                    <Parking
+                        settings={settings}
+                        currentUser={currentUser}
+                        syncStatus={syncStatus}
+                    />
+                );
             case 'attendance':
                 return currentUser.role === 'class-leader' ? (
                     <ClassAttendance
@@ -1768,6 +1810,7 @@ const App: React.FC = () => {
                 { id: 'no-name', label: 'No Name', roles: ['admin', 'finance-chair', 'finance-team'] },
                 { id: 'financial-control', label: 'Financial Control', roles: ['admin', 'finance-chair', 'finance-team'] },
                 { id: 'wesley-hall', label: 'Wesley Hall', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
+                { id: 'parking', label: 'Parking', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'tax-receipts', label: 'Tax Receipts', roles: ['admin', 'finance-chair'] },
                 { id: 'organization-funds', label: 'Organization Funds', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },

@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import type { Settings, User, SyncStatus, WesleyHallReceipt } from '../types';
 import { formatCurrency, getTodayEST, getNowEST } from '../utils';
 import { v4 as uuidv4 } from 'uuid';
-import { loadWesleyHallReceipts, saveWesleyHallReceipt, deleteWesleyHallReceipt } from '../services/supabase';
+import { loadWesleyHallReceipts, saveWesleyHallReceipt, updateWesleyHallReceipt, deleteWesleyHallReceipt, saveSettingsToSupabase } from '../services/supabase';
 
 interface WesleyHallProps {
     settings: Settings;
@@ -21,8 +21,14 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
 
     const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [selectedYear, setSelectedYear] = useState<string>('all');
-    const [monthlyTarget, setMonthlyTarget] = useState<number>(2500);
+    const [monthlyTarget, setMonthlyTarget] = useState<number>(settings.wesleyHallMonthlyTarget ?? 2500);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedReceiptForEdit, setSelectedReceiptForEdit] = useState<WesleyHallReceipt | null>(null);
+    const [receiptToDelete, setReceiptToDelete] = useState<WesleyHallReceipt | null>(null);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [isSummaryCompact, setIsSummaryCompact] = useState(false);
     const [isControlsCompact, setIsControlsCompact] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -39,6 +45,12 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
     };
 
     const isConnected = !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
+
+    useEffect(() => {
+        if (typeof settings.wesleyHallMonthlyTarget === 'number') {
+            setMonthlyTarget(settings.wesleyHallMonthlyTarget);
+        }
+    }, [settings.wesleyHallMonthlyTarget]);
 
     useEffect(() => {
         if (!isConnected) return;
@@ -228,6 +240,15 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
         doc.save(fileName);
     };
 
+    const resetReceiptForm = () => {
+        setDate(getTodayEST());
+        setAmount('');
+        setNotes('');
+        setEditingReceiptId(null);
+        setSelectedReceiptForEdit(null);
+        setIsEditModalOpen(false);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isConnected) {
@@ -240,21 +261,39 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
             return;
         }
         setIsSubmitting(true);
-        const rec: WesleyHallReceipt = {
-            id: uuidv4(),
-            date,
-            amount: amt,
-            notes,
-            createdBy: currentUser.username || 'unknown-user',
-            createdAt: getNowEST(),
-            deleted: false,
-        };
+
         try {
-            await saveWesleyHallReceipt(settings.supabaseUrl, settings.supabaseKey, rec);
-            setReceipts(prev => [rec, ...prev]);
-            setDate(getTodayEST());
-            setAmount('');
-            setNotes('');
+            if (editingReceiptId) {
+                const existing = receipts.find(r => r.id === editingReceiptId);
+                if (!existing) {
+                    throw new Error('Receipt not found for update.');
+                }
+                const updated: WesleyHallReceipt = {
+                    ...existing,
+                    date,
+                    amount: amt,
+                    notes,
+                    updatedBy: currentUser.username || 'unknown-user',
+                    lastUpdated: getNowEST(),
+                    deleted: false,
+                };
+                await updateWesleyHallReceipt(settings.supabaseUrl, settings.supabaseKey, updated);
+                setReceipts(prev => prev.map(r => r.id === editingReceiptId ? updated : r));
+                setIsEditModalOpen(false);
+            } else {
+                const rec: WesleyHallReceipt = {
+                    id: uuidv4(),
+                    date,
+                    amount: amt,
+                    notes,
+                    createdBy: currentUser.username || 'unknown-user',
+                    createdAt: getNowEST(),
+                    deleted: false,
+                };
+                await saveWesleyHallReceipt(settings.supabaseUrl, settings.supabaseKey, rec);
+                setReceipts(prev => [rec, ...prev]);
+            }
+            resetReceiptForm();
         } catch (e: any) {
             alert(`Failed to save record: ${e.message}`);
         } finally {
@@ -262,18 +301,58 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
         }
     };
 
-    const handleDelete = async (id: string) => {
+    const handleEdit = (receipt: WesleyHallReceipt) => {
+        setSelectedReceiptForEdit(receipt);
+        setEditingReceiptId(receipt.id);
+        setDate(receipt.date);
+        setAmount(String(receipt.amount));
+        setNotes(receipt.notes ?? '');
+        setIsEditModalOpen(true);
+    };
+
+    const handleMonthlyTargetChange = async (nextValue: number) => {
+        const normalized = Number.isFinite(nextValue) ? Math.max(0, nextValue) : 0;
+        setMonthlyTarget(normalized);
+
+        if (!isConnected || !settings.supabaseUrl || !settings.supabaseKey) return;
+
+        try {
+            await saveSettingsToSupabase(settings.supabaseUrl, settings.supabaseKey, {
+                ...settings,
+                wesleyHallMonthlyTarget: normalized,
+            });
+        } catch (error: any) {
+            console.warn('Failed to sync Wesley Hall target:', error?.message || error);
+        }
+    };
+
+    const handleDeleteRequest = (receipt: WesleyHallReceipt) => {
         if (!isConnected) {
             alert('Deletes are disabled until connected to the cloud.');
             return;
         }
-        if (!window.confirm('Delete this receipt?')) return;
+        setReceiptToDelete(receipt);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!receiptToDelete) return;
+        setIsDeleting(true);
         try {
-            await deleteWesleyHallReceipt(settings.supabaseUrl, settings.supabaseKey, id);
-            setReceipts(prev => prev.filter(r => r.id !== id));
+            await deleteWesleyHallReceipt(settings.supabaseUrl, settings.supabaseKey, receiptToDelete.id);
+            setReceipts(prev => prev.filter(r => r.id !== receiptToDelete.id));
+            setIsDeleteModalOpen(false);
+            setReceiptToDelete(null);
         } catch (e: any) {
             alert(`Failed to delete: ${e.message}`);
+        } finally {
+            setIsDeleting(false);
         }
+    };
+
+    const handleDeleteClose = () => {
+        setIsDeleteModalOpen(false);
+        setReceiptToDelete(null);
     };
 
     return (
@@ -368,7 +447,7 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
 
                             <div className="flex flex-col gap-2">
                                 <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Monthly target</label>
-                                <input type="number" min="0" step="0.01" value={monthlyTarget} onChange={e => setMonthlyTarget(Number(e.target.value) || 0)} className="rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-700 focus:border-indigo-400 focus:bg-white" />
+                                <input type="number" min="0" step="0.01" value={monthlyTarget} onChange={e => handleMonthlyTargetChange(Number(e.target.value) || 0)} className="rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-700 focus:border-indigo-400 focus:bg-white" />
                             </div>
 
                             <button type="button" onClick={exportWesleyHallReport} className="rounded-xl bg-slate-800 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition hover:bg-slate-700">
@@ -454,10 +533,15 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
                             <label className="mb-2 block text-sm font-bold text-slate-700">Notes (optional)</label>
                             <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g., Wedding, Community Event" className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-700 outline-none transition focus:border-indigo-400 focus:bg-white" />
                         </div>
-                        <div className="md:col-span-3">
-                            <button type="submit" disabled={!isConnected || isSubmitting} title={!isConnected ? 'Requires cloud connection' : undefined} className={`w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 px-8 py-4 text-lg font-black text-white shadow-lg shadow-indigo-600/25 transition-all ${!isConnected ? 'cursor-not-allowed opacity-60' : 'hover:-translate-y-0.5 hover:shadow-xl'}`}>
-                                {isSubmitting ? 'Saving...' : 'Add Receipt'}
+                        <div className="md:col-span-3 flex flex-col gap-3 sm:flex-row">
+                            <button type="submit" disabled={!isConnected || isSubmitting} title={!isConnected ? 'Requires cloud connection' : undefined} className={`flex-1 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 px-8 py-4 text-lg font-black text-white shadow-lg shadow-indigo-600/25 transition-all ${!isConnected ? 'cursor-not-allowed opacity-60' : 'hover:-translate-y-0.5 hover:shadow-xl'}`}>
+                                {isSubmitting ? 'Saving...' : editingReceiptId ? 'Update Receipt' : 'Add Receipt'}
                             </button>
+                            {editingReceiptId && (
+                                <button type="button" onClick={resetReceiptForm} className="rounded-2xl border-2 border-slate-200 bg-white px-6 py-4 text-base font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                                    Cancel Edit
+                                </button>
+                            )}
                         </div>
                     </form>
                 )}
@@ -603,6 +687,91 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
                 )}
             </div>
 
+            {isDeleteModalOpen && receiptToDelete && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" onClick={handleDeleteClose}>
+                    <div className="w-full max-w-lg rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.35)]" onClick={e => e.stopPropagation()}>
+                        <div className="border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-6 py-5 text-white">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/20 text-2xl">⚠️</div>
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-300">Delete receipt</p>
+                                    <h3 className="mt-1 text-2xl font-black">Remove Wesley Hall entry</h3>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-5 p-6">
+                            <p className="text-lg font-medium text-slate-700">
+                                Are you sure you want to delete this rental receipt?
+                            </p>
+
+                            <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+                                <div className="flex items-center justify-between gap-4 text-sm text-slate-600">
+                                    <span className="font-bold uppercase tracking-[0.12em] text-slate-500">Date</span>
+                                    <span className="font-semibold text-slate-800">{receiptToDelete.date}</span>
+                                </div>
+                                <div className="mt-3 flex items-center justify-between gap-4 text-sm text-slate-600">
+                                    <span className="font-bold uppercase tracking-[0.12em] text-slate-500">Amount</span>
+                                    <span className="text-xl font-black text-red-700">{formatCurrency(receiptToDelete.amount, settings.currency)}</span>
+                                </div>
+                                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Notes</p>
+                                    <p className="mt-2 text-sm text-slate-700">{receiptToDelete.notes || 'No notes recorded.'}</p>
+                                </div>
+                            </div>
+
+                            <p className="text-sm text-slate-500">This action cannot be undone.</p>
+
+                            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                <button type="button" onClick={handleDeleteClose} className="rounded-xl border-2 border-slate-200 bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">Cancel</button>
+                                <button type="button" onClick={handleDeleteConfirm} disabled={isDeleting} className={`rounded-xl bg-gradient-to-r from-red-600 to-red-500 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition ${isDeleting ? 'cursor-not-allowed opacity-60' : 'hover:-translate-y-0.5 hover:shadow-lg'}`}>
+                                    {isDeleting ? 'Deleting...' : 'Delete receipt'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isEditModalOpen && selectedReceiptForEdit && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => resetReceiptForm()}>
+                    <div className="w-full max-w-xl rounded-[28px] border border-slate-200 bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4 text-white">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-100">Edit Receipt</p>
+                                <h3 className="mt-1 text-2xl font-black">Update Wesley Hall entry</h3>
+                            </div>
+                            <button type="button" onClick={resetReceiptForm} className="rounded-full bg-white/10 px-3 py-1 text-2xl font-bold text-white transition hover:bg-white/20">×</button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-5 p-6">
+                            <div className="grid gap-5 md:grid-cols-2">
+                                <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-4">
+                                    <label className="mb-2 block text-sm font-bold text-slate-700">Date</label>
+                                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-700 outline-none focus:border-indigo-400" />
+                                </div>
+                                <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-4">
+                                    <label className="mb-2 block text-sm font-bold text-slate-700">Amount</label>
+                                    <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" required className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-800 outline-none focus:border-indigo-400" />
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-4">
+                                <label className="mb-2 block text-sm font-bold text-slate-700">Notes (optional)</label>
+                                <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g., Wedding, Community Event" className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base text-slate-700 outline-none focus:border-indigo-400" />
+                            </div>
+
+                            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                                <button type="button" onClick={resetReceiptForm} className="rounded-xl border-2 border-slate-200 bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">Cancel</button>
+                                <button type="submit" disabled={!isConnected || isSubmitting} className={`rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition ${!isConnected || isSubmitting ? 'cursor-not-allowed opacity-60' : 'hover:-translate-y-0.5 hover:shadow-lg'}`}>
+                                    {isSubmitting ? 'Saving...' : 'Update Receipt'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             <div className="bg-white rounded-[26px] shadow-[0_18px_40px_rgba(15,23,42,0.08)] border border-slate-200 overflow-hidden">
                 <button
                     type="button"
@@ -634,7 +803,10 @@ const WesleyHall: React.FC<WesleyHallProps> = ({ settings, currentUser, syncStat
                                             <td className="px-6 py-4">{r.notes || '-'}</td>
                                             <td className="px-6 py-4 text-sm text-slate-500 font-medium">{r.createdBy || '-'}</td>
                                             <td className="px-6 py-4 text-right">
-                                                <button onClick={() => handleDelete(r.id)} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`rounded-xl bg-red-500 px-3 py-2 text-sm font-bold text-white transition-all ${!isConnected ? 'cursor-not-allowed opacity-60' : 'hover:bg-red-600 hover:scale-105'}`}>Delete</button>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button onClick={() => handleEdit(r)} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-white transition-all ${!isConnected ? 'cursor-not-allowed opacity-60' : 'hover:bg-amber-600 hover:scale-105'}`}>Edit</button>
+                                                    <button onClick={() => handleDeleteRequest(r)} disabled={!isConnected} title={!isConnected ? 'Requires cloud connection' : undefined} className={`rounded-xl bg-red-500 px-3 py-2 text-sm font-bold text-white transition-all ${!isConnected ? 'cursor-not-allowed opacity-60' : 'hover:bg-red-600 hover:scale-105'}`}>Delete</button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

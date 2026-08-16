@@ -87,6 +87,8 @@ export interface Settings {
     enforceDirectory: boolean; // if true, member names must be selected from the directory
     supabaseUrl: string;
     supabaseKey: string;
+    wesleyHallMonthlyTarget?: number;
+    parkingMonthlyTarget?: number;
     logoUrl?: string; // Base64 or URL for organization logo
     orgName?: string;
     orgAddress?: string;
@@ -170,7 +172,7 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'organization-funds' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'requisitions' | 'my-approvals' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'attendance' | 'assets' | 'asset-maintenance';
+export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'organization-funds' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'requisitions' | 'my-approvals' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'parking' | 'attendance' | 'assets' | 'asset-maintenance';
 
 export type RequisitionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'funded' | 'paid' | 'closed';
 export type ApprovalDecision = 'approved' | 'rejected';
@@ -254,6 +256,18 @@ export interface MonthLock {
 }
 
 export interface WesleyHallReceipt {
+    id: string;
+    date: string; // ISO format YYYY-MM-DD
+    amount: number;
+    notes?: string;
+    createdBy?: string;
+    updatedBy?: string;
+    lastUpdated?: string; // ISO Timestamp
+    deleted?: boolean;
+    createdAt?: string; // ISO Timestamp
+}
+
+export interface ParkingReceipt {
     id: string;
     date: string; // ISO format YYYY-MM-DD
     amount: number;
