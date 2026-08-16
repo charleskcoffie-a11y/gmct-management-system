@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { OrganizationFundOrganization, OrganizationFundTransaction, Settings, User } from '../types';
 import { formatCurrency } from '../utils';
+import { useToast } from './ToastProvider';
 import {
     loadOrganizationFundOrganizations,
     loadOrganizationFundTransactions,
     saveOrganizationFundOrganization,
     saveOrganizationFundTransaction,
+    deleteOrganizationFundTransaction,
     setOrganizationFundOrganizationActive,
 } from '../services/supabase';
 
@@ -45,6 +47,7 @@ const getOrganizationBalance = (entries: OrganizationFundTransaction[], organiza
 };
 
 const OrganizationFunds: React.FC<Props> = ({ settings, currentUser, canWrite }) => {
+    const { showConfirm } = useToast();
     const [organizations, setOrganizations] = useState<OrganizationFundOrganization[]>([]);
     const [entries, setEntries] = useState<OrganizationFundTransaction[]>([]);
     const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>('');
@@ -69,6 +72,9 @@ const OrganizationFunds: React.FC<Props> = ({ settings, currentUser, canWrite })
     const [isYearlySummaryCollapsed, setIsYearlySummaryCollapsed] = useState<boolean>(true);
     const [orgSortKey, setOrgSortKey] = useState<'name' | 'deposited' | 'withdrawn' | 'net' | 'pending'>('name');
     const [orgSortDirection, setOrgSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [editingEntry, setEditingEntry] = useState<OrganizationFundTransaction | null>(null);
+    const [editingAmount, setEditingAmount] = useState<string>('');
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
 
     const canUseCloud = !!settings.supabaseUrl && !!settings.supabaseKey;
 
@@ -320,6 +326,63 @@ const OrganizationFunds: React.FC<Props> = ({ settings, currentUser, canWrite })
         };
         await saveOrganizationFundTransaction(settings.supabaseUrl, settings.supabaseKey, updated);
         await refresh();
+    };
+
+    const openEditEntry = (entry: OrganizationFundTransaction) => {
+        setEditingEntry(entry);
+        setEditingAmount(String(entry.amount));
+    };
+
+    const closeEditEntry = () => {
+        if (isSavingEdit) return;
+        setEditingEntry(null);
+        setEditingAmount('');
+    };
+
+    const saveEditedEntry = async () => {
+        if (!editingEntry || !canWrite || !canUseCloud) return;
+        const amount = Number.parseFloat(editingAmount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert('Enter a valid positive amount.');
+            return;
+        }
+
+        if (editingEntry.type === 'withdrawal' && editingEntry.status === 'approved') {
+            const balanceExcludingEntry = getOrganizationBalance(entries, editingEntry.organizationId) + editingEntry.amount;
+            if (amount > balanceExcludingEntry) {
+                alert(`Amount exceeds the available balance (${formatCurrency(balanceExcludingEntry, settings.currency)}).`);
+                return;
+            }
+        }
+
+        setIsSavingEdit(true);
+        try {
+            await saveOrganizationFundTransaction(settings.supabaseUrl, settings.supabaseKey, {
+                ...editingEntry,
+                amount,
+                updatedAt: new Date().toISOString(),
+            });
+            await refresh();
+            setEditingEntry(null);
+            setEditingAmount('');
+        } catch (err: any) {
+            alert(err?.message || 'Failed to update transaction.');
+        } finally {
+            setIsSavingEdit(false);
+        }
+    };
+
+    const deleteEntry = async (entry: OrganizationFundTransaction) => {
+        if (!canWrite || !canUseCloud) return;
+        const description = `${entry.type === 'deposit' ? 'deposit' : 'withdrawal'} of ${formatCurrency(entry.amount, settings.currency)} on ${entry.date}`;
+        showConfirm(`Delete this ${description}? This cannot be undone.`, async () => {
+            try {
+                await deleteOrganizationFundTransaction(settings.supabaseUrl, settings.supabaseKey, entry.id);
+                await refresh();
+            } catch (err: any) {
+                alert(err?.message || 'Failed to delete transaction.');
+            }
+        });
     };
 
     const addOrganization = async () => {
@@ -601,6 +664,7 @@ const OrganizationFunds: React.FC<Props> = ({ settings, currentUser, canWrite })
                                             <th className="py-2 pr-3">Approved By</th>
                                             <th className="py-2 pr-3">Signature</th>
                                             <th className="py-2 pr-3">Status</th>
+                                            <th className="py-2 pr-3">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -617,6 +681,26 @@ const OrganizationFunds: React.FC<Props> = ({ settings, currentUser, canWrite })
                                                     <span className={`text-xs font-bold px-2 py-1 rounded border ${statusBadgeClass(entry.status)}`}>
                                                         {entry.status.toUpperCase()}
                                                     </span>
+                                                </td>
+                                                <td className="py-2 pr-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEditEntry(entry)}
+                                                            disabled={!canWrite}
+                                                            className={`rounded-lg px-2.5 py-1.5 text-xs font-bold text-white ${canWrite ? 'bg-amber-500 hover:bg-amber-600' : 'cursor-not-allowed bg-slate-400'}`}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => deleteEntry(entry)}
+                                                            disabled={!canWrite}
+                                                            className={`rounded-lg px-2.5 py-1.5 text-xs font-bold text-white ${canWrite ? 'bg-rose-500 hover:bg-rose-600' : 'cursor-not-allowed bg-slate-400'}`}
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -673,6 +757,37 @@ const OrganizationFunds: React.FC<Props> = ({ settings, currentUser, canWrite })
                     </div>
                 )}
             </div>
+
+            {editingEntry && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={closeEditEntry}>
+                    <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Edit Transaction</p>
+                                <h3 className="mt-1 text-2xl font-black text-slate-900">{editingEntry.organizationNameSnapshot}</h3>
+                                <p className="mt-1 text-sm text-slate-500">{editingEntry.type === 'deposit' ? 'Deposit' : 'Withdrawal'} on {editingEntry.date}</p>
+                            </div>
+                            <button type="button" onClick={closeEditEntry} className="rounded-full px-2 text-2xl font-bold text-slate-500 hover:bg-slate-100">×</button>
+                        </div>
+                        <label className="mt-6 block text-sm font-bold text-slate-700">Amount</label>
+                        <input
+                            autoFocus
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={editingAmount}
+                            onChange={(event) => setEditingAmount(event.target.value)}
+                            className="mt-2 w-full rounded-xl border-2 border-slate-200 px-3 py-3 text-lg font-bold outline-none focus:border-cyan-400"
+                        />
+                        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                            <button type="button" onClick={closeEditEntry} className="rounded-xl border-2 border-slate-200 px-5 py-3 font-bold text-slate-700 hover:bg-slate-50">Cancel</button>
+                            <button type="button" onClick={saveEditedEntry} disabled={isSavingEdit} className={`rounded-xl px-5 py-3 font-bold text-white ${isSavingEdit ? 'cursor-not-allowed bg-slate-400' : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700'}`}>
+                                {isSavingEdit ? 'Saving...' : 'Save Amount'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
