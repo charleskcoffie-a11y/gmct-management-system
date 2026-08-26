@@ -32,6 +32,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [acceptedDuplicateKeys, setAcceptedDuplicateKeys] = useLocalStorage<string[]>('gmct-harvest-accepted-duplicates', []);
     const [collapsedYears, setCollapsedYears] = useState<Set<string>>(new Set());
     const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
+    const [expandedMemberRecords, setExpandedMemberRecords] = useState<Set<string>>(new Set());
     
     // Delete state
     const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -62,7 +63,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         { value: 'womens-harvest', label: "Women's Harvest" },
         { value: 'youth-harvest-levy', label: 'Youth Harvest Levy' },
         { value: 'youth-harvest', label: 'Youth Harvest' },
-        { value: 'harvest', label: 'Harvest Sales' },
+        { value: 'harvest', label: 'Main Harvest' },
         { value: 'harvest-pledge', label: 'Harvest Pledge' },
         { value: 'harvest-launch', label: 'Harvest Launch' }
     ];
@@ -76,17 +77,32 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : false;
     const isConnected = isOnline && !!settings.supabaseUrl && !!settings.supabaseKey && syncStatus?.state === 'synced';
 
+    const memberMatchesSearch = (member: Member, query: string) => {
+        const searchable = [member.name, member.memberNumber, member.classNumber]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return searchable.includes(query);
+    };
+
     // Filtered entries - get only harvest-type entries from entries table
     const filteredEntries = useMemo(() => {
+        const query = searchFilter.trim().toLowerCase();
         return entries.filter(entry => {
             // Only include harvest-related types
             if (!harvestTypes.includes(entry.type as any)) return false;
             if (entry.deleted && !showDeleted) return false;
-            if (searchFilter && !entry.memberName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
             if (startDateFilter && entry.date < startDateFilter) return false;
             if (endDateFilter && entry.date > endDateFilter) return false;
             
             const member = membersMap.get(entry.memberID);
+            if (query) {
+                const entrySearchable = [entry.memberName, entry.memberID, entry.classNumber, member?.name, member?.memberNumber, member?.classNumber]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase();
+                if (!entrySearchable.includes(query)) return false;
+            }
             const entryClass = entry.classNumber || member?.classNumber;
             if (classFilter !== 'all' && entryClass !== classFilter) return false;
             return true;
@@ -202,6 +218,46 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
 
         return entry.type;
     };
+
+    const memberSearchResults = useMemo(() => {
+        const query = searchFilter.trim().toLowerCase();
+        if (!query) return [];
+
+        return members
+            .filter(member => {
+                if (!memberMatchesSearch(member, query)) return false;
+                if (classFilter !== 'all' && member.classNumber !== classFilter) return false;
+                return true;
+            })
+            .slice(0, 8)
+            .map(member => {
+                const memberEntries = entries.filter(entry => {
+                    if (!harvestTypes.includes(entry.type as any)) return false;
+                    if (entry.deleted && !showDeleted) return false;
+                    if (startDateFilter && entry.date < startDateFilter) return false;
+                    if (endDateFilter && entry.date > endDateFilter) return false;
+                    const entryMemberName = (entry.memberName || '').trim().toLowerCase();
+                    return entry.memberID === member.id || entryMemberName === member.name.trim().toLowerCase();
+                });
+                const activeMemberEntries = memberEntries.filter(entry => !entry.deleted);
+                const byType = activeMemberEntries.reduce((acc, entry) => {
+                    const key = getHarvestSummaryKey(entry);
+                    acc[key] = (acc[key] || 0) + entry.amount;
+                    return acc;
+                }, {} as Record<string, number>);
+                const total = activeMemberEntries.reduce((sum, entry) => sum + entry.amount, 0);
+
+                return {
+                    member,
+                    count: activeMemberEntries.length,
+                    total,
+                    byType,
+                    entries: activeMemberEntries
+                        .slice()
+                        .sort((a, b) => b.date.localeCompare(a.date)),
+                };
+            });
+    }, [members, entries, searchFilter, classFilter, startDateFilter, endDateFilter, showDeleted]);
 
     const isHarvestEntryLike = (entry: Entry) => {
         const rawType = (entry.type || '').toLowerCase();
@@ -628,7 +684,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-6 rounded-xl shadow-lg border-2 border-amber-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
                 <div className="lg:col-span-1">
                     <label className="block text-sm font-bold uppercase text-amber-600 mb-1">🔍 Search Member</label>
-                    <input type="text" placeholder="Name..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="block w-full border-2 border-amber-200 rounded-lg shadow-sm py-3 focus:ring-amber-300 focus:border-amber-300 font-medium"/>
+                    <input type="text" placeholder="Name, member #, or class..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="block w-full border-2 border-amber-200 rounded-lg shadow-sm py-3 focus:ring-amber-300 focus:border-amber-300 font-medium"/>
                 </div>
                 <div className="lg:col-span-1">
                     <label className="block text-sm font-bold uppercase text-amber-600 mb-1">📚 Class</label>
@@ -648,6 +704,102 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                     </div>
                 </div>
             </div>
+
+            {searchFilter.trim() && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-amber-200 overflow-hidden">
+                    <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-3">
+                        <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wide text-amber-700">Matching Members</h3>
+                            <p className="text-xs text-slate-600">Click a member to filter the harvest list to that name.</p>
+                        </div>
+                        <span className="text-xs font-bold text-amber-700">{memberSearchResults.length} shown</span>
+                    </div>
+                    <div className="divide-y divide-amber-100">
+                        {memberSearchResults.length === 0 ? (
+                            <div className="px-5 py-4 text-sm font-semibold text-slate-500">No members match this search.</div>
+                        ) : memberSearchResults.map(({ member, count, total, byType, entries }) => {
+                            const isExpanded = expandedMemberRecords.has(member.id);
+                            const visibleEntries = isExpanded ? entries : entries.slice(0, 8);
+                            const hiddenCount = entries.length - visibleEntries.length;
+
+                            return (
+                                <div key={member.id} className="w-full px-5 py-4 hover:bg-amber-50 transition-colors">
+                                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                                        <div>
+                                            <div className="text-base font-bold text-slate-900">{member.name}</div>
+                                            <div className="text-xs font-semibold text-slate-500">Member #{member.memberNumber || '-'} • Class {member.classNumber || '-'}</div>
+                                        </div>
+                                        <div className="lg:text-right">
+                                            <div className="text-lg font-extrabold text-emerald-700">{formatCurrency(total, settings.currency)}</div>
+                                            <div className="text-xs font-semibold text-slate-500">{count} harvest contribution{count !== 1 ? 's' : ''}</div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSearchFilter(member.name)}
+                                                className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-amber-700 transition-colors"
+                                            >
+                                                Filter to this member
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        {harvestCategories.map(category => (
+                                            <div key={category.value} className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2">
+                                                <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">{category.label}</div>
+                                                <div className="text-sm font-bold text-slate-800">{formatCurrency(byType[category.value] || 0, settings.currency)}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {entries.length > 0 && (
+                                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                            <div className="flex items-center justify-between gap-3 mb-2">
+                                                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Included active records</div>
+                                                {entries.length > 8 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedMemberRecords(prev => {
+                                                            const next = new Set(prev);
+                                                            if (next.has(member.id)) next.delete(member.id);
+                                                            else next.add(member.id);
+                                                            return next;
+                                                        })}
+                                                        className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-slate-900 transition-colors"
+                                                    >
+                                                        {isExpanded ? 'Show fewer records' : `Show all ${entries.length} records`}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                {visibleEntries.map(entry => {
+                                                    const category = harvestCategories.find(item => item.value === getHarvestSummaryKey(entry));
+                                                    return (
+                                                        <div key={entry.id} className="flex items-center justify-between gap-3 rounded-md bg-white border border-slate-200 px-3 py-2 text-xs">
+                                                            <span className="font-semibold text-slate-700">{entry.date} • {category?.label || entry.type.replace(/-/g, ' ')}</span>
+                                                            <span className="font-bold text-emerald-700">{formatCurrency(entry.amount, settings.currency)}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            {hiddenCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpandedMemberRecords(prev => {
+                                                        const next = new Set(prev);
+                                                        next.add(member.id);
+                                                        return next;
+                                                    })}
+                                                    className="mt-3 w-full rounded-lg border-2 border-amber-300 bg-amber-100 px-4 py-2 text-sm font-extrabold text-amber-800 shadow-sm hover:bg-amber-200 transition-colors"
+                                                >
+                                                    Show {hiddenCount} more included record{hiddenCount !== 1 ? 's' : ''}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Summary */}
             <div className="bg-gradient-to-br from-amber-300 to-orange-400 p-6 rounded-xl shadow-lg border-2 border-amber-200">
