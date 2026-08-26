@@ -569,6 +569,20 @@ const mapApprovalFromDB = (a: any): RequisitionApproval => ({
     decidedAt: a.decided_at || undefined,
 } as RequisitionApproval);
 
+const mapApprovalToLegacyDB = (a: RequisitionApproval) => ({
+    id: a.id,
+    requisition_id: a.requisitionId,
+    approver_username: a.approverUsername,
+    decision: a.decision,
+    note: a.note || null,
+    decided_at: a.decidedAt || null,
+});
+
+const isMissingApprovalColumnError = (error: any) => {
+    const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
+    return /schema cache|column|could not find/i.test(text) && /approver_role|signature_name|signature_at/i.test(text);
+};
+
 // --- Organization Funds ---
 const mapOrganizationFundOrganizationFromDB = (row: any): OrganizationFundOrganization => ({
     id: row.id,
@@ -769,10 +783,22 @@ export const saveRequisition = async (url: string, key: string, req: Requisition
 export const decideRequisition = async (url: string, key: string, approval: RequisitionApproval, newStatus: 'approved' | 'rejected') => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
+
     const { error: insErr } = await supabase.from('requisition_approvals').insert([mapApprovalToDB(approval)]);
-    if (insErr) throw new Error(insErr.message);
-    const { error: updErr } = await supabase.from('requisitions').update({ status: newStatus, last_updated: new Date().toISOString() }).eq('id', approval.requisitionId);
+    if (insErr) {
+        if (!isMissingApprovalColumnError(insErr)) throw new Error(insErr.message);
+        const { error: legacyInsErr } = await supabase.from('requisition_approvals').insert([mapApprovalToLegacyDB(approval)]);
+        if (legacyInsErr) throw new Error(legacyInsErr.message);
+    }
+
+    const { data, error: updErr } = await supabase
+        .from('requisitions')
+        .update({ status: newStatus, last_updated: new Date().toISOString() })
+        .eq('id', approval.requisitionId)
+        .select('id')
+        .maybeSingle();
     if (updErr) throw new Error(updErr.message);
+    if (!data) throw new Error('The requisition status was not updated. It may have been changed, deleted, or blocked by database permissions.');
 };
 
 // --- Individual Entry Operations (for multi-user real-time collaboration) ---

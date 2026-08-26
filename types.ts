@@ -176,6 +176,7 @@ export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest
 
 export type RequisitionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'funded' | 'paid' | 'closed';
 export type ApprovalDecision = 'approved' | 'rejected';
+export type RequisitionApproverRole = 'admin' | 'finance-team' | 'pastor';
 
 export interface RequisitionItem {
     id: string;
@@ -205,8 +206,11 @@ export interface RequisitionApproval {
     id: string;
     requisitionId: string;
     approverUsername: string;
+    approverRole?: RequisitionApproverRole;
     decision: ApprovalDecision;
     note?: string;
+    signatureName?: string;
+    signatureAt?: string;
     decidedAt?: string;
 }
 
