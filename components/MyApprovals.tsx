@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { ApprovalDecision, Requisition, RequisitionApproval, Settings, User } from '../types';
 import { decideRequisition, loadRequisitions } from '../services/supabase';
 import { formatCurrency } from '../utils';
+import { useToast } from './ToastProvider';
 
 type Props = {
   settings: Settings;
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export default function MyApprovals({ settings, currentUser, onDecisionSaved }: Props) {
+  const { showToast } = useToast();
   const [pending, setPending] = useState<Requisition[]>([]);
   const [note, setNote] = useState<Record<string, string>>({});
   const [signatureName, setSignatureName] = useState<Record<string, string>>({});
@@ -17,6 +19,7 @@ export default function MyApprovals({ settings, currentUser, onDecisionSaved }: 
   const [isDrawing, setIsDrawing] = useState<Record<string, boolean>>({});
   const [hasDrawnSignature, setHasDrawnSignature] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
+  const [decisionSaving, setDecisionSaving] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const signatureCanvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
@@ -90,6 +93,7 @@ export default function MyApprovals({ settings, currentUser, onDecisionSaved }: 
   };
 
   const act = async (req: Requisition, decision: ApprovalDecision) => {
+    if (decisionSaving[req.id]) return;
     if (!settings.supabaseUrl || !settings.supabaseKey) return;
     if (req.requesterUsername === currentUser.username) {
       alert('Requester cannot approve their own requisition.');
@@ -119,10 +123,20 @@ export default function MyApprovals({ settings, currentUser, onDecisionSaved }: 
       signatureName: signature || `${currentUser.username} (drawn signature)`,
       signatureAt: new Date().toISOString(),
     };
-    await decideRequisition(settings.supabaseUrl, settings.supabaseKey, approval, decision);
-    await refresh();
-    if (onDecisionSaved) {
-      await onDecisionSaved();
+    setDecisionSaving(prev => ({ ...prev, [req.id]: true }));
+    try {
+      await decideRequisition(settings.supabaseUrl, settings.supabaseKey, approval, decision);
+      await refresh();
+      if (onDecisionSaved) {
+        await onDecisionSaved();
+      }
+      showToast(`Requisition ${decision === 'approved' ? 'saved and approved' : 'saved and rejected'} successfully.`, 'success', 4000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save the requisition decision.';
+      console.error('Failed to save requisition decision:', error);
+      alert(`Could not ${decision === 'approved' ? 'approve' : 'reject'} this requisition. ${message}`);
+    } finally {
+      setDecisionSaving(prev => ({ ...prev, [req.id]: false }));
     }
   };
 
@@ -337,18 +351,20 @@ export default function MyApprovals({ settings, currentUser, onDecisionSaved }: 
               
               <div className="mt-4 flex items-center gap-3 pt-3 border-t-2 border-slate-300">
                 <button 
-                  className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold hover:from-emerald-700 hover:to-green-700 shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2" 
+                  className={`flex-1 px-4 py-3 rounded-xl text-white font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${decisionSaving[r.id] ? 'bg-emerald-300 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 hover:shadow-xl'}`}
                   onClick={()=>act(r, 'approved')}
+                  disabled={!!decisionSaving[r.id]}
                 >
                   <span>✓</span>
-                  <span>Approve</span>
+                  <span>{decisionSaving[r.id] ? 'Saving...' : 'Approve'}</span>
                 </button>
                 <button 
-                  className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 text-white font-bold hover:from-rose-700 hover:to-red-700 shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2" 
+                  className={`flex-1 px-4 py-3 rounded-xl text-white font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${decisionSaving[r.id] ? 'bg-rose-300 cursor-not-allowed' : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 hover:shadow-xl'}`}
                   onClick={()=>act(r, 'rejected')}
+                  disabled={!!decisionSaving[r.id]}
                 >
                   <span>✕</span>
-                  <span>Reject</span>
+                  <span>{decisionSaving[r.id] ? 'Saving...' : 'Reject'}</span>
                 </button>
               </div>
             </div>

@@ -3,6 +3,7 @@ import type { ApprovalDecision, Requisition, RequisitionApproval, RequisitionIte
 import { decideRequisition, deleteRequisition, loadRequisitions, saveRequisition, saveRequisitionAttachment, submitRequisition, uploadRequisitionAttachment } from '../services/supabase';
 import { formatCurrency } from '../utils';
 import { downloadRequisitionPdf, downloadRequisitionTemplatePdf } from '../utils/requisitionPdf';
+import { useToast } from './ToastProvider';
 
 type Props = {
   settings: Settings;
@@ -59,6 +60,7 @@ const canDeleteRequisition = (req: Requisition, user: User) => {
 };
 
 export default function Requisitions({ settings, currentUser }: Props) {
+  const { showToast } = useToast();
   const [list, setList] = useState<Requisition[]>([]);
   const [statusFilter, setStatusFilter] = useState<RequisitionStatus | 'all'>('all');
   const [q, setQ] = useState('');
@@ -513,6 +515,7 @@ export default function Requisitions({ settings, currentUser }: Props) {
 
   const onDecision = async (decision: ApprovalDecision) => {
     if (!editing) return;
+    if (decisionSaving) return;
     if (!settings.supabaseUrl || !settings.supabaseKey) {
       alert('Cloud connection required. Configure Supabase in Settings.');
       return;
@@ -543,6 +546,11 @@ export default function Requisitions({ settings, currentUser }: Props) {
       await decideRequisition(settings.supabaseUrl, settings.supabaseKey, approval, decision);
       setEditing(null);
       await refresh();
+      showToast(`Requisition ${decision === 'approved' ? 'saved and approved' : 'saved and rejected'} successfully.`, 'success', 4000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save the requisition decision.';
+      console.error('Failed to save requisition decision:', error);
+      alert(`Could not ${decision === 'approved' ? 'approve' : 'reject'} this requisition. ${message}`);
     } finally {
       setDecisionSaving(false);
     }
