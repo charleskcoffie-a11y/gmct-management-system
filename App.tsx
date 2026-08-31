@@ -1731,6 +1731,7 @@ const App: React.FC = () => {
                         harvestEntries={harvestEntries.filter(h => !h.deleted)}
                         members={members}
                         settings={settings}
+                        selectedSociety={selectedSociety}
                     />
                 );
             case 'wesley-hall':

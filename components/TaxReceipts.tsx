@@ -1,6 +1,6 @@
 // components/TaxReceipts.tsx
 import React, { useMemo, useState } from 'react';
-import type { Entry, HarvestEntry, Member, Settings } from '../types';
+import type { Entry, HarvestEntry, Member, Settings, Society } from '../types';
 import { formatCurrency, sanitizeEntryType } from '../utils';
 
 interface TaxReceiptsProps {
@@ -8,6 +8,7 @@ interface TaxReceiptsProps {
     harvestEntries: HarvestEntry[];
     members: Member[];
     settings: Settings;
+    selectedSociety?: Society;
 }
 
 interface MemberTotals {
@@ -72,11 +73,20 @@ const Barcode: React.FC<{ serial: string }> = ({ serial }) => {
     );
 };
 
-const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, members, settings }) => {
+const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, members, settings, selectedSociety }) => {
     const currentYear = new Date().getFullYear().toString();
     const [year, setYear] = useState(currentYear);
     const [selectedClass, setSelectedClass] = useState<string>('all');
     const [minAmount, setMinAmount] = useState<number>(20);
+
+    // Society-specific charity configuration
+    const [societyCharityNumber, setSocietyCharityNumber] = useState<string>(
+        selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : '')
+    );
+    const [societySignature, setSocietySignature] = useState<string>(
+        selectedSociety?.signatureImage || (selectedSociety?.isPrimary ? settings.signatureImage || '' : '')
+    );
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
 
     const classOptions = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
 
@@ -171,24 +181,69 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
 
     const handlePrint = () => window.print();
 
-    const orgName = settings.orgName || 'Ghana Methodist Church of Toronto';
-    const orgAddress = settings.orgAddress || '69 Milvan Drive, Toronto, ON M9L 1Y8, Canada';
-    const orgPhone = settings.orgPhone || '416-901-5900';
-    const orgEmail = settings.orgEmail || '';
+    const orgName = selectedSociety?.name || settings.orgName || 'Ghana Methodist Church of Toronto';
+    const orgAddress = selectedSociety?.address || settings.orgAddress || '69 Milvan Drive, Toronto, ON M9L 1Y8, Canada';
+    const orgPhone = selectedSociety?.phone || settings.orgPhone || '416-901-5900';
+    const orgEmail = selectedSociety?.email || settings.orgEmail || '';
     const orgWebsite = 'https://gmct-ca.org/';
-    const charityNumber = settings.charityNumber || '873990964RP0001';
+    const charityNumber = societyCharityNumber || selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : 'Registration Pending');
+    const signatureImage = societySignature || (selectedSociety?.isPrimary ? settings.signatureImage : undefined);
 
     return (
         <div className="space-y-6">
             <div className="flex flex-wrap justify-between gap-4 items-end no-print">
                 <div>
                     <h2 className="text-3xl font-extrabold text-slate-900">Annual Tax Receipts</h2>
-                    <p className="text-slate-600">Generate CRA/charity receipts per member (≥ ${minAmount.toFixed(0)}) for {year}.</p>
+                    <p className="text-slate-600">
+                        Generate CRA/charity receipts for {orgName} (≥ ${minAmount.toFixed(0)}) for {year}.
+                    </p>
                 </div>
                 <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setIsConfigOpen(!isConfigOpen)}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white font-semibold rounded-lg shadow text-sm"
+                    >
+                        ⚙️ Receipt Details
+                    </button>
                     <button onClick={handlePrint} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow">Print / Save PDF</button>
                 </div>
             </div>
+
+            {/* Society Tax Receipt Configuration Box */}
+            {isConfigOpen && (
+                <div className="bg-indigo-50 border-2 border-indigo-200 p-4 rounded-xl shadow-sm no-print space-y-3">
+                    <h3 className="font-bold text-indigo-900 text-sm">Society Receipt Setup: {orgName}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">CRA / Charity Registration #</label>
+                            <input
+                                type="text"
+                                value={societyCharityNumber}
+                                onChange={e => setSocietyCharityNumber(e.target.value)}
+                                placeholder="e.g. 123456789RR0001"
+                                className="w-full border-slate-300 rounded-lg shadow-sm text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">Authorized Signature (Image upload)</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        const reader = new FileReader();
+                                        reader.onload = () => setSocietySignature(reader.result as string);
+                                        reader.readAsDataURL(file);
+                                    }
+                                }}
+                                className="w-full text-xs text-slate-600"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow border border-slate-200 no-print">
                 <div>
@@ -271,10 +326,14 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                 {/* Signature and Total Amount */}
                                 <div className="mt-2 flex justify-between items-center">
                                     <div className="text-[9px]">
-                                        {settings.signatureImage && (
-                                            <img src={settings.signatureImage} alt="Signature" className="h-8 object-contain mb-1" />
+                                        {signatureImage ? (
+                                            <img src={signatureImage} alt="Signature" className="h-8 object-contain mb-1" />
+                                        ) : (
+                                            <div className="h-8 flex items-end font-script italic text-slate-500">Authorized Officer</div>
                                         )}
-                                        <div className="font-bold text-slate-900">Peggy Asary, Treasurer</div>
+                                        <div className="font-bold text-slate-900">
+                                            {selectedSociety?.isPrimary ? 'Peggy Asary, Treasurer' : `${orgName} Authorized Officer`}
+                                        </div>
                                     </div>
                                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded p-2 text-center">
                                         <div className="text-[9px] text-slate-600 uppercase font-bold">Total Eligible Amount</div>

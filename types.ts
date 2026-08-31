@@ -147,6 +147,9 @@ export interface Society {
     address?: string;
     phone?: string;
     email?: string;
+    charityNumber?: string;
+    signatureImage?: string;
+    logoUrl?: string;
     features: SocietyFeatures;
     accentColor?: string;
     description?: string;
