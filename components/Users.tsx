@@ -11,9 +11,10 @@ interface UsersTabProps {
     members: Member[];
     settings?: Settings;
     syncStatus?: SyncStatus;
+    selectedSocietyId?: string;
 }
 
-const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings, syncStatus }) => {
+const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings, syncStatus, selectedSocietyId = 'gmct' }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -22,27 +23,33 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
             alert('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.');
             return;
         }
+        // Attach societyId to user
+        const userToSave: User = {
+            ...user,
+            societyId: user.societyId || selectedSocietyId,
+        };
+
         // Disallow any edits or creation targeting the default Admin user
         const isOriginalAdmin = !!originalUsername && originalUsername.toLowerCase() === 'admin';
-        const isTargetAdmin = user.username.toLowerCase() === 'admin';
+        const isTargetAdmin = userToSave.username.toLowerCase() === 'admin';
         if (isOriginalAdmin || (!originalUsername && isTargetAdmin)) {
             alert('The default Admin user cannot be edited or recreated.');
             return;
         }
         const newUsers = [...users];
-        const matchUsername = (originalUsername || user.username).toLowerCase();
+        const matchUsername = (originalUsername || userToSave.username).toLowerCase();
         const index = newUsers.findIndex(u => u.username.toLowerCase() === matchUsername);
 
         // Protect default Admin account from being renamed
-        if (matchUsername === 'admin' && user.username.toLowerCase() !== matchUsername) {
+        if (matchUsername === 'admin' && userToSave.username.toLowerCase() !== matchUsername) {
             alert('The default Admin username cannot be renamed.');
             return;
         }
 
         // Prevent duplicate usernames when creating/renaming
-        const hasDuplicate = newUsers.some((u, i) => i !== index && u.username.toLowerCase() === user.username.toLowerCase());
+        const hasDuplicate = newUsers.some((u, i) => i !== index && u.username.toLowerCase() === userToSave.username.toLowerCase());
         if (hasDuplicate) {
-            alert(`Username "${user.username}" is already in use.`);
+            alert(`Username "${userToSave.username}" is already in use.`);
             return;
         }
 
@@ -50,11 +57,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
             const existingUser = newUsers[index];
             newUsers[index] = {
                 ...existingUser,
-                ...user,
-                password: user.password ? user.password : existingUser.password,
+                ...userToSave,
+                password: userToSave.password ? userToSave.password : existingUser.password,
             };
         } else {
-            newUsers.push(user);
+            newUsers.push(userToSave);
         }
 
         // Optimistic update local state
@@ -63,7 +70,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers, members, settings,
         // Persist to Supabase if configured
         if (settings?.supabaseUrl && settings?.supabaseKey) {
             try {
-                await saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, user, originalUsername);
+                await saveUserToSupabase(settings.supabaseUrl, settings.supabaseKey, userToSave, originalUsername);
             } catch (e: any) {
                 alert(`Cloud save failed. Local updated only. Details: ${e.message || e}`);
             }
