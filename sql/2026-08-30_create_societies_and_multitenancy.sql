@@ -165,8 +165,34 @@ values
         'MB',
         false,
         'Winnipeg, MB',
-        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": true, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
+        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": false, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
         'fuchsia'
+    ),
+    (
+        'new-life-ottawa',
+        'NLIC-OTT',
+        'New Life International Methodist Church',
+        'New Life (Ottawa)',
+        'Ottawa',
+        'Ontario',
+        'ON',
+        false,
+        'Ottawa, ON',
+        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": false, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
+        'indigo'
+    ),
+    (
+        'holy-trinity-montreal',
+        'HTM-MTL',
+        'Holy Trinity Methodist Society',
+        'Holy Trinity (Montreal)',
+        'Montreal',
+        'Quebec',
+        'QC',
+        false,
+        'Montreal, QC',
+        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": false, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
+        'blue'
     ),
     (
         'halifax-ns',
@@ -178,7 +204,7 @@ values
         'NS',
         false,
         'Halifax, NS',
-        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": true, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
+        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": false, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
         'orange'
     ),
     (
@@ -191,7 +217,7 @@ values
         'NL',
         false,
         'St. John''s, NL',
-        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": true, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
+        '{"wesleyHall": false, "parking": false, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": false, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
         'rose'
     )
 on conflict (id) do update set
