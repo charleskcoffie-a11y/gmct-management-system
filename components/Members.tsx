@@ -17,6 +17,7 @@ interface MembersProps {
     entries?: Entry[];
     developmentEntries?: DevelopmentFundEntry[];
     syncStatus?: SyncStatus;
+    selectedSocietyId?: string;
 }
 
 const colorGradients = [
@@ -127,12 +128,17 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
             showToast('Writes are disabled until connected to the cloud. Please ensure Supabase is configured and the app shows Connected.', 'error', 4000);
             return;
         }
+
+        const memberToSave: Member = {
+            ...member,
+            societyId: member.societyId || selectedSocietyId || 'gmct'
+        };
         
-        const isEdit = members.some(m => m.id === member.id);
+        const isEdit = members.some(m => m.id === memberToSave.id);
 
         try {
             // Save to database and get the updated member back
-            const result = await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, member);
+            const result = await saveMemberToSupabaseFn(settings.supabaseUrl, settings.supabaseKey, memberToSave);
             
             // Update local state with the member from database
             if (isEdit) {
@@ -141,9 +147,9 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                 setMembers(prev => [...prev, result.member].sort((a,b) => a.name.localeCompare(b.name)));
             }
             
-            setSyncConfirmation({ memberName: member.name, mode: isEdit ? 'updated' : 'added', ts: Date.now() });
+            setSyncConfirmation({ memberName: memberToSave.name, mode: isEdit ? 'updated' : 'added', ts: Date.now() });
             showToast(
-                `✅ ${member.name} ${isEdit ? 'updated' : 'added'} successfully!`,
+                `✅ ${memberToSave.name} ${isEdit ? 'updated' : 'added'} successfully!`,
                 'success',
                 3000
             );

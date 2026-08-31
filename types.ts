@@ -24,6 +24,7 @@ export interface Entry {
     lastUpdated?: string; // ISO Timestamp
     deleted?: boolean;
     createdAt?: string; // ISO Timestamp (creation time)
+    societyId?: string; // Multi-tenant society ID
 }
 
 export interface DevelopmentFundEntry {
@@ -33,6 +34,7 @@ export interface DevelopmentFundEntry {
     amount: number;
     description: string;
     createdBy?: string;
+    societyId?: string;
 }
 
 export interface HarvestEntry {
@@ -48,6 +50,7 @@ export interface HarvestEntry {
     lastUpdated?: string;
     deleted?: boolean;
     createdAt?: string;
+    societyId?: string;
 }
 
 export interface NoNameEntry {
@@ -57,6 +60,7 @@ export interface NoNameEntry {
     notes?: string;
     createdBy?: string;
     updatedAt?: string;
+    societyId?: string;
 }
 
 export interface Member {
@@ -79,6 +83,7 @@ export interface Member {
     createdAt?: string;
     devFundPledge?: boolean; // Has pledged to development fund
     devFundPledgeAmount?: number; // Amount pledged to development fund
+    societyId?: string; // Multi-tenant society ID
 }
 
 export interface Settings {
@@ -203,6 +208,7 @@ export interface WeeklyHistoryRecord {
     events: string;
     observations: string;
     preparedBy: string;
+    societyId?: string;
 }
 
 export type Tab = 'home' | 'records' | 'development-fund' | 'harvest' | 'harvest-pledges' | 'no-name' | 'financial-control' | 'organization-funds' | 'members' | 'insights' | 'reports' | 'history' | 'weekly-history' | 'upcoming-birthdays' | 'e-transfers' | 'requisitions' | 'my-approvals' | 'users' | 'settings' | 'utilities' | 'tax-receipts' | 'wesley-hall' | 'parking' | 'attendance' | 'assets' | 'asset-maintenance';

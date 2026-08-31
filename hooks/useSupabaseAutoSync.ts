@@ -29,7 +29,8 @@ export function useSupabaseAutoSync(
         setSundayLocks?: (d: SundayLock[]) => void;
         setSettings?: (d: Settings) => void;
         setClassLeaders?: (d: ClassLeader[]) => void;
-    }
+    },
+    societyId?: string
 ): SyncStatus {
     // Initialize state based on whether credentials exist
     const [status, setStatus] = useState<SyncStatus>(() => ({
@@ -40,23 +41,15 @@ export function useSupabaseAutoSync(
     
     const isFirstMount = useRef(true);
     const hasInitialPulled = useRef(false);
-    const timeoutRef = useRef<any>(null);
+    const currentSocietyRef = useRef<string | undefined>(societyId);
 
-    // We only want to auto-sync if data changes.
-    const dataDependency = JSON.stringify({
-        eLen: data.entries.length,
-        mLen: data.members.length,
-        hLen: data.history.length,
+    // Reset initial pulled flag when society changes so it fetches fresh data for the newly selected society
+    if (currentSocietyRef.current !== societyId) {
+        currentSocietyRef.current = societyId;
+        hasInitialPulled.current = false;
+    }
 
-        uLen: data.users.length,
-        lLen: data.monthLocks?.length || 0,
-        lastEntry: data.entries.length > 0 ? data.entries[data.entries.length - 1] : null,
-        lastHist: data.history.length > 0 ? data.history[data.history.length - 1] : null,
-        lastLock: data.monthLocks && data.monthLocks.length > 0 ? data.monthLocks[data.monthLocks.length - 1] : null,
-        settingsHash: settings.classAccessCodes ? JSON.stringify(settings.classAccessCodes) : '',
-    });
-
-    // 1. Initial Pull on Mount (Smart Merge)
+    // 1. Initial Pull on Mount or Society Change (Smart Merge)
     useEffect(() => {
         const performInitialPull = async () => {
             if (!isConfigured(settings) || !setters) return;
@@ -64,7 +57,7 @@ export function useSupabaseAutoSync(
 
             setStatus({ state: 'syncing' });
             try {
-                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey, societyId);
                 const cloudSettings = cloudData.settings
                     ? {
                         ...cloudData.settings,
@@ -106,14 +99,14 @@ export function useSupabaseAutoSync(
         if (isConfigured(settings)) {
             performInitialPull();
         }
-    }, [settings.supabaseUrl, settings.supabaseKey]); // Run when settings (keys) change or mount
+    }, [settings.supabaseUrl, settings.supabaseKey, societyId]); // Run when settings or society changes
 
     // 1.5 Periodic Pull for Multi-User Updates (every 30 seconds)
     useEffect(() => {
         const interval = setInterval(async () => {
             if (!setters) return;
             try {
-                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey, societyId);
                 const cloudEntries = cloudData.entries || [];
                 const cloudMembers = cloudData.members || [];
                 const cloudHistory = cloudData.history || [];
@@ -146,7 +139,7 @@ export function useSupabaseAutoSync(
         }, 30000); // Pull every 30 seconds
 
         return () => clearInterval(interval);
-    }, [settings.supabaseUrl, settings.supabaseKey]);
+    }, [settings.supabaseUrl, settings.supabaseKey, societyId]);
 
 
     // 2. Auto-Upload on Data Change (DISABLED for multi-user mode)

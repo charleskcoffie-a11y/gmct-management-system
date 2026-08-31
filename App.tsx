@@ -200,43 +200,35 @@ const App: React.FC = () => {
         entries, members, history: weeklyHistory, users, monthLocks, sundayLocks, classLeaders
     }, {
         setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSundayLocks, setSettings, setClassLeaders
-    });
+    }, selectedSociety.id);
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);
     useEffect(() => {
         if (syncStatus.state === 'synced') setHasConnected(true);
     }, [syncStatus.state]);
     
-    // --- Load All Data from Database on mount or when connection is ready ---
+    // --- Load All Data from Database on mount or when connection is ready / society changes ---
     useEffect(() => {
         if (!settings.supabaseUrl || !settings.supabaseKey) return;
         if (syncStatus.state !== 'synced') return; // Wait until synced
         
         // Load all data from database in parallel with fallback error handling
         Promise.all([
-            loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Members load failed:', err); return []; }),
-            loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Entries load failed:', err); return []; }),
-            loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Harvest pledges load failed:', err); return []; }),
-            loadRequisitions(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Requisitions load failed:', err); return []; }),
-            loadParkingReceipts(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Parking receipts load failed:', err); return []; }),
-            loadWesleyHallReceipts(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Wesley Hall receipts load failed:', err); return []; })
+            loadMembersFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Members load failed:', err); return []; }),
+            loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Entries load failed:', err); return []; }),
+            loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Harvest pledges load failed:', err); return []; }),
+            loadRequisitions(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Requisitions load failed:', err); return []; }),
+            loadParkingReceipts(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Parking receipts load failed:', err); return []; }),
+            loadWesleyHallReceipts(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Wesley Hall receipts load failed:', err); return []; })
         ]).then(([loadedMembers, loadedEntries, loadedPledges, loadedRequisitions, loadedParkingReceipts, loadedWesleyHallReceipts]) => {
-            if (loadedMembers && loadedMembers.length > 0) {
-                setMembers(loadedMembers);
-            }
-            if (loadedEntries && loadedEntries.length > 0) {
-                setEntries(loadedEntries);
-            }
-            if (loadedPledges && loadedPledges.length > 0) {
-                setHarvestPledges(loadedPledges);
-            }
-            if (loadedRequisitions && loadedRequisitions.length > 0) {
-                setRequisitions(loadedRequisitions);
-            }
+            setMembers(loadedMembers || []);
+            setEntries(loadedEntries || []);
+            setHarvestPledges(loadedPledges || []);
+            setRequisitions(loadedRequisitions || []);
             setParkingReceipts(loadedParkingReceipts || []);
             setWesleyHallReceipts(loadedWesleyHallReceipts || []);
         }).catch(err => console.error('Failed to load data from database:', err));
-    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, selectedSociety.id]);
 
     useEffect(() => {
         if (activeTab !== 'records' || !settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
@@ -720,23 +712,28 @@ const App: React.FC = () => {
             return;
         }
 
-        if (isDuplicateEntry(entry)) {
-            alert(`Duplicate entry detected: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+        const entryToSave: Entry = {
+            ...entry,
+            societyId: entry.societyId || selectedSociety.id
+        };
+
+        if (isDuplicateEntry(entryToSave)) {
+            alert(`Duplicate entry detected: a ${entryToSave.type.replace(/-/g, ' ')} record already exists for this member on ${entryToSave.date}.`);
             return;
         }
 
         try {
-            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
             if (hasCloudDuplicate) {
-                alert(`Duplicate entry blocked by cloud check: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
-                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                alert(`Duplicate entry blocked by cloud check: a ${entryToSave.type.replace(/-/g, ' ')} record already exists for this member on ${entryToSave.date}.`);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id);
                 setEntries(refreshedEntries);
                 return;
             }
 
-            await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
             // Reload entries from database
-            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id);
             setEntries(updatedEntries);
             setIsModalOpen(false);
         } catch (error: any) {
@@ -750,23 +747,28 @@ const App: React.FC = () => {
             return;
         }
 
-        if (isDuplicateEntry(entry)) {
-            alert(`Duplicate entry detected: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
+        const entryToSave: Entry = {
+            ...entry,
+            societyId: entry.societyId || selectedSociety.id
+        };
+
+        if (isDuplicateEntry(entryToSave)) {
+            alert(`Duplicate entry detected: a ${entryToSave.type.replace(/-/g, ' ')} record already exists for this member on ${entryToSave.date}.`);
             return;
         }
 
         try {
-            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
             if (hasCloudDuplicate) {
-                alert(`Duplicate entry blocked by cloud check: a ${entry.type.replace(/-/g, ' ')} record already exists for this member on ${entry.date}.`);
-                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                alert(`Duplicate entry blocked by cloud check: a ${entryToSave.type.replace(/-/g, ' ')} record already exists for this member on ${entryToSave.date}.`);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id);
                 setEntries(refreshedEntries);
                 return;
             }
 
-            await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+            await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
             // Reload entries from database
-            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id);
             setEntries(updatedEntries);
         } catch (error: any) {
             alert(`Failed to save entry: ${error.message}`);
@@ -783,7 +785,7 @@ const App: React.FC = () => {
         }
 
         try {
-            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id);
             setEntries(updatedEntries);
         } catch (error) {
             console.error('Failed to refresh entries after delete:', error);
@@ -1667,7 +1669,7 @@ const App: React.FC = () => {
                 );
             case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} sundayLocks={sundayLocks} setSundayLocks={setSundayLocks} currentUser={currentUser} settings={settings} />;
-            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} currentUser={currentUser} />;
+            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
             case 'day-born':
                 return (
                     <DayBorn

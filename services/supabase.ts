@@ -78,18 +78,41 @@ const fetchAllRows = async (
     supabase: SupabaseClient,
     table: string,
     orderColumn?: string,
-    ascending: boolean = true
+    ascending: boolean = true,
+    societyId?: string
 ) => {
     const allRows: any[] = [];
     let from = 0;
 
     while (true) {
-        let query = supabase.from(table).select('*').range(from, from + PAGE_SIZE - 1);
+        let query = supabase.from(table).select('*');
+        if (societyId) {
+            if (societyId.toLowerCase() === 'gmct') {
+                query = query.or('society_id.eq.gmct,society_id.is.null');
+            } else {
+                query = query.eq('society_id', societyId);
+            }
+        }
+        query = query.range(from, from + PAGE_SIZE - 1);
         if (orderColumn) {
             query = query.order(orderColumn, { ascending });
         }
         const { data, error } = await query;
-        if (error) throw error;
+        if (error) {
+            // If society_id column does not exist on table, fallback to standard query
+            if (societyId && (error.message?.includes('society_id') || error.code === '42703')) {
+                let fallback = supabase.from(table).select('*').range(from, from + PAGE_SIZE - 1);
+                if (orderColumn) fallback = fallback.order(orderColumn, { ascending });
+                const { data: fbData, error: fbErr } = await fallback;
+                if (fbErr) throw fbErr;
+                const rows = fbData || [];
+                allRows.push(...rows);
+                if (rows.length < PAGE_SIZE) break;
+                from += PAGE_SIZE;
+                continue;
+            }
+            throw error;
+        }
 
         const rows = data || [];
         allRows.push(...rows);
@@ -118,7 +141,8 @@ const mapMemberToDB = (m: Member) => ({
     dev_fund_pledge: m.devFundPledge || false,
     dev_fund_pledge_amount: typeof m.devFundPledgeAmount === 'number' ? m.devFundPledgeAmount : null,
     active: typeof m.active === 'boolean' ? m.active : true,
-    created_at: m.createdAt || new Date().toISOString() // Ensure never empty
+    created_at: m.createdAt || new Date().toISOString(), // Ensure never empty
+    society_id: m.societyId || 'gmct'
 });
 
 const mapMemberFromDB = (m: any): Member => {
@@ -145,7 +169,8 @@ const mapMemberFromDB = (m: any): Member => {
         devFundPledge: m.dev_fund_pledge || false,
         devFundPledgeAmount: typeof m.dev_fund_pledge_amount === 'number' ? m.dev_fund_pledge_amount : undefined,
         active: typeof m.active === 'boolean' ? m.active : true,
-        createdAt: m.created_at
+        createdAt: m.created_at,
+        societyId: m.society_id || 'gmct'
     };
 };
 
@@ -166,7 +191,8 @@ const mapEntryToDB = (e: Entry) => ({
     updated_by: e.updatedBy,
     last_updated: toTimestamp(e.lastUpdated),
     deleted: e.deleted,
-    created_at: e.createdAt || new Date().toISOString()
+    created_at: e.createdAt || new Date().toISOString(),
+    society_id: e.societyId || 'gmct'
 });
 
 const mapEntryFromDB = (e: any): Entry => ({
@@ -186,7 +212,8 @@ const mapEntryFromDB = (e: any): Entry => ({
     updatedBy: e.updated_by,
     lastUpdated: e.last_updated,
     deleted: e.deleted,
-    createdAt: e.created_at
+    createdAt: e.created_at,
+    societyId: e.society_id || 'gmct'
 });
 
 const mapDevFundToDB = (d: DevelopmentFundEntry) => ({
@@ -390,28 +417,64 @@ export const uploadDataToSupabase = async (
     return { success: true };
 };
 
-export const downloadDataFromSupabase = async (url: string, key: string) => {
+export const downloadDataFromSupabase = async (url: string, key: string, societyId?: string) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const { data: membersDB, error: memErr } = await supabase.from('members').select('*');
-    if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
+    let memQuery = supabase.from('members').select('*');
+    if (societyId) {
+        if (societyId.toLowerCase() === 'gmct') {
+            memQuery = memQuery.or('society_id.eq.gmct,society_id.is.null');
+        } else {
+            memQuery = memQuery.eq('society_id', societyId);
+        }
+    }
+    const { data: membersDB, error: memErr } = await memQuery;
+    if (memErr) {
+        // Fallback if society_id column doesn't exist yet
+        if (memErr.message?.includes('society_id') || (memErr as any).code === '42703') {
+            const { data: fbData } = await supabase.from('members').select('*');
+            memErr.message = '';
+        } else {
+            throw new Error(`Fetch Members failed: ${memErr.message}`);
+        }
+    }
     const members = membersDB?.map(mapMemberFromDB) || [];
 
     let entriesDB: any[] = [];
     try {
-        entriesDB = await fetchAllRows(supabase, 'entries', 'date', false);
+        entriesDB = await fetchAllRows(supabase, 'entries', 'date', false, societyId);
     } catch (entErr: any) {
         throw new Error(`Fetch Entries failed: ${entErr.message}`);
     }
     const entries = entriesDB?.map(mapEntryFromDB) || [];
 
-    const { data: usersDB, error: userErr } = await supabase.from('app_users').select('*');
-    if (userErr) throw new Error(`Fetch Users failed: ${userErr.message}`);
+    let userQuery = supabase.from('app_users').select('*');
+    if (societyId) {
+        if (societyId.toLowerCase() === 'gmct') {
+            userQuery = userQuery.or('society_id.eq.gmct,society_id.is.null');
+        } else {
+            userQuery = userQuery.eq('society_id', societyId);
+        }
+    }
+    const { data: usersDB, error: userErr } = await userQuery;
+    if (userErr && !(userErr.message?.includes('society_id') || (userErr as any).code === '42703')) {
+        throw new Error(`Fetch Users failed: ${userErr.message}`);
+    }
     const users = usersDB?.map(mapUserFromDB) || [];
 
-    const { data: historyDB, error: histErr } = await supabase.from('weekly_history').select('*');
-    if (histErr) throw new Error(`Fetch History failed: ${histErr.message}`);
+    let histQuery = supabase.from('weekly_history').select('*');
+    if (societyId) {
+        if (societyId.toLowerCase() === 'gmct') {
+            histQuery = histQuery.or('society_id.eq.gmct,society_id.is.null');
+        } else {
+            histQuery = histQuery.eq('society_id', societyId);
+        }
+    }
+    const { data: historyDB, error: histErr } = await histQuery;
+    if (histErr && !(histErr.message?.includes('society_id') || (histErr as any).code === '42703')) {
+        throw new Error(`Fetch History failed: ${histErr.message}`);
+    }
     const history = historyDB?.map(mapHistoryFromDB) || [];
     
     let monthLocks: MonthLock[] = [];
@@ -739,11 +802,24 @@ export const deleteOrganizationFundTransaction = async (url: string, key: string
     return { success: true };
 };
 
-export const loadRequisitions = async (url: string, key: string): Promise<Requisition[]> => {
+export const loadRequisitions = async (url: string, key: string, societyId?: string): Promise<Requisition[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
-    const { data, error } = await supabase.from('requisitions').select('*').order('created_at', { ascending: false });
+    let query = supabase.from('requisitions').select('*');
+    if (societyId) {
+        if (societyId.toLowerCase() === 'gmct') {
+            query = query.or('society_id.eq.gmct,society_id.is.null');
+        } else {
+            query = query.eq('society_id', societyId);
+        }
+    }
+    query = query.order('created_at', { ascending: false });
+    const { data, error } = await query;
     if (error) {
+        if (societyId && (error.message?.includes('society_id') || (error as any).code === '42703')) {
+            const { data: fbData } = await supabase.from('requisitions').select('*').order('created_at', { ascending: false });
+            return (fbData || []).map(mapRequisitionFromDB);
+        }
         console.warn('Failed to load requisitions:', error.message);
         return [];
     }
@@ -922,11 +998,11 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
     return { success: true };
 };
 
-export const loadEntriesFromSupabase = async (url: string, key: string): Promise<Entry[]> => {
+export const loadEntriesFromSupabase = async (url: string, key: string, societyId?: string): Promise<Entry[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
     try {
-        const data = await fetchAllRows(supabase, 'entries', 'date', false);
+        const data = await fetchAllRows(supabase, 'entries', 'date', false, societyId);
         return (data || []).map(mapEntryFromDB);
     } catch (error: any) {
         console.warn('Failed to load entries:', error.message || error);
@@ -934,15 +1010,33 @@ export const loadEntriesFromSupabase = async (url: string, key: string): Promise
     }
 };
 
-export const loadMembersFromSupabase = async (url: string, key: string): Promise<Member[]> => {
+export const loadMembersFromSupabase = async (url: string, key: string, societyId?: string): Promise<Member[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
-    const { data, error } = await supabase.from('members').select('*').order('name', { ascending: true });
-    if (error) {
-        console.warn('Failed to load members:', error.message);
+    try {
+        let query = supabase.from('members').select('*');
+        if (societyId) {
+            if (societyId.toLowerCase() === 'gmct') {
+                query = query.or('society_id.eq.gmct,society_id.is.null');
+            } else {
+                query = query.eq('society_id', societyId);
+            }
+        }
+        query = query.order('name', { ascending: true });
+        const { data, error } = await query;
+        if (error) {
+            if (societyId && (error.message?.includes('society_id') || (error as any).code === '42703')) {
+                const { data: fbData } = await supabase.from('members').select('*').order('name', { ascending: true });
+                return (fbData || []).map(mapMemberFromDB);
+            }
+            console.warn('Failed to load members:', error.message);
+            return [];
+        }
+        return (data || []).map(mapMemberFromDB);
+    } catch (error: any) {
+        console.warn('Failed to load members:', error.message || error);
         return [];
     }
-    return (data || []).map(mapMemberFromDB);
 };
 
 export const saveMemberToSupabase = async (url: string, key: string, member: Member) => {
@@ -1190,7 +1284,8 @@ const mapHarvestPledgeToDB = (p: HarvestPledge): HarvestPledgeDB => ({
     updated_by: p.updatedBy,
     last_updated: toTimestamp(p.lastUpdated),
     deleted: p.deleted,
-    created_at: p.createdAt || new Date().toISOString()
+    created_at: p.createdAt || new Date().toISOString(),
+    society_id: p.societyId || 'gmct'
 });
 
 const mapHarvestPledgeFromDB = (p: any): HarvestPledge => ({
@@ -1208,7 +1303,8 @@ const mapHarvestPledgeFromDB = (p: any): HarvestPledge => ({
     updatedBy: p.updated_by,
     lastUpdated: p.last_updated,
     deleted: p.deleted,
-    createdAt: p.created_at
+    createdAt: p.created_at,
+    societyId: p.society_id || 'gmct'
 });
 
 // Save single harvest pledge to Supabase
@@ -1253,16 +1349,26 @@ export const saveHarvestPledgePayment = async (
 };
 
 // Load all harvest pledges from Supabase
-export const loadHarvestPledgesFromSupabase = async (url: string, key: string): Promise<HarvestPledge[]> => {
+export const loadHarvestPledgesFromSupabase = async (url: string, key: string, societyId?: string): Promise<HarvestPledge[]> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
 
-    const { data, error } = await supabase
-        .from('harvest_pledges')
-        .select('*')
-        .order('date', { ascending: false });
+    let query = supabase.from('harvest_pledges').select('*');
+    if (societyId) {
+        if (societyId.toLowerCase() === 'gmct') {
+            query = query.or('society_id.eq.gmct,society_id.is.null');
+        } else {
+            query = query.eq('society_id', societyId);
+        }
+    }
+    query = query.order('date', { ascending: false });
+    const { data, error } = await query;
     
     if (error) {
+        if (societyId && (error.message?.includes('society_id') || (error as any).code === '42703')) {
+            const { data: fbData } = await supabase.from('harvest_pledges').select('*').order('date', { ascending: false });
+            return (fbData || []).map(mapHarvestPledgeFromDB);
+        }
         console.error("Load harvest pledges failed:", error.message);
         return [];
     }
