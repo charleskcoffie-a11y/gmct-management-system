@@ -94,16 +94,39 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
 
     const societyName = selectedSociety?.name || 'GMCT Management System';
     const societyLocation = selectedSociety ? `${selectedSociety.city}, ${selectedSociety.province}` : 'Toronto, ON';
+    const societyCode = selectedSociety?.societyCode || 'GMCT';
+    const isPrimary = selectedSociety?.isPrimary ?? true;
 
-    // Keep emergency local users available when cloud users are empty/restricted.
+    // Build emergency fallback users specific to the current society
+    const societyFallbackUsers: User[] = useMemo(() => {
+        const defaultPassword = isPrimary ? 'GMCT' : (selectedSociety?.societyCode || 'CANADA');
+        return [
+            { username: 'Admin', password: defaultPassword, role: 'admin', societyId: selectedSociety?.id },
+            { username: 'FinanceTeam', password: defaultPassword, role: 'finance-team', societyId: selectedSociety?.id },
+            { username: 'Pastor', password: defaultPassword, role: 'pastor', societyId: selectedSociety?.id },
+            { username: 'DataEntry', password: defaultPassword, role: 'data-entry', societyId: selectedSociety?.id },
+            { username: 'ClassLeader', role: 'class-leader', societyId: selectedSociety?.id },
+        ];
+    }, [selectedSociety, isPrimary]);
+
+    // Filter users specifically for this society (or unassigned users if primary GMCT)
     const userOptions: User[] = useMemo(() => {
-        const merged = [...users];
-        for (const fallback of fallbackUsers) {
+        const targetSocId = selectedSociety?.id || 'gmct';
+        const filteredCloudUsers = users.filter(u => {
+            if (u.societyId) {
+                return u.societyId.toLowerCase() === targetSocId.toLowerCase();
+            }
+            // If no societyId specified on existing legacy cloud user, assign to GMCT
+            return isPrimary;
+        });
+
+        const merged = [...filteredCloudUsers];
+        for (const fallback of societyFallbackUsers) {
             const exists = merged.some(u => u.username.toLowerCase() === fallback.username.toLowerCase());
             if (!exists) merged.push(fallback);
         }
         return merged;
-    }, [users]);
+    }, [users, societyFallbackUsers, selectedSociety, isPrimary]);
 
     const roles = useMemo(() => {
         const fromUsers = userOptions.map(u => u.role);
@@ -233,7 +256,9 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
                                 <p className="text-sm text-red-300 bg-red-900/30 border border-red-400/30 rounded-lg px-3 py-2">{displayedError}</p>
                             )}
 
-                            <p className="text-sm text-indigo-100/70">Default Admin: <span className="font-semibold">Admin</span> / <span className="font-semibold">GMCT</span></p>
+                            <p className="text-sm text-indigo-100/70">
+                                Default Admin: <span className="font-semibold">Admin</span> / <span className="font-semibold">{isPrimary ? 'GMCT' : societyCode}</span>
+                            </p>
                             <div className="pt-4 border-t border-white/10 space-y-3">
                                 <div>
                                     <p className="text-xs font-semibold text-indigo-100 mb-2">Security Tips</p>

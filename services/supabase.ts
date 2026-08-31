@@ -223,14 +223,16 @@ const mapUserToDB = (u: User) => ({
     username: u.username,
     password: u.password,
     role: u.role,
-    class_led: u.classLed
+    class_led: u.classLed,
+    society_id: u.societyId || 'gmct'
 });
 
 const mapUserFromDB = (u: any): User => ({
     username: u.username,
     password: u.password,
     role: normalizeUserRoleFromDB(u.role),
-    classLed: u.class_led
+    classLed: u.class_led,
+    societyId: u.society_id || 'gmct'
 });
 
 const mapHistoryToDB = (h: WeeklyHistoryRecord) => ({
