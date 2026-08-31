@@ -49,7 +49,7 @@ const getColorForClass = (classNumber: string | undefined) => {
     return { gradient: colorGradients[index], badge: badgeColors[index] };
 };
 
-const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entries = [], developmentEntries = [], syncStatus }) => {
+const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entries = [], developmentEntries = [], syncStatus, selectedSocietyId = 'gmct' }) => {
     const { showToast } = useToast();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);

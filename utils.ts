@@ -227,6 +227,7 @@ export function sanitizeMember(raw: any): Member {
             : true,
         // Ensure createdAt is never empty string
         createdAt: sanitizeString(findVal(['createdAt', 'created_at'])) || getNowEST(),
+        societyId: sanitizeString(findVal(['societyId', 'society_id'])),
         // Development fund pledge fields
         devFundPledge: typeof findVal(['devFundPledge', 'dev_fund_pledge', 'developmentFundPledge']) === 'boolean'
             ? (findVal(['devFundPledge', 'dev_fund_pledge', 'developmentFundPledge']) as boolean)
