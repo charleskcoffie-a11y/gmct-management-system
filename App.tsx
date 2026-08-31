@@ -941,6 +941,10 @@ const App: React.FC = () => {
         if (currentUser.role === 'class-leader' && activeTab !== 'attendance') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Class Leaders can only take attendance for their class.</div>;
         }
+        // Restrict global System Settings & Utilities to GMCT Primary Admin only
+        if ((activeTab === 'settings' || activeTab === 'utilities') && !selectedSociety.isPrimary) {
+            return <div className="p-8 text-center text-slate-500">Access Denied. System Settings & Utilities are restricted to the Primary Mission Administrator (GMCT).</div>;
+        }
         // Double check access before rendering restrictive tabs
         if (activeTab === 'utilities' && currentUser.role !== 'admin') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
@@ -1876,7 +1880,6 @@ const App: React.FC = () => {
                 { id: 'insights', label: 'Insights & Reports', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'requisitions', label: 'Requisitions', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
                 { id: 'my-approvals', label: 'My Approvals', roles: ['admin', 'finance-chair', 'finance-team', 'pastor'] },
-                { id: 'settings', label: 'Settings', roles: ['admin'] },
             ]
         },
         {
@@ -1926,6 +1929,8 @@ const App: React.FC = () => {
 
     const isFeatureEnabled = (itemId: string): boolean => {
         const features = selectedSociety.features || {};
+        // Global system settings and database utilities are strictly reserved for GMCT primary admin
+        if (itemId === 'settings' || itemId === 'utilities') return !!selectedSociety.isPrimary;
         if (itemId === 'wesley-hall') return features.wesleyHall !== false;
         if (itemId === 'parking') return features.parking !== false;
         if (itemId === 'reports-etransfers' || itemId === 'e-transfers') return features.etransfers !== false;
