@@ -1798,7 +1798,12 @@ const App: React.FC = () => {
             // 'history' moved under Reports tab
             case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} targetSection={reportsTarget} onConsumeTarget={() => setReportsTarget(null)} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} classLeaders={classLeaders} setClassLeaders={setClassLeaders} allData={{
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} classLeaders={classLeaders} setClassLeaders={setClassLeaders} selectedSociety={selectedSociety} onUpdateSocietyFeatures={(socId, newFeatures) => {
+                const target = CANADA_MISSION_SOCIETIES.find(s => s.id === socId);
+                if (target) {
+                    target.features = newFeatures;
+                }
+            }} allData={{
                 entries,
                 members,
                 weeklyHistory,

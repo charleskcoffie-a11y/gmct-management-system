@@ -1,8 +1,9 @@
 
 // components/Settings.tsx
 import React, { useState, useEffect } from 'react';
-import type { Settings, CloudState, Entry, Member, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, ClassLeader } from '../types';
-import { testSupabaseConnection, uploadDataToSupabase, downloadDataFromSupabase, saveSettingsToSupabase, saveClassLeaderToSupabase, deleteClassLeaderFromSupabase } from '../services/supabase';
+import type { Settings, CloudState, Entry, Member, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, ClassLeader, Society, SocietyFeatures } from '../types';
+import { CANADA_MISSION_SOCIETIES } from '../constants';
+import { testSupabaseConnection, uploadDataToSupabase, downloadDataFromSupabase, saveSettingsToSupabase, saveClassLeaderToSupabase, deleteClassLeaderFromSupabase, saveSocietyFeaturesToSupabase } from '../services/supabase';
 import { useToast } from './ToastProvider';
 
 interface SettingsProps {
@@ -15,6 +16,8 @@ interface SettingsProps {
     currentUser: User;
     classLeaders: ClassLeader[];
     setClassLeaders: React.Dispatch<React.SetStateAction<ClassLeader[]>>;
+    selectedSociety?: Society;
+    onUpdateSocietyFeatures?: (societyId: string, features: SocietyFeatures) => void;
     // Data props needed for sync and locking
     allData?: {
         entries: Entry[];
@@ -32,13 +35,18 @@ interface SettingsProps {
     };
 }
 
-const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser, classLeaders, setClassLeaders }) => {
+const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser, classLeaders, setClassLeaders, selectedSociety, onUpdateSocietyFeatures }) => {
     const { showToast } = useToast();
     const [localSettings, setLocalSettings] = useState<Settings>(settings);
     const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{type: 'success'|'error'|'info', message: string} | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
+
+    // Society Features Toggle State (for Canada Mission multi-tenancy management)
+    const [selectedSocietyToManage, setSelectedSocietyToManage] = useState<string>('ebenezer-hamilton');
+    const [societiesList, setSocietiesList] = useState<Society[]>(CANADA_MISSION_SOCIETIES);
+    const [isSavingSocietyFeatures, setIsSavingSocietyFeatures] = useState(false);
     
     // Class Leaders Management State
     const [isAddingLeader, setIsAddingLeader] = useState(false);
@@ -328,6 +336,132 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             ) : (
                 <div className="bg-gradient-to-br from-slate-100 to-slate-200 p-6 rounded-xl border-2 border-slate-300 text-center text-slate-700 font-bold">
                     🔒 Only Administrators can modify System Configuration.
+                </div>
+            )}
+
+            {/* 1.1 Canada Mission Societies & Feature Management (GMCT Admin Exclusive) */}
+            {currentUser.role === 'admin' && (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl shadow-lg border-2 border-indigo-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-indigo-100 pb-3 mb-4">
+                        <div>
+                            <h3 className="text-xl font-bold text-indigo-900 flex items-center gap-2">
+                                <span>🇨🇦</span> Canada Mission — Society Feature Management
+                            </h3>
+                            <p className="text-xs text-indigo-700 mt-0.5">
+                                Enable or disable specific modules and features for each branch society across the Mission.
+                            </p>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-200 text-indigo-900 border border-indigo-300">
+                            Head Office Control
+                        </span>
+                    </div>
+
+                    {(() => {
+                        const activeSocietyObj = societiesList.find(s => s.id === selectedSocietyToManage) || societiesList[0];
+                        const features = activeSocietyObj.features || {};
+
+                        const featureDefinitions: { key: keyof SocietyFeatures; label: string; description: string }[] = [
+                            { key: 'taxReceipts', label: 'Tax Receipts', description: 'Enable annual CRA income tax receipts generation' },
+                            { key: 'etransfers', label: 'E-Transfers', description: 'Enable Interac e-transfer donations processing' },
+                            { key: 'requisitions', label: 'Requisitions & Approvals', description: 'Enable purchase requests and approval workflow' },
+                            { key: 'harvest', label: 'Harvest & Pledges', description: 'Enable Harvest festival giving and pledge tracking' },
+                            { key: 'organizationFunds', label: 'Organization Funds', description: 'Track Men, Women, Youth, and Choir funds' },
+                            { key: 'assets', label: 'Asset Registry', description: 'Track church property, equipment, and assets' },
+                            { key: 'developmentFund', label: 'Development Fund', description: 'Building and capital development contributions' },
+                            { key: 'wesleyHall', label: 'Wesley Hall (Rental)', description: 'Hall booking, calendar, and rental income tracking' },
+                            { key: 'parking', label: 'Parking Management', description: 'Sunday parking spaces and vehicle tracking' },
+                            { key: 'dayBorn', label: 'Day Born Groups', description: 'Sunday to Saturday day born contribution groups' },
+                            { key: 'childrensMinistry', label: 'Childrens Ministry', description: 'Children ministry collections and roll' },
+                        ];
+
+                        const handleFeatureToggle = (featureKey: keyof SocietyFeatures) => {
+                            const updatedFeatures: SocietyFeatures = {
+                                ...features,
+                                [featureKey]: !features[featureKey],
+                            };
+                            setSocietiesList(prev => prev.map(s => s.id === activeSocietyObj.id ? { ...s, features: updatedFeatures } : s));
+                        };
+
+                        const handleSaveFeatures = async () => {
+                            setIsSavingSocietyFeatures(true);
+                            try {
+                                if (localSettings.supabaseUrl && localSettings.supabaseKey) {
+                                    await saveSocietyFeaturesToSupabase(localSettings.supabaseUrl, localSettings.supabaseKey, activeSocietyObj.id, features);
+                                }
+                                onUpdateSocietyFeatures?.(activeSocietyObj.id, features);
+                                showToast(`✅ Features for ${activeSocietyObj.name} updated successfully!`, 'success', 3500);
+                            } catch (e: any) {
+                                showToast(`❌ Failed to save features: ${e.message || e}`, 'error', 5000);
+                            } finally {
+                                setIsSavingSocietyFeatures(false);
+                            }
+                        };
+
+                        return (
+                            <div className="space-y-4">
+                                <div className="bg-white p-4 rounded-xl border border-indigo-200">
+                                    <label className="block text-xs font-bold uppercase text-indigo-900 mb-2">
+                                        Select Society to Configure:
+                                    </label>
+                                    <select
+                                        value={selectedSocietyToManage}
+                                        onChange={e => setSelectedSocietyToManage(e.target.value)}
+                                        className="w-full border-2 border-indigo-300 rounded-lg py-2.5 px-3 text-sm font-semibold bg-indigo-50/50 text-indigo-950 focus:ring-2 focus:ring-indigo-400"
+                                    >
+                                        {societiesList.map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name} ({s.city}, {s.provinceCode}) {s.isPrimary ? '⭐ [Primary / Head]' : `• [${s.societyCode}]`}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {featureDefinitions.map(def => {
+                                        const isChecked = !!features[def.key];
+                                        return (
+                                            <div
+                                                key={def.key}
+                                                onClick={() => handleFeatureToggle(def.key)}
+                                                className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                                                    isChecked
+                                                        ? 'bg-white border-indigo-400 shadow-sm'
+                                                        : 'bg-slate-50 border-slate-200 opacity-75 hover:opacity-100'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {}} // Handled by container onClick
+                                                    className="h-5 w-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 mt-0.5"
+                                                />
+                                                <div className="flex-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-sm font-bold text-slate-900">{def.label}</span>
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isChecked ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-200 text-slate-600'}`}>
+                                                            {isChecked ? 'Enabled' : 'Disabled'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-slate-600 mt-0.5">{def.description}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="flex justify-end pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveFeatures}
+                                        disabled={isSavingSocietyFeatures}
+                                        className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-all text-sm flex items-center gap-2"
+                                    >
+                                        <span>{isSavingSocietyFeatures ? 'Saving...' : `✓ Save Features for ${activeSocietyObj.shortName}`}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 

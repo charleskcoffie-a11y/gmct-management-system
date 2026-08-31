@@ -1632,6 +1632,50 @@ export const saveParkingReceipt = async (url: string, key: string, receipt: Park
     return { success: true };
 };
 
+export const loadSocietiesFromSupabase = async (url: string, key: string): Promise<Society[]> => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) return [];
+    try {
+        const { data, error } = await supabase.from('societies').select('*').order('is_primary', { ascending: false });
+        if (error) {
+            console.warn('Load societies failed:', error.message);
+            return [];
+        }
+        return (data || []).map(s => ({
+            id: s.id,
+            name: s.name,
+            shortName: s.short_name || s.name,
+            societyCode: s.code,
+            city: s.city,
+            province: s.province,
+            provinceCode: s.province_code,
+            isPrimary: s.is_primary,
+            address: s.address,
+            phone: s.phone,
+            email: s.email,
+            charityNumber: s.charity_number,
+            signatureImage: s.signature_image,
+            logoUrl: s.logo_url,
+            features: s.features || {},
+            accentColor: s.accent_color || 'indigo',
+        }));
+    } catch (e: any) {
+        console.warn('Load societies error:', e.message || e);
+        return [];
+    }
+};
+
+export const saveSocietyFeaturesToSupabase = async (url: string, key: string, societyId: string, features: SocietyFeatures) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase
+        .from('societies')
+        .update({ features })
+        .eq('id', societyId);
+    if (error) throw new Error(`Save society features failed: ${error.message}`);
+    return { success: true };
+};
+
 export const updateParkingReceipt = async (url: string, key: string, receipt: ParkingReceipt) => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
