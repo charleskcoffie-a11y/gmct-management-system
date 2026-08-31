@@ -109,7 +109,7 @@ export interface Settings {
     classAccessCodes?: Record<string, string>; // Map of class number to access code, e.g. {"1": "alpha", "2": "beta"}
 }
 
-export type UserRole = 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader';
+export type UserRole = 'software-admin' | 'admin' | 'finance-chair' | 'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader';
 
 export interface User {
     username: string;

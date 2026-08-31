@@ -6,11 +6,13 @@ import { ChurchIcon } from './icons';
 interface SocietySelectorProps {
     onSelectSociety: (society: Society) => void;
     currentSocietyId?: string;
+    societies?: Society[];
 }
 
 export const SocietySelector: React.FC<SocietySelectorProps> = ({
     onSelectSociety,
     currentSocietyId = 'gmct',
+    societies = CANADA_MISSION_SOCIETIES,
 }) => {
     const [selectedId, setSelectedId] = useState<string>(currentSocietyId);
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -18,20 +20,20 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const primarySociety = useMemo(
-        () => CANADA_MISSION_SOCIETIES.find(s => s.isPrimary) || CANADA_MISSION_SOCIETIES[0],
-        []
+        () => societies.find(s => s.isPrimary) || societies[0],
+        [societies]
     );
 
     const activeSociety = useMemo(
-        () => CANADA_MISSION_SOCIETIES.find(s => s.id === selectedId) || primarySociety,
-        [selectedId, primarySociety]
+        () => societies.find(s => s.id === selectedId) || primarySociety,
+        [selectedId, primarySociety, societies]
     );
 
     // Filter societies based on search input
     const filteredSocieties = useMemo(() => {
-        if (!searchQuery.trim()) return CANADA_MISSION_SOCIETIES;
+        if (!searchQuery.trim()) return societies;
         const q = searchQuery.toLowerCase().trim();
-        return CANADA_MISSION_SOCIETIES.filter(s =>
+        return societies.filter(s =>
             s.name.toLowerCase().includes(q) ||
             s.city.toLowerCase().includes(q) ||
             s.province.toLowerCase().includes(q) ||
@@ -39,7 +41,7 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
             s.societyCode.toLowerCase().includes(q) ||
             s.shortName.toLowerCase().includes(q)
         );
-    }, [searchQuery]);
+    }, [searchQuery, societies]);
 
     // Group filtered societies by province
     const groupedByProvince = useMemo(() => {
@@ -105,7 +107,7 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
                             <label className="block text-xs font-bold uppercase tracking-wider text-indigo-200 mb-2 flex items-center justify-between">
                                 <span>Search & Select Society</span>
                                 <span className="text-[11px] text-indigo-300/80 font-normal">
-                                    {filteredSocieties.length} of {CANADA_MISSION_SOCIETIES.length} societies
+                                    {filteredSocieties.length} of {societies.length} societies
                                 </span>
                             </label>
 

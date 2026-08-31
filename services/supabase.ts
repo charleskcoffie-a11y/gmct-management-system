@@ -236,6 +236,7 @@ const mapDevFundFromDB = (d: any): DevelopmentFundEntry => ({
 
 const normalizeUserRoleFromDB = (raw: any): UserRole => {
     const role = String(raw || '').trim().toLowerCase().replace(/_/g, '-').replace(/\s+/g, '-');
+    if (role === 'software-admin' || role === 'softwareadmin') return 'software-admin';
     if (role === 'admin' || role === 'administrator') return 'admin';
     if (role === 'finance-team' || role === 'financeteam' || role === 'finance') return 'finance-team';
     if (role === 'finance-chair' || role === 'financechair') return 'finance-chair';
@@ -1673,6 +1674,28 @@ export const saveSocietyFeaturesToSupabase = async (url: string, key: string, so
         .update({ features })
         .eq('id', societyId);
     if (error) throw new Error(`Save society features failed: ${error.message}`);
+    return { success: true };
+};
+
+export const createSocietyInSupabase = async (url: string, key: string, society: Society) => {
+    const supabase = getSupabaseClient(url, key);
+    if (!supabase) throw new Error('Invalid Supabase configuration');
+    const { error } = await supabase.from('societies').insert([{
+        id: society.id,
+        code: society.societyCode,
+        name: society.name,
+        short_name: society.shortName,
+        city: society.city,
+        province: society.province,
+        province_code: society.provinceCode,
+        is_primary: false,
+        address: society.address || null,
+        phone: society.phone || null,
+        email: society.email || null,
+        features: society.features,
+        accent_color: society.accentColor || 'indigo',
+    }]);
+    if (error) throw new Error(`Create society failed: ${error.message}`);
     return { success: true };
 };
 

@@ -18,7 +18,7 @@ import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitize
 import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition, ParkingReceipt, WesleyHallReceipt, Society } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY, CANADA_MISSION_SOCIETIES, DEFAULT_SOCIETY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, loadParkingReceipts, loadWesleyHallReceipts, saveUserToSupabase, checkEntryDuplicateInSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, loadParkingReceipts, loadWesleyHallReceipts, saveUserToSupabase, checkEntryDuplicateInSupabase, loadSocietiesFromSupabase, createSocietyInSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 import ProfileModal from './components/ProfileModal';
 import SocietySelector from './components/SocietySelector';
@@ -123,10 +123,11 @@ const App: React.FC = () => {
     // Multi-tenant Canada Mission Society Selection
     const [selectedSocietyId, setSelectedSocietyId] = useLocalStorage<string>('canada-mission-society-id', 'gmct');
     const [isSelectingSociety, setIsSelectingSociety] = useState(false);
+    const [societies, setSocieties] = useState<Society[]>(CANADA_MISSION_SOCIETIES);
 
     const selectedSociety: Society = useMemo(() => {
-        return CANADA_MISSION_SOCIETIES.find(s => s.id === selectedSocietyId) || DEFAULT_SOCIETY;
-    }, [selectedSocietyId]);
+        return societies.find(s => s.id === selectedSocietyId) || DEFAULT_SOCIETY;
+    }, [selectedSocietyId, societies]);
 
     const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
     const [developmentFund, setDevelopmentFund] = useState<DevelopmentFundEntry[]>([]);
@@ -229,6 +230,15 @@ const App: React.FC = () => {
             setWesleyHallReceipts(loadedWesleyHallReceipts || []);
         }).catch(err => console.error('Failed to load data from database:', err));
     }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, selectedSociety.id]);
+
+    useEffect(() => {
+        if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+        loadSocietiesFromSupabase(settings.supabaseUrl, settings.supabaseKey)
+            .then(loadedSocieties => {
+                if (loadedSocieties.length) setSocieties(loadedSocieties);
+            })
+            .catch(error => console.warn('Societies load failed:', error));
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
 
     useEffect(() => {
         if (activeTab !== 'records' || !settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
@@ -622,10 +632,29 @@ const App: React.FC = () => {
     const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#8b5cf6'];
 
     // --- Handlers ---
-    const handleLogin = ({ username, password = '', skipPassword = false, role }: LoginRequest) => {
+    const handleLogin = async ({ username, password = '', skipPassword = false, role }: LoginRequest) => {
         console.log('🔐 Login attempt:', { username, role: 'checking...' });
         console.log('  classLeaders in state:', classLeaders.length, classLeaders);
         const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
+
+        if (role === 'software-admin') {
+            try {
+                const response = await fetch(`${settings.supabaseUrl}/functions/v1/tenant-gateway/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, societyId: selectedSociety.id }),
+                });
+                const result = await response.json();
+                if (!response.ok || result.user?.role !== 'software-admin') throw new Error(result.error || 'Software administrator access was not granted.');
+                sessionStorage.setItem('gmct-tenant-session', result.token);
+                setCurrentUser({ username: result.user.username, role: 'software-admin', societyId: result.user.societyId });
+                setLoginError(null);
+                setActiveTab('settings');
+            } catch (error: any) {
+                setLoginError(error.message || 'Software administrator sign-in failed.');
+            }
+            return;
+        }
 
         // Build society-specific fallback users
         const defaultPassword = selectedSociety.isPrimary ? 'GMCT' : (selectedSociety.societyCode || 'CANADA');
@@ -975,6 +1004,7 @@ const App: React.FC = () => {
             return (
                 <SocietySelector
                     currentSocietyId={selectedSocietyId}
+                    societies={societies}
                     onSelectSociety={(soc) => {
                         setSelectedSocietyId(soc.id);
                         setIsSelectingSociety(false);
@@ -1002,17 +1032,17 @@ const App: React.FC = () => {
             return <div className="p-8 text-center text-slate-500">Access Denied. Class Leaders can only take attendance for their class.</div>;
         }
         // Restrict global System Settings & Utilities to GMCT Primary Admin only
-        if ((activeTab === 'settings' || activeTab === 'utilities') && !selectedSociety.isPrimary) {
+        if ((activeTab === 'settings' || activeTab === 'utilities') && (!selectedSociety.isPrimary || currentUser.role !== 'software-admin')) {
             return <div className="p-8 text-center text-slate-500">Access Denied. System Settings & Utilities are restricted to the Primary Mission Administrator (GMCT).</div>;
         }
         // Double check access before rendering restrictive tabs
-        if (activeTab === 'utilities' && currentUser.role !== 'admin') {
+        if (activeTab === 'utilities' && currentUser.role !== 'software-admin') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
         }
         if (activeTab === 'users' && currentUser.role !== 'admin') {
              return <div className="p-8 text-center text-slate-500">Access Denied. Administrator privileges required.</div>;
         }
-        if (activeTab === 'settings' && currentUser.role !== 'admin') {
+        if (activeTab === 'settings' && currentUser.role !== 'software-admin') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Only Admin can access Settings.</div>;
         }
         if (activeTab === 'tax-receipts' && !(currentUser.role === 'admin' || currentUser.role === 'finance-chair')) {
@@ -1858,11 +1888,11 @@ const App: React.FC = () => {
             // 'history' moved under Reports tab
             case 'history': return <Reports entries={societyEntries} harvestEntries={societyHarvestEntries} members={societyMembers} settings={settings} history={societyWeeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} targetSection={reportsTarget} onConsumeTarget={() => setReportsTarget(null)} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={societyMembers} settings={settings} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} classLeaders={classLeaders} setClassLeaders={setClassLeaders} selectedSociety={selectedSociety} onUpdateSocietyFeatures={(socId, newFeatures) => {
-                const target = CANADA_MISSION_SOCIETIES.find(s => s.id === socId);
-                if (target) {
-                    target.features = newFeatures;
-                }
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={{ ...currentUser, role: 'admin' }} classLeaders={classLeaders} setClassLeaders={setClassLeaders} selectedSociety={selectedSociety} societies={societies} onUpdateSocietyFeatures={(socId, newFeatures) => {
+                setSocieties(previousSocieties => previousSocieties.map(society => society.id === socId ? { ...society, features: newFeatures } : society));
+            }} onCreateSociety={async (society) => {
+                await createSocietyInSupabase(settings.supabaseUrl, settings.supabaseKey, society);
+                setSocieties(previousSocieties => [...previousSocieties, society]);
             }} allData={{
                 entries,
                 members,
@@ -1877,7 +1907,7 @@ const App: React.FC = () => {
                 setDevelopmentFund: (d) => setDevelopmentFund(d),
                 setMonthLocks: (d) => setMonthLocks(d)
             }} />;
-            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} currentUser={currentUser} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
+            case 'utilities': return <Utilities entries={entries} members={members} history={weeklyHistory} developmentFund={developmentFund} settings={settings} currentUser={{ ...currentUser, role: 'admin' }} setEntries={setEntries} setMembers={setMembers} setSettings={setSettings} setDevelopmentFund={setDevelopmentFund} />;
             default: return <div>Select a tab</div>;
         }
     };
@@ -1984,11 +2014,11 @@ const App: React.FC = () => {
             id: 'admin',
             label: 'Administration',
             icon: '⚙️',
-            roles: ['admin', 'finance-chair'],
+            roles: ['admin', 'finance-chair', 'software-admin'],
             items: [
                 { id: 'users', label: 'Manage Users', roles: ['admin'] },
-                { id: 'settings', label: 'Settings', roles: ['admin', 'finance-chair'] },
-                { id: 'utilities', label: 'Utilities', roles: ['admin'] },
+                { id: 'settings', label: 'Settings', roles: ['software-admin'] },
+                { id: 'utilities', label: 'Utilities', roles: ['software-admin'] },
             ]
         },
     ];
@@ -1996,7 +2026,7 @@ const App: React.FC = () => {
     const isFeatureEnabled = (itemId: string): boolean => {
         const features = selectedSociety.features || {};
         // Global system settings and database utilities are strictly reserved for GMCT primary admin
-        if (itemId === 'settings' || itemId === 'utilities') return !!selectedSociety.isPrimary;
+        if (itemId === 'settings' || itemId === 'utilities') return !!selectedSociety.isPrimary && currentUser.role === 'software-admin';
         if (itemId === 'wesley-hall') return features.wesleyHall !== false;
         if (itemId === 'parking') return features.parking !== false;
         if (itemId === 'reports-etransfers' || itemId === 'e-transfers') return features.etransfers !== false;

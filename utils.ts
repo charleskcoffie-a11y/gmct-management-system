@@ -497,7 +497,7 @@ export function sanitizeMethod(method: any): Method {
 }
 
 export function sanitizeUserRole(role: any): UserRole {
-    const validRoles: UserRole[] = ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor', 'statistician'];
+    const validRoles: UserRole[] = ['software-admin', 'admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor', 'statistician', 'class-leader'];
     // Backward compatibility map
     if (role === 'finance') return 'finance-team';
     return validRoles.includes(role) ? role : 'finance-team';

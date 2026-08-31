@@ -14,6 +14,7 @@ interface LoginProps {
 }
 
 const roleLabels: Record<UserRole, string> = {
+    'software-admin': 'Software Administration',
     admin: 'Administrator',
     'finance-chair': 'Finance Chair',
     'finance-team': 'Finance Team',
@@ -47,6 +48,11 @@ const fallbackUsers: User[] = [
 
 // Map roles to their icons and colors
 const roleIconMap: Record<UserRole, { icon: React.ReactNode; color: string; bgColor: string }> = {
+    'software-admin': {
+        icon: <AdminIcon />,
+        color: 'text-emerald-300',
+        bgColor: 'bg-emerald-900/30',
+    },
     admin: {
         icon: <AdminIcon />,
         color: 'text-purple-400',
@@ -156,6 +162,12 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
             return;
         }
 
+        if (role === 'software-admin') {
+            setSelectedUser('');
+            setShowUserModal(true);
+            return;
+        }
+
         // For class leaders, show username/password form like other roles
         const roleUsers = getUsersForRole(role);
         if (roleUsers.length === 0) {
@@ -259,6 +271,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
                             <p className="text-sm text-indigo-100/70">
                                 Default Admin: <span className="font-semibold">Admin</span> / <span className="font-semibold">{isPrimary ? 'GMCT' : societyCode}</span>
                             </p>
+                            {isPrimary && <button type="button" onClick={() => handleRoleSelect('software-admin')} className="text-xs text-indigo-300 hover:text-white underline">Software administration</button>}
                             <div className="pt-4 border-t border-white/10 space-y-3">
                                 <div>
                                     <p className="text-xs font-semibold text-indigo-100 mb-2">Security Tips</p>
@@ -362,6 +375,15 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-semibold text-indigo-100/90 mb-1">User</label>
+                                {selectedRole === 'software-admin' ? (
+                                <input
+                                    value={selectedUser}
+                                    onChange={(e) => setSelectedUser(e.target.value)}
+                                    placeholder="Software administrator username"
+                                    className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
+                                    autoFocus
+                                />
+                                ) : (
                                 <select
                                     value={selectedUser}
                                     onChange={(e) => setSelectedUser(e.target.value)}
@@ -372,6 +394,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
                                         <option key={user.username} value={user.username}>{user.username}</option>
                                     ))}
                                 </select>
+                                )}
                             </div>
 
                             <div>

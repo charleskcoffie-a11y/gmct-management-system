@@ -2,7 +2,6 @@
 // components/Settings.tsx
 import React, { useState, useEffect } from 'react';
 import type { Settings, CloudState, Entry, Member, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, ClassLeader, Society, SocietyFeatures } from '../types';
-import { CANADA_MISSION_SOCIETIES } from '../constants';
 import { testSupabaseConnection, uploadDataToSupabase, downloadDataFromSupabase, saveSettingsToSupabase, saveClassLeaderToSupabase, deleteClassLeaderFromSupabase, saveSocietyFeaturesToSupabase } from '../services/supabase';
 import { useToast } from './ToastProvider';
 
@@ -17,7 +16,9 @@ interface SettingsProps {
     classLeaders: ClassLeader[];
     setClassLeaders: React.Dispatch<React.SetStateAction<ClassLeader[]>>;
     selectedSociety?: Society;
+    societies: Society[];
     onUpdateSocietyFeatures?: (societyId: string, features: SocietyFeatures) => void;
+    onCreateSociety?: (society: Society) => Promise<void>;
     // Data props needed for sync and locking
     allData?: {
         entries: Entry[];
@@ -35,7 +36,7 @@ interface SettingsProps {
     };
 }
 
-const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser, classLeaders, setClassLeaders, selectedSociety, onUpdateSocietyFeatures }) => {
+const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser, classLeaders, setClassLeaders, selectedSociety, societies, onUpdateSocietyFeatures, onCreateSociety }) => {
     const { showToast } = useToast();
     const [localSettings, setLocalSettings] = useState<Settings>(settings);
     const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
@@ -45,8 +46,24 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
 
     // Society Features Toggle State (for Canada Mission multi-tenancy management)
     const [selectedSocietyToManage, setSelectedSocietyToManage] = useState<string>('ebenezer-hamilton');
-    const [societiesList, setSocietiesList] = useState<Society[]>(CANADA_MISSION_SOCIETIES);
+    const [societiesList, setSocietiesList] = useState<Society[]>(societies);
     const [isSavingSocietyFeatures, setIsSavingSocietyFeatures] = useState(false);
+    const [isCreatingSociety, setIsCreatingSociety] = useState(false);
+    const [newSociety, setNewSociety] = useState({ name: '', shortName: '', societyCode: '', city: '', province: '', provinceCode: '', address: '', phone: '', email: '' });
+    const [tenantAdminUsername, setTenantAdminUsername] = useState('gmct-admin');
+    const [tenantAdminPassword, setTenantAdminPassword] = useState('');
+    const [isInitializingTenantSecurity, setIsInitializingTenantSecurity] = useState(false);
+    const [tenantSecurityInitialized, setTenantSecurityInitialized] = useState(false);
+
+    useEffect(() => setSocietiesList(societies), [societies]);
+
+    useEffect(() => {
+        if (!selectedSociety?.isPrimary || !localSettings.supabaseUrl) return;
+        fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/status`)
+            .then(response => response.ok ? response.json() : null)
+            .then(result => setTenantSecurityInitialized(!!result?.initialized))
+            .catch(() => {});
+    }, [selectedSociety?.isPrimary, localSettings.supabaseUrl]);
     
     // Class Leaders Management State
     const [isAddingLeader, setIsAddingLeader] = useState(false);
@@ -340,7 +357,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             )}
 
             {/* 1.1 Canada Mission Societies & Feature Management (GMCT Admin Exclusive) */}
-            {currentUser.role === 'admin' && (
+            {currentUser.role === 'admin' && selectedSociety?.isPrimary && (
                 <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl shadow-lg border-2 border-indigo-200">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-indigo-100 pb-3 mb-4">
                         <div>
@@ -355,6 +372,51 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                             Head Office Control
                         </span>
                     </div>
+
+                    {!tenantSecurityInitialized && (
+                        <form onSubmit={async event => {
+                            event.preventDefault();
+                            if (tenantAdminPassword.length < 12) {
+                                showToast('Use a tenant administrator password with at least 12 characters.', 'error', 4000);
+                                return;
+                            }
+                            setIsInitializingTenantSecurity(true);
+                            try {
+                                const response = await fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/bootstrap`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ username: tenantAdminUsername, password: tenantAdminPassword, societyId: 'gmct' }),
+                                });
+                                const result = await response.json();
+                                if (!response.ok) throw new Error(result.error || 'Unable to initialize tenant security.');
+                                setTenantAdminPassword('');
+                                setTenantSecurityInitialized(true);
+                                showToast('GMCT tenant administrator created. The new tenant login is ready for pilot setup.', 'success', 5000);
+                            } catch (error: any) {
+                                if (String(error.message || error).includes('already been initialized')) {
+                                    setTenantSecurityInitialized(true);
+                                    return;
+                                }
+                                showToast(`Tenant setup failed: ${error.message || error}`, 'error', 5000);
+                            } finally {
+                                setIsInitializingTenantSecurity(false);
+                            }
+                        }} className="mb-5 bg-white p-4 rounded-xl border border-emerald-200">
+                            <h4 className="text-sm font-bold text-emerald-950">Initialize Tenant Administration</h4>
+                            <p className="text-xs text-slate-600 mt-1">Create the one protected GMCT tenant administrator account. This does not change the current GMCT login.</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                <label className="text-xs font-semibold text-slate-700">Username
+                                    <input required minLength={3} value={tenantAdminUsername} onChange={event => setTenantAdminUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-emerald-200 px-3 py-2 text-sm" />
+                                </label>
+                                <label className="text-xs font-semibold text-slate-700">New password
+                                    <input required minLength={12} type="password" value={tenantAdminPassword} onChange={event => setTenantAdminPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-emerald-200 px-3 py-2 text-sm" />
+                                </label>
+                            </div>
+                            <div className="flex justify-end pt-3"><button type="submit" disabled={isInitializingTenantSecurity || !localSettings.supabaseUrl} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg text-sm">{isInitializingTenantSecurity ? 'Initializing...' : 'Create Tenant Administrator'}</button></div>
+                        </form>
+                    )}
+
+                    {tenantSecurityInitialized && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Tenant administration has been initialized for GMCT.</div>}
 
                     {(() => {
                         const activeSocietyObj = societiesList.find(s => s.id === selectedSocietyToManage) || societiesList[0];
@@ -399,6 +461,49 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
 
                         return (
                             <div className="space-y-4">
+                                <form onSubmit={async event => {
+                                    event.preventDefault();
+                                    const id = newSociety.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                                    if (!id || societiesList.some(s => s.id === id || s.societyCode.toLowerCase() === newSociety.societyCode.trim().toLowerCase())) {
+                                        showToast('Please use a unique society name and code.', 'error', 4000);
+                                        return;
+                                    }
+                                    setIsCreatingSociety(true);
+                                    try {
+                                        const society: Society = {
+                                            id,
+                                            name: newSociety.name.trim(),
+                                            shortName: newSociety.shortName.trim() || newSociety.name.trim(),
+                                            societyCode: newSociety.societyCode.trim().toUpperCase(),
+                                            city: newSociety.city.trim(),
+                                            province: newSociety.province.trim(),
+                                            provinceCode: newSociety.provinceCode.trim().toUpperCase(),
+                                            address: newSociety.address.trim() || undefined,
+                                            phone: newSociety.phone.trim() || undefined,
+                                            email: newSociety.email.trim() || undefined,
+                                            accentColor: 'indigo',
+                                            features: { etransfers: true, requisitions: true, harvest: true, harvestPledges: true, taxReceipts: true, assets: true, organizationFunds: true, dayBorn: true, childrensMinistry: true },
+                                        };
+                                        await onCreateSociety?.(society);
+                                        setSelectedSocietyToManage(society.id);
+                                        setNewSociety({ name: '', shortName: '', societyCode: '', city: '', province: '', provinceCode: '', address: '', phone: '', email: '' });
+                                        showToast(`${society.name} was added to the Mission directory.`, 'success', 3500);
+                                    } catch (error: any) {
+                                        showToast(`Failed to create society: ${error.message || error}`, 'error', 5000);
+                                    } finally {
+                                        setIsCreatingSociety(false);
+                                    }
+                                }} className="bg-white p-4 rounded-xl border border-indigo-200">
+                                    <h4 className="text-sm font-bold text-indigo-950 mb-3">Add Society</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {([['name', 'Society name *'], ['shortName', 'Short name'], ['societyCode', 'Society code *'], ['city', 'City *'], ['province', 'Province *'], ['provinceCode', 'Province code *'], ['address', 'Address'], ['phone', 'Phone'], ['email', 'Email']] as const).map(([field, label]) => (
+                                            <label key={field} className="text-xs font-semibold text-slate-700">{label}
+                                                <input required={['name', 'societyCode', 'city', 'province', 'provinceCode'].includes(field)} value={newSociety[field]} onChange={event => setNewSociety(previous => ({ ...previous, [field]: event.target.value }))} className="mt-1 w-full rounded-lg border border-indigo-200 px-3 py-2 text-sm" />
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <div className="flex justify-end pt-3"><button type="submit" disabled={isCreatingSociety} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg text-sm">{isCreatingSociety ? 'Adding...' : 'Add Society'}</button></div>
+                                </form>
                                 <div className="bg-white p-4 rounded-xl border border-indigo-200">
                                     <label className="block text-xs font-bold uppercase text-indigo-900 mb-2">
                                         Select Society to Configure:
