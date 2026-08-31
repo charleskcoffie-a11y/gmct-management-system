@@ -1,0 +1,107 @@
+[
+  {
+    "username": "Data Entry",
+    "password": "1234",
+    "role": "data-entry",
+    "class_led": "",
+    "created_at": "2025-12-08T13:34:44.037601+00:00"
+  },
+  {
+    "username": "Stats",
+    "password": "1581",
+    "role": "statistician",
+    "class_led": "",
+    "created_at": "2025-12-17T20:05:27.304596+00:00"
+  },
+  {
+    "username": "James",
+    "password": "1",
+    "role": "finance-team",
+    "class_led": "",
+    "created_at": "2026-01-09T02:15:06.124167+00:00"
+  },
+  {
+    "username": "Peggy",
+    "password": "200869",
+    "role": "finance-chair",
+    "class_led": "",
+    "created_at": "2026-01-09T02:44:15.669736+00:00"
+  },
+  {
+    "username": "Rev Coffie",
+    "password": "1927",
+    "role": "pastor",
+    "class_led": "",
+    "created_at": "2026-01-11T03:06:59.73036+00:00"
+  },
+  {
+    "username": "Very Rev Essien",
+    "password": "2088",
+    "role": "pastor",
+    "class_led": "",
+    "created_at": "2026-02-13T03:55:47.864119+00:00"
+  },
+  {
+    "username": "Hetty",
+    "password": "1010",
+    "role": "finance-team",
+    "class_led": "",
+    "created_at": "2026-01-09T02:14:23.21182+00:00"
+  },
+  {
+    "username": "Okyere CPA",
+    "password": "2003",
+    "role": "finance-team",
+    "class_led": "",
+    "created_at": "2026-01-12T03:23:04.655374+00:00"
+  },
+  {
+    "username": "Agyen",
+    "password": "5304",
+    "role": "finance-team",
+    "class_led": "",
+    "created_at": "2026-01-09T02:14:51.646672+00:00"
+  },
+  {
+    "username": "AGYEN FRIMPONG",
+    "password": "3636",
+    "role": "admin",
+    "class_led": "",
+    "created_at": "2026-08-08T13:52:00.190165+00:00"
+  },
+  {
+    "username": "FinanceTeam",
+    "password": "GMCT",
+    "role": "finance-team",
+    "class_led": null,
+    "created_at": "2026-08-09T02:47:33.205829+00:00"
+  },
+  {
+    "username": "Pastor",
+    "password": "GMCT",
+    "role": "pastor",
+    "class_led": null,
+    "created_at": "2026-08-09T02:47:33.205829+00:00"
+  },
+  {
+    "username": "DataEntry",
+    "password": "GMCT",
+    "role": "data-entry",
+    "class_led": null,
+    "created_at": "2026-08-09T02:47:33.205829+00:00"
+  },
+  {
+    "username": "Admin",
+    "password": "1581",
+    "role": "admin",
+    "class_led": null,
+    "created_at": "2025-11-26T23:01:02.026715+00:00"
+  },
+  {
+    "username": "ClassLeader",
+    "password": "2208",
+    "role": "class-leader",
+    "class_led": null,
+    "created_at": "2025-12-31T06:10:49.381414+00:00"
+  }
+]

@@ -1,0 +1,2102 @@
+[
+  {
+    "id": "939f3dfa-e01d-455e-82e1-14d5e052ba8f",
+    "date_of_service": "2025-11-30",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "939f3dfa-e01d-455e-82e1-14d5e052ba8f",
+      "events": "Post Induction Thanksgiving Service of the Lay Chairman, Bro. Eric Sasu Somuah",
+      "liturgist": "Sis. Elizabeth Kwofie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 0,
+        "women": 0,
+        "junior": 0,
+        "children": 0,
+        "visitors": 6,
+        "catechumens": 0
+      },
+      "preparedBy": "Rev. Charles Coffie",
+      "sermonTopic": "Preparing for His Coming",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "Newark NJ Circuit",
+          "name": "Very Rev. Eric K. Apochie",
+          "reason": "",
+          "position": "Superintendent Ministers"
+        },
+        {
+          "from": "Bethel Society-Calgary",
+          "name": "Bro. Christian Arkilley",
+          "reason": "",
+          "position": "Circuit Steward"
+        },
+        {
+          "from": "NLIM",
+          "name": "Rev. Grace Sarfo Twum Antwi",
+          "reason": "",
+          "position": "Minister in charge"
+        },
+        {
+          "from": "Ebenezer Society-Hamilton",
+          "name": "Rev. Akwasi Boateng",
+          "reason": "",
+          "position": "Minister In-Charged"
+        },
+        {
+          "from": "Redemption Soceity",
+          "name": "Rev. Sylvester O. Ansah",
+          "reason": "",
+          "position": "Minister In-Charged"
+        },
+        {
+          "from": "Ghana",
+          "name": "Sis. Georgia Adjei",
+          "reason": "",
+          "position": "Gospel Artist"
+        }
+      ],
+      "dateOfService": "2025-11-30",
+      "donationsList": [],
+      "announcementsBy": "Bro. Benjamin Kwofie-Society Steward",
+      "serviceTypeOther": "Post Induction Thanksgiving Service",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "The worship service was vibrant, with community members dressed in traditional kente attire. The church members wore their kente dresses to show support for their brother, who is part of the congregation. He spoke about the importance of Advent and emphasized why Christians should take it seriously. Advent encompasses the four Sundays leading up to Christmas, with each Sunday focusing on a specific theme, represented by the four candles of Advent: Hope, Peace, Joy, and Love. He urged the congregation to live well with everyone, especially during this time as Christians. Our lives should shine brightly to those outside the community and draw them in."
+    },
+    "created_at": "2025-12-08T12:56:38.821142+00:00"
+  },
+  {
+    "id": "d90ee574-fbf1-4214-a47c-5684672eacd1",
+    "date_of_service": "2025-12-07",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "d90ee574-fbf1-4214-a47c-5684672eacd1",
+      "events": "",
+      "liturgist": "Rev. Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 0,
+        "women": 0,
+        "junior": 0,
+        "children": 0,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "preparedBy": "Rev. Charles Coffie",
+      "sermonTopic": "Prepare the Way of the Lord",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Communion"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2025-12-07",
+      "donationsList": [],
+      "announcementsBy": "Sis. Henrietta Birago",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "We cannot be fools to ourselves or God. Machi 3 tells use he will come with fire."
+    },
+    "created_at": "2025-12-08T13:21:18.547518+00:00"
+  },
+  {
+    "id": "5c85a228-e7ba-4257-931a-3163dce08d29",
+    "date_of_service": "2025-12-25",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "5c85a228-e7ba-4257-931a-3163dce08d29",
+      "events": "",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Rev Charles Coffie",
+      "attendance": {
+        "men": 67,
+        "women": 56,
+        "junior": 6,
+        "children": 334,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Rev. Charles Coffie",
+      "sermonTopic": "God is our Peace",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2025-12-25",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Christmas Day Service",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-01-08T03:19:16.760593+00:00"
+  },
+  {
+    "id": "d774751b-805e-4856-9bde-42754d50cd03",
+    "date_of_service": "2025-12-31",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "d774751b-805e-4856-9bde-42754d50cd03",
+      "events": "",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev Emmanuel Evans Essien",
+      "attendance": {
+        "men": 180,
+        "women": 200,
+        "junior": 40,
+        "children": 58,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Rev. Charles Coffie",
+      "sermonTopic": "Finishing with Praise and Entering with Purpose",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2025-12-31",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Watch Night Service",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-01-08T03:22:51.53295+00:00"
+  },
+  {
+    "id": "666140ed-5d04-4ec2-ba96-09587e90251d",
+    "date_of_service": "2025-12-28",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "666140ed-5d04-4ec2-ba96-09587e90251d",
+      "events": "It is essential for every Christian to adorn themselves with the truth in their speech. speech.",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev Emmanuel Evans Essien",
+      "attendance": {
+        "men": 100,
+        "women": 100,
+        "junior": 6,
+        "children": 5,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Rev. Charles Coffie",
+      "memoryVerse": "",
+      "sermonTopic": "Speaking the Truth in all Times",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2025-12-28",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Confirmation Service",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "7 Young girls we confirmed into full Membership the names are as follows:"
+    },
+    "created_at": "2026-01-08T03:46:06.664971+00:00"
+  },
+  {
+    "id": "a9839a7f-e0ff-45f2-aaf4-019b20953e41",
+    "date_of_service": "2025-12-17",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "a9839a7f-e0ff-45f2-aaf4-019b20953e41",
+      "events": "",
+      "liturgist": "",
+      "officiant": "",
+      "attendance": {
+        "men": 0,
+        "women": 0,
+        "junior": 0,
+        "children": 0,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "preparedBy": "",
+      "sermonTopic": "",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [],
+      "visitorsList": [],
+      "dateOfService": "2025-12-17",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2025-12-17T15:52:31.236157+00:00"
+  },
+  {
+    "id": "3d10e40f-9b0a-4722-bac4-b89f1185f863",
+    "date_of_service": "2026-01-04",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "3d10e40f-9b0a-4722-bac4-b89f1185f863",
+      "events": "",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev Emmanuel Evans Essien",
+      "attendance": {
+        "men": 125,
+        "women": 169,
+        "junior": 45,
+        "children": 23,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Rev. Charles Coffie",
+      "memoryVerse": "",
+      "sermonTopic": "The Word Reveals Divine Light and Life",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-01-04",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Covenant Service",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "First sunday of the new year"
+    },
+    "created_at": "2026-01-08T03:12:54.72241+00:00"
+  },
+  {
+    "id": "15106dc8-9442-4824-b010-399996f937d8",
+    "date_of_service": "2025-12-21",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "15106dc8-9442-4824-b010-399996f937d8",
+      "events": "",
+      "liturgist": "Ev. Stephen O. Frimpong",
+      "officiant": "Rev Charles Coffie",
+      "attendance": {
+        "men": 89,
+        "women": 45,
+        "junior": 0,
+        "children": 23,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Rev. Charles Coffie",
+      "memoryVerse": "",
+      "sermonTopic": "Speaking the Truth in all Times",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2025-12-21",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "service of Nine Lessons and Carols",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-01-08T03:53:13.335531+00:00"
+  },
+  {
+    "id": "58c664c9-3d77-4f92-9d5a-0a3de59a189c",
+    "date_of_service": "2025-12-14",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "58c664c9-3d77-4f92-9d5a-0a3de59a189c",
+      "events": "",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Pastor Dr. Eric Halett",
+      "attendance": {
+        "men": 56,
+        "women": 89,
+        "junior": 0,
+        "children": 0,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Rev. Charles Coffie",
+      "sermonTopic": "Preparing for His Coming",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [
+        {
+          "from": "Wesleyan Church of Canada",
+          "name": "Pastor Dr. Eric Halett",
+          "reason": "",
+          "position": "District Superintendent"
+        }
+      ],
+      "dateOfService": "2025-12-14",
+      "donationsList": [],
+      "announcementsBy": "Bro. James Baah",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "The big question is: what do you do when you are expecting someone very important?"
+    },
+    "created_at": "2025-12-17T11:27:56.304591+00:00"
+  },
+  {
+    "id": "d5d35905-ba26-4c57-a196-2b9854cc90c4",
+    "date_of_service": "2026-01-11",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "d5d35905-ba26-4c57-a196-2b9854cc90c4",
+      "events": "Induction of New Leaders And Appreciation Of Outgoing Leaders.",
+      "liturgist": "BRO AUGUSTINE BIO",
+      "officiant": "SIS ADRIANA HAMMOND",
+      "attendance": {
+        "men": 144,
+        "women": 143,
+        "junior": 0,
+        "children": 64,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "KENNEDY DWUMFOUR",
+      "memoryVerse": "MARK 1 :4-11",
+      "sermonTopic": "CALLED AND ANOINTED FOR PURPOSE",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [
+        {
+          "from": "Calvary",
+          "name": "Francis",
+          "reason": "",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-01-11",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "The outgoing stewards were presented with service awards. Sis. Adraiana Hammond (Steward Welfare), Bro. Benjamin Kwofie (Finance), and Bro. George Oduro (Admin) were among those honoured. Additionally, plaques were awarded to members who went above and beyond in their sacrifices for the church.\n\nThe following brothers received awards for guaranteeing the manse: Bro. Jacob Kumi and Bro. Peter Kumah, who now resides in Ghana. Other plaques were awarded to brothers and sisters who used their personal property to secure the mortgage for our church at 69 Milvan Drive, North York. The recipients included Mrs. Benjamin Kwofie, Mrs. Elizabeth Kwofie, Mr. Charles Kwofie, Mrs. Catherine Kwofie, Mrs. Eric Sasu Somuah, Sis. Vera Somuah, Dr. David Lartey, and Sis. Alberta Lartey. They were recognized and appreciated for their dedicated service to the church."
+    },
+    "created_at": "2026-01-12T04:39:07.608311+00:00"
+  },
+  {
+    "id": "ca4a98d5-4ec6-40f1-a53f-5f0e37471b3e",
+    "date_of_service": "2026-01-18",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "ca4a98d5-4ec6-40f1-a53f-5f0e37471b3e",
+      "events": "Presentation of Presents from various society and organizations to Rev Akwasi Boateng",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Rev Akwasi Boateng",
+      "attendance": {
+        "men": 162,
+        "women": 140,
+        "junior": 0,
+        "children": 55,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "KENNEDY DWUMFOUR",
+      "memoryVerse": "2 Samuel 7:18",
+      "sermonTopic": "This Far By His Grace",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Thanksgiving"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-01-18",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "A post-ordination thanksgiving service was held for Rev. Akwasi Boateng upon completing three years of probation. Rev. Akwasi Boateng is the Minister in charge at Ebenezer Methodist Church in Hamilton. The ministers present included Very Rev. Emmanuel Evans Essien(Superintendent Minister-Canada Circuit, Very Rev. Albert Kwame Appiah, Rev. Ebo Quinoo from the Newark, NJ Circuit, Rev. Grace Sarfo Twum Antwi, Rev. Sylvester O. Anash, Rev. Lawrence Nyarko, Rev. Charles Coffie, and Rev. Eric Nyarko."
+    },
+    "created_at": "2026-01-19T05:13:53.274814+00:00"
+  },
+  {
+    "id": "249c9f0c-20f1-462b-9095-170bb85e72ab",
+    "date_of_service": "2026-01-25",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "249c9f0c-20f1-462b-9095-170bb85e72ab",
+      "events": "",
+      "liturgist": "Sis Elizabeth Kwoffie",
+      "officiant": "Evang Stephen Opoku Frimpong",
+      "attendance": {
+        "men": 77,
+        "women": 80,
+        "junior": 0,
+        "children": 47,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "KENNEDY DWUMFOUR",
+      "memoryVerse": "2 Timothy 3:10-17, 2 Peter 1:12-21",
+      "sermonTopic": "The Authority And Inspiration of Scripture",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-01-25",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "The service was conducted on Zoom due to a severe weather warning. A snowstorm was predicted, prompting the executive to transition the service online, as many churches in the region had done. The service was well attended."
+    },
+    "created_at": "2026-01-25T16:03:47.874251+00:00"
+  },
+  {
+    "id": "d1895f0e-6980-4d8b-b893-bf85b2608262",
+    "date_of_service": "2026-02-22",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "d1895f0e-6980-4d8b-b893-bf85b2608262",
+      "events": "Social Talk: The workshop focused on the 30-year declaration of Black History Month by the government of Canada. The workshop was led by Sis. Liz Okai",
+      "liturgist": "Bro Dacosta Owusu Agyemang",
+      "officiant": "Rev Charles Coffie",
+      "attendance": {
+        "men": 123,
+        "women": 132,
+        "junior": 0,
+        "children": 77,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "KENNEDY DWUMFOUR",
+      "memoryVerse": "James 1:21-25",
+      "sermonTopic": "The Significance of Studying All Scripture",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-02-22",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "This event was part of the Ontario Heritage Office. It was sponsored by the Govement of Canada"
+    },
+    "created_at": "2026-02-22T16:35:41.156348+00:00"
+  },
+  {
+    "id": "d58e4d5e-bf22-4189-815c-b5a732fb04b2",
+    "date_of_service": "2026-02-01",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "d58e4d5e-bf22-4189-815c-b5a732fb04b2",
+      "events": "Communion , Prayers for Children, Offering for our brother who had an accident and Invitation to Georgia Adjei Gospel Concert at Assemblies Of God.",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev Emmanuel E Essien",
+      "attendance": {
+        "men": 119,
+        "women": 135,
+        "junior": 0,
+        "children": 25,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "KENNEDY DWUMFOUR",
+      "memoryVerse": "Luke 4: 38-39",
+      "sermonTopic": "The Healing Power Of the Word And Spirit",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Communion"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-02-01",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-02-02T03:15:26.200234+00:00"
+  },
+  {
+    "id": "0ec1c228-cbb5-497d-ad76-fd559f4b2903",
+    "date_of_service": "2026-02-08",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "0ec1c228-cbb5-497d-ad76-fd559f4b2903",
+      "events": "Health Talk",
+      "liturgist": "Bro George Acheampong",
+      "officiant": "Bro Eric Somuah",
+      "attendance": {
+        "men": 99,
+        "women": 127,
+        "junior": 0,
+        "children": 33,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "KENNEDY DWUMFOUR",
+      "memoryVerse": "Exodus 15:22-27",
+      "sermonTopic": "The Lord Our Healer",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-02-08",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-02-09T15:09:38.442156+00:00"
+  },
+  {
+    "id": "78ea5999-f227-46c8-85e7-7fffa0f6a862",
+    "date_of_service": "2026-02-15",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "78ea5999-f227-46c8-85e7-7fffa0f6a862",
+      "events": "Social Talk about Black History, Circuit MYF induction. Ms Liza Arnason was the guest speaker of the occasion. It was a very informative and empowering service.",
+      "liturgist": "Bro Michael Obeng",
+      "officiant": "Rev Emmanuel Evans Essien",
+      "attendance": {
+        "men": 118,
+        "women": 162,
+        "junior": 0,
+        "children": 64,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy  Dwumfour",
+      "memoryVerse": "",
+      "sermonTopic": "Inter-Faith Dialogue",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-02-15",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "It was the centenary thanksgiving service for Maame Hanna Prempeh."
+    },
+    "created_at": "2026-02-15T16:32:10.03505+00:00"
+  },
+  {
+    "id": "0aeec1dc-ee5a-4392-96a4-f38eef5eebf5",
+    "date_of_service": "2026-03-01",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "0aeec1dc-ee5a-4392-96a4-f38eef5eebf5",
+      "events": "",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 114,
+        "women": 195,
+        "junior": 0,
+        "children": 0,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "Mark 8:13-38",
+      "sermonTopic": "Turning Towards the Promise: Repentance as a Journey Of Faith",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Communion"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-03-01",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-03-01T16:36:06.746787+00:00"
+  },
+  {
+    "id": "89e4e659-c4ca-4327-949e-9113eead6258",
+    "date_of_service": "2026-03-01",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "89e4e659-c4ca-4327-949e-9113eead6258",
+      "events": "",
+      "liturgist": "Rev. Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 1,
+        "women": 1,
+        "junior": 1,
+        "children": 1,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Evg. Stephen Opoku Frimpong",
+      "memoryVerse": "Genesis 17:1",
+      "sermonTopic": "Turning Towards the Promise: Repentance as a journey of Faith.",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Communion"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-03-01",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "It is Abraham walking before God, receiving a new name, trusting in a promise his body could not support. It is Paul being pressed and perplexed, yet not losing heart, fixing his eyes on the eternal and saying 'I believe.' It is the disciple who hears Jesus' call to self-denial and, choosing to lose the life of self-sufficiency, finds the life that is truly life."
+    },
+    "created_at": "2026-03-01T18:02:55.198487+00:00"
+  },
+  {
+    "id": "1be17c15-6977-4d3a-b665-ab17f674ba55",
+    "date_of_service": "2026-03-08",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "1be17c15-6977-4d3a-b665-ab17f674ba55",
+      "events": "",
+      "liturgist": "Evg. Stephen O. Frimpong",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 102,
+        "women": 129,
+        "junior": 0,
+        "children": 93,
+        "visitors": 1,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "John 2:13-22",
+      "sermonTopic": "The word Renews and restore  the convenant",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Lay Movement"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-03-08",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-03-08T17:58:24.918134+00:00"
+  },
+  {
+    "id": "7f8e8376-84ee-4d3e-af95-04a4834bbf9b",
+    "date_of_service": "2026-03-15",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "7f8e8376-84ee-4d3e-af95-04a4834bbf9b",
+      "events": "2026 Harvest Launch",
+      "liturgist": "Bro. Nana Akwasi Ampofo",
+      "officiant": "Bro Samuel Okyere",
+      "attendance": {
+        "men": 114,
+        "women": 131,
+        "junior": 1,
+        "children": 76,
+        "visitors": 5,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "John 3:16",
+      "sermonTopic": "The Word Heals the Spiritually Broken",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Lay Movement"
+      ],
+      "visitorsList": [
+        {
+          "from": "Methodist",
+          "name": "Myron Hene",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Junior",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Yeboah",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "Methodist",
+          "name": "Asafomaame Owusu",
+          "reason": "Visit",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-03-15",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-03-15T16:04:40.838083+00:00"
+  },
+  {
+    "id": "684b9d18-c808-470e-9854-c9429fff365b",
+    "date_of_service": "2026-03-08",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "684b9d18-c808-470e-9854-c9429fff365b",
+      "events": "Prayers for Ghana, MGF Cultural display,Ghana National Anthem by AMB",
+      "liturgist": "Evg. Stephen Opoku Frimpong",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 113,
+        "women": 129,
+        "junior": 0,
+        "children": 96,
+        "visitors": 1,
+        "catechumens": 0
+      },
+      "noDonation": false,
+      "noVisitors": false,
+      "preparedBy": "Kennedy  Dwumfour/ Evg.Stephen Opoku Frimpong",
+      "memoryVerse": "Nehemiah 1:1-5",
+      "sermonTopic": "The Word Renews and Restores the Covenant",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "",
+          "name": "Eric Frimpong",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Nina Bonsu",
+          "reason": "To join us",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-03-08",
+      "donationsList": [
+        {
+          "donor": "Agyeiwaa",
+          "amount": 1,
+          "description": "Scalf"
+        }
+      ],
+      "announcementsBy": "",
+      "serviceTypeOther": "Cultural Sunday",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "Celebration of 99th birthday (Maame Jane)"
+    },
+    "created_at": "2026-03-08T17:41:14.09642+00:00"
+  },
+  {
+    "id": "65428826-f294-49b1-a2fd-c9986c85fdf2",
+    "date_of_service": "2026-03-22",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "65428826-f294-49b1-a2fd-c9986c85fdf2",
+      "events": "Children’s Day Celebration",
+      "liturgist": "Sis. Arielle Coffie",
+      "officiant": "Sis. Roselyn Yeboah",
+      "attendance": {
+        "men": 88,
+        "women": 114,
+        "junior": 1,
+        "children": 79,
+        "visitors": 2,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "John 11:25",
+      "sermonTopic": "The Word breathes Life into Dry Bones",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "Ghana",
+          "name": "Nana Kwadwo Bediako Amamfe",
+          "reason": "Came to visit",
+          "position": ""
+        },
+        {
+          "from": "Ghana",
+          "name": "Nana Kwadwo Bediako’s wife",
+          "reason": "Visit",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-03-22",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Children’s Day",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-03-22T17:11:23.197439+00:00"
+  },
+  {
+    "id": "cf9de6a0-381e-4081-8b65-338853e20b83",
+    "date_of_service": "2026-03-29",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "cf9de6a0-381e-4081-8b65-338853e20b83",
+      "events": "Ministration from Singing Band",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Rev Charles Coffie",
+      "attendance": {
+        "men": 138,
+        "women": 157,
+        "junior": 0,
+        "children": 60,
+        "visitors": 6,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Kennedy  Dwumfour",
+      "memoryVerse": "Luke 19:28",
+      "sermonTopic": "Walking In Humble Obedience: The King who Serves",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "",
+          "name": "Dorcas Agyemang",
+          "reason": "To worship with Us",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Isaac Oppong",
+          "reason": "visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Bernice Asare Bediako",
+          "reason": "visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Kwabena Owusu",
+          "reason": "To worship with us",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Emmanuel Acheampong",
+          "reason": "visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Yaw",
+          "reason": "to worship",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-03-29",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Palm Sunday",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-03-30T13:26:16.974208+00:00"
+  },
+  {
+    "id": "a32ed5ce-bb38-4efe-bf48-3c35cb48e920",
+    "date_of_service": "2026-04-03",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "a32ed5ce-bb38-4efe-bf48-3c35cb48e920",
+      "events": "Seven  Words On the Cross",
+      "liturgist": "Evg. Stephen Opoku Frimpong",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 98,
+        "women": 131,
+        "junior": 0,
+        "children": 40,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "",
+      "sermonTopic": "Walking in the Word through the Cross: Equipped by Sacrifice",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-04-03",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Good  Friday",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-04-03T15:23:35.187149+00:00"
+  },
+  {
+    "id": "eff312c2-02bb-4ee1-9371-f1a2fbf44a1a",
+    "date_of_service": "2026-05-10",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "eff312c2-02bb-4ee1-9371-f1a2fbf44a1a",
+      "events": "Mothers’ Day, Mini Harvest,",
+      "liturgist": "Sis. Vera Somuah",
+      "officiant": "Asafomaame Gertrude Appiah",
+      "attendance": {
+        "men": 97,
+        "women": 117,
+        "junior": 0,
+        "children": 47,
+        "visitors": 3,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "Ephesians 4:15",
+      "sermonTopic": "The Word Corrects and Guides in Love",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "Methodist",
+          "name": "Vincent",
+          "reason": "Came to join the Church",
+          "position": ""
+        },
+        {
+          "from": "Ghana",
+          "name": "Thomas",
+          "reason": "Came to visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Kojo",
+          "reason": "Came to visit",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-05-10",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Mini Harvest, Mothers’ Day",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-05-10T15:19:18.659833+00:00"
+  },
+  {
+    "id": "c7fa82eb-730b-4e4d-9ad3-8cb80ee6b800",
+    "date_of_service": "2026-06-14",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "c7fa82eb-730b-4e4d-9ad3-8cb80ee6b800",
+      "events": "",
+      "liturgist": "Rev. Charles Coffie",
+      "officiant": "Rev. Sylvester O. Ansah",
+      "attendance": {
+        "men": 139,
+        "women": 178,
+        "junior": 1,
+        "children": 74,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Evg. Stephen Opoku Frimpong",
+      "memoryVerse": "2 Corinthians 5:17",
+      "sermonTopic": "The Word Nurtures Spiritual Growth in God’s Kingdom",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "",
+          "name": "Lauretta Marfo",
+          "reason": "Joining the Church",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Mr. Appiah",
+          "reason": "Joining the Church",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Kyei",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Nana Opoku Fosu",
+          "reason": "Visit",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-06-14",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Guild Week Thanksgiving",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "Guild Week Thanksgiving Service"
+    },
+    "created_at": "2026-06-14T15:55:09.077388+00:00"
+  },
+  {
+    "id": "79016c3a-6c9e-4f53-9eac-9ec89ef4a729",
+    "date_of_service": "2026-04-05",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "79016c3a-6c9e-4f53-9eac-9ec89ef4a729",
+      "events": "Resurrection Sunday, Dr ABBA Ocran (Northern America Diocese Rep to Conference visited us)",
+      "liturgist": "Rev. Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 115,
+        "women": 194,
+        "junior": 0,
+        "children": 61,
+        "visitors": 8,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Evg. Stephen Opoku Frimpong",
+      "memoryVerse": "John 20:1-18",
+      "sermonTopic": "The Word Teaches New Life in Christ",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Communion",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "Methodist",
+          "name": "Mrs Eddie",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "Methodist",
+          "name": "Joshua Eddie",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Bismark Osei",
+          "reason": "Worship",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Stella Gaisie",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Kwabena Nsiah",
+          "reason": "Worship",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Henrietta Oppong",
+          "reason": "Worship",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Derrick Kwakye",
+          "reason": "Worship",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Awotwi",
+          "reason": "Worship",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-04-05",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Easter Sunday",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "A trophy was presented to Saturday Born members for emerging winners for the Harvest Launch Day born harvest, honouring of Bro Daniel Kwabena Owusu (Past Men’s Fellowship Diocesan Chairman) by MMF, honouring of  Sis. Liz Ocran by the MWF"
+    },
+    "created_at": "2026-04-05T15:45:32.682659+00:00"
+  },
+  {
+    "id": "84ccea89-59df-4dc4-ab3b-80961f726884",
+    "date_of_service": "2026-05-31",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "84ccea89-59df-4dc4-ab3b-80961f726884",
+      "events": "Trinity Sunday, Vigil for or Sis. Emmanuella Essien,",
+      "liturgist": "Bro. Prince Aidoo",
+      "officiant": "Evg. Stephen Opoku Frimpong",
+      "attendance": {
+        "men": 87,
+        "women": 105,
+        "junior": 0,
+        "children": 57,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "Roman s 8:14",
+      "sermonTopic": "Walking in the fullness of the Triune God",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-05-31",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Trinity Sunday",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-05-31T16:10:07.591831+00:00"
+  },
+  {
+    "id": "b30fe245-8966-40c6-9af2-386c68b1410e",
+    "date_of_service": "2026-06-21",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "b30fe245-8966-40c6-9af2-386c68b1410e",
+      "events": "Prayers ahead of the mid year revival",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 122,
+        "women": 141,
+        "junior": 0,
+        "children": 67,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "",
+      "memoryVerse": "mathew 11:28",
+      "sermonTopic": "The word Reproves sin",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Revival/Prayer Sunday"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-06-21",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-06-21T16:16:20.785595+00:00"
+  },
+  {
+    "id": "d69b1754-c7a6-46b1-9043-7840d1b512cb",
+    "date_of_service": "2026-07-05",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "d69b1754-c7a6-46b1-9043-7840d1b512cb",
+      "events": "Lay movement week (5-10 July)",
+      "liturgist": "Rev. Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 109,
+        "women": 171,
+        "junior": 1,
+        "children": 89,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "Mark 6:7",
+      "sermonTopic": "The Word Trains For Good Works",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Communion"
+      ],
+      "visitorsList": [
+        {
+          "from": "Nkawkaw Diocese",
+          "name": "Evans Antwi Boasiako",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "France",
+          "name": "Elizabeth",
+          "reason": "Visit",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-07-05",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-07-05T15:51:26.932875+00:00"
+  },
+  {
+    "id": "b7c491a4-4dc0-40c5-9996-f03f3f373109",
+    "date_of_service": "2026-07-12",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "b7c491a4-4dc0-40c5-9996-f03f3f373109",
+      "events": "",
+      "liturgist": "Very Rev.Thomas Atta-Akosah",
+      "officiant": "Rt. Rev Dr Samuel Edubate Nketsia",
+      "attendance": {
+        "men": 150,
+        "women": 170,
+        "junior": 0,
+        "children": 97,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "Mark 6:14",
+      "sermonTopic": "The words calls us to walk in prepared works",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Thanksgiving",
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-07-12",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-07-19T15:17:25.010874+00:00"
+  },
+  {
+    "id": "98553dc1-f359-4576-ad7d-627be5bef4b6",
+    "date_of_service": "2026-07-19",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "98553dc1-f359-4576-ad7d-627be5bef4b6",
+      "events": "Young People’s Week",
+      "liturgist": "Bro. Alfred Bekoe- Wurapa",
+      "officiant": "Evg. Stephen Opoku Frimpong",
+      "attendance": {
+        "men": 115,
+        "women": 142,
+        "junior": 0,
+        "children": 76,
+        "visitors": 2,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Evg. Stephen Opoku Frimpong",
+      "memoryVerse": "2 Tim. 1:6",
+      "sermonTopic": "Growing into Good Works through the Word",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Youth Sunday"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-07-19",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-07-19T15:58:38.925928+00:00"
+  },
+  {
+    "id": "c583ebbb-6895-4c84-ae10-c0cdd630f9a2",
+    "date_of_service": "2026-04-12",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "c583ebbb-6895-4c84-ae10-c0cdd630f9a2",
+      "events": "Second Sunday After Easter, Leaders’ Meeting after Service to receive new members, Synod Appeal",
+      "liturgist": "Bro Simon Aboagye",
+      "officiant": "Sis Elizabeth Kwofie",
+      "attendance": {
+        "men": 103,
+        "women": 152,
+        "junior": 2,
+        "children": 92,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Kennedy  Dwumfour/ Evg.Stephen Opoku Frimpong",
+      "memoryVerse": "John 20:29",
+      "sermonTopic": "The word corrects doubt and strenghthens faith",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [
+        {
+          "from": "Methodist",
+          "name": "Gladys",
+          "reason": "Worship with us",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Kwabena Appiah",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Awurakua Appiah",
+          "reason": "",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Afiahemaa Appiah",
+          "reason": "",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Kwabena Nyarko Appia",
+          "reason": "",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Kwabena Agyekum Appia",
+          "reason": "",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-04-12",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-04-12T15:23:08.039642+00:00"
+  },
+  {
+    "id": "e5bd5909-a4d8-4bd9-bf59-6504e52a35f3",
+    "date_of_service": "2026-04-19",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "e5bd5909-a4d8-4bd9-bf59-6504e52a35f3",
+      "events": "Immigration Talk",
+      "liturgist": "Bro George Acheampong",
+      "officiant": "Bro Agyen Frimpong",
+      "attendance": {
+        "men": 136,
+        "women": 122,
+        "junior": 0,
+        "children": 54,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "",
+      "sermonTopic": "The Words Opens our Eyes to Christ",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-04-19",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Immigration Talk",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-04-19T15:35:28.856755+00:00"
+  },
+  {
+    "id": "b0019e55-a8ea-42d9-9605-a0925ff9a8a3",
+    "date_of_service": "2026-05-24",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "b0019e55-a8ea-42d9-9605-a0925ff9a8a3",
+      "events": "Pentecost Sunday",
+      "liturgist": "Bro. Simon Aboagye",
+      "officiant": "Rev Charles Cofffie",
+      "attendance": {
+        "men": 133,
+        "women": 151,
+        "junior": 0,
+        "children": 58,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "John 16:12-15",
+      "sermonTopic": "The Holy Spirit And The IIumination of the Word",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-05-24",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "1minute silence for our late sister Emmanuella Essien"
+    },
+    "created_at": "2026-05-24T15:52:28.519497+00:00"
+  },
+  {
+    "id": "de7fed68-9f20-4f86-872e-f55dfab8517c",
+    "date_of_service": "2026-04-26",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "de7fed68-9f20-4f86-872e-f55dfab8517c",
+      "events": "Ministration from Church Choir, Launching of App, Appeal to support the choir",
+      "liturgist": "BRO AUGUSTINE BIO",
+      "officiant": "Rev Charles Coffie",
+      "attendance": {
+        "men": 132,
+        "women": 195,
+        "junior": 0,
+        "children": 67,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "",
+      "memoryVerse": "",
+      "sermonTopic": "Focusing on God's Word in Good or Difficult Times",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-04-26",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "28th Gmct Choir Anniversary",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": "The Church choir was celebrating 28 years Anniversary"
+    },
+    "created_at": "2026-04-27T15:07:54.503543+00:00"
+  },
+  {
+    "id": "775af299-da29-4c6d-9cea-808b176af0d8",
+    "date_of_service": "2026-05-03",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "775af299-da29-4c6d-9cea-808b176af0d8",
+      "events": "Prayers for YASA parents",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 132,
+        "women": 152,
+        "junior": 0,
+        "children": 24,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "The Words Trains Us to Bear Fruit",
+      "memoryVerse": "John 15 : 5",
+      "sermonTopic": "The Word Trains Us to Bear Fruit",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Communion"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-05-03",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-05-03T15:46:26.556302+00:00"
+  },
+  {
+    "id": "0bcaa966-df11-432b-af7e-83566629c1b0",
+    "date_of_service": "2026-05-17",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "0bcaa966-df11-432b-af7e-83566629c1b0",
+      "events": "Men's Week Celebration Thanksgiving service",
+      "liturgist": "Bro.Ebenezer Acquah",
+      "officiant": "Bro. Eric Somuah",
+      "attendance": {
+        "men": 43,
+        "women": 91,
+        "junior": 0,
+        "children": 31,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "1 John 5:9-13",
+      "sermonTopic": "The Word Sanctifies and prepares for Mission",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-05-17",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-05-24T14:41:02.7869+00:00"
+  },
+  {
+    "id": "fa21e377-9074-4815-89b3-9ae2fede9a4b",
+    "date_of_service": "2026-06-07",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "fa21e377-9074-4815-89b3-9ae2fede9a4b",
+      "events": "",
+      "liturgist": "Stephen Opoku Frimpong",
+      "officiant": "Very Rev. Dr. Joseph O. Atuahene",
+      "attendance": {
+        "men": 143,
+        "women": 215,
+        "junior": 1,
+        "children": 1,
+        "visitors": 5,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "",
+      "sermonTopic": "The Word Trains Us for Wise Living",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Communion"
+      ],
+      "visitorsList": [
+        {
+          "from": "",
+          "name": "Christopher",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Philip",
+          "reason": "Joining",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Mr. Sawyer",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Mrs Sawyer",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Mrs Sawyer daughter",
+          "reason": "Visit",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-06-07",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-06-07T16:47:54.073163+00:00"
+  },
+  {
+    "id": "11ec6509-33f4-4ff8-8733-363834d1413a",
+    "date_of_service": "2026-06-28",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "11ec6509-33f4-4ff8-8733-363834d1413a",
+      "events": "Unveiling of Trumpets for the AMB",
+      "liturgist": "Rev. Charles Coffie",
+      "officiant": "Very Rev. Dr. Jacob W. French",
+      "attendance": {
+        "men": 102,
+        "women": 144,
+        "junior": 1,
+        "children": 69,
+        "visitors": 2,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "James 2:17",
+      "sermonTopic": "Faith Without Works is Dead",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Other",
+        "Divine Service"
+      ],
+      "visitorsList": [
+        {
+          "from": "Methodist",
+          "name": "Esther Nyarko-Agyemang",
+          "reason": "To join the Church",
+          "position": ""
+        },
+        {
+          "from": "Methodist",
+          "name": "Ante Cecilia",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Akua Amankwaa",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Serwaa Yeboa",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Maa Doris",
+          "reason": "Visit",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Esther",
+          "reason": "Visit",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-06-28",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Teaching Service",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-06-28T16:36:39.719848+00:00"
+  },
+  {
+    "id": "4f02da37-336b-41b7-812b-8efdaa404fe0",
+    "date_of_service": "2026-07-26",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "4f02da37-336b-41b7-812b-8efdaa404fe0",
+      "events": "",
+      "liturgist": "Evg. Stephen Opoku Frimpong",
+      "officiant": "Very Rev.Dr Joseph O.Atuahene",
+      "attendance": {
+        "men": 84,
+        "women": 110,
+        "junior": 0,
+        "children": 73,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "Amos 5:21-24 , Isaiah 1:22:24",
+      "sermonTopic": "Scripture And Social Transformation",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "Ghana",
+          "name": "Caleb Wiredu",
+          "reason": "worship",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-07-26",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Teaching Service",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-07-26T15:11:53.636545+00:00"
+  },
+  {
+    "id": "23520066-f236-497b-ae42-0c83943d55af",
+    "date_of_service": "2026-08-02",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "23520066-f236-497b-ae42-0c83943d55af",
+      "events": "",
+      "liturgist": "Rev. Charles Coffie",
+      "officiant": "Very Rev. Emmanuel E. Essien",
+      "attendance": {
+        "men": 140,
+        "women": 186,
+        "junior": 0,
+        "children": 59,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Evg. Stephen Opoku Frimpong",
+      "memoryVerse": "John 6:35",
+      "sermonTopic": "Hungering for the Bread of Life to do Good",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Communion",
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-08-02",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-08-02T15:32:45.804325+00:00"
+  },
+  {
+    "id": "298dc4b9-c90c-44f2-a4c5-282807cacb13",
+    "date_of_service": "2026-08-23",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "298dc4b9-c90c-44f2-a4c5-282807cacb13",
+      "events": "",
+      "liturgist": "Sis. Nana Serwah Owusu Atuahene",
+      "officiant": "Bro. Evans Kwame Acheampong",
+      "attendance": {
+        "men": 83,
+        "women": 91,
+        "junior": 1,
+        "children": 78,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Stephen Opoku Frimpong",
+      "memoryVerse": "Proverbs 3:11",
+      "sermonTopic": "Preparing to be Thoroughly Equipped: Accepting Rebuke and Correction",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-08-23",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Children’s week celebration Thanksgiving",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-08-23T15:14:17.640183+00:00"
+  },
+  {
+    "id": "1d01c287-2e95-46f0-bebe-17c6d4dca8ca",
+    "date_of_service": "2026-08-16",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "1d01c287-2e95-46f0-bebe-17c6d4dca8ca",
+      "events": "Thanksgiving service",
+      "liturgist": "Bro. James Baah",
+      "officiant": "Bro. Simon Aboagye",
+      "attendance": {
+        "men": 109,
+        "women": 169,
+        "junior": 0,
+        "children": 55,
+        "visitors": 1,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": true,
+      "preparedBy": "Kennedy Dwumfour",
+      "memoryVerse": "John 6:51-58",
+      "sermonTopic": "Walking in Wisdom and Good Works",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service"
+      ],
+      "visitorsList": [],
+      "dateOfService": "2026-08-16",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-08-16T15:28:07.817968+00:00"
+  },
+  {
+    "id": "e166abf6-d019-469b-a8ef-4c5cb6e972fd",
+    "date_of_service": "2026-08-30",
+    "society_name": "Ghana Methodist Church Toronto (GMCT)",
+    "data": {
+      "id": "e166abf6-d019-469b-a8ef-4c5cb6e972fd",
+      "events": "",
+      "liturgist": "Rev Charles Coffie",
+      "officiant": "Very Rev. Emmanuel Evans Essien",
+      "attendance": {
+        "men": 114,
+        "women": 127,
+        "junior": 0,
+        "children": 56,
+        "visitors": 0,
+        "catechumens": 0
+      },
+      "noDonation": true,
+      "noVisitors": false,
+      "preparedBy": "The Words Forms Us into True Doers of Good",
+      "memoryVerse": "",
+      "sermonTopic": "The words forms us into true doers of good",
+      "societyName": "Ghana Methodist Church Toronto (GMCT)",
+      "observations": "",
+      "serviceTypes": [
+        "Divine Service",
+        "Other"
+      ],
+      "visitorsList": [
+        {
+          "from": "",
+          "name": "Kwame Opoku",
+          "reason": "",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Christiana Quaigrain +233 243340221",
+          "reason": "",
+          "position": ""
+        },
+        {
+          "from": "",
+          "name": "Ethan Nunoo 4374402774",
+          "reason": "",
+          "position": ""
+        }
+      ],
+      "dateOfService": "2026-08-30",
+      "donationsList": [],
+      "announcementsBy": "",
+      "serviceTypeOther": "Society Meeting",
+      "newMembersContact": "",
+      "newMembersDetails": "",
+      "worshipHighlights": ""
+    },
+    "created_at": "2026-08-30T17:27:15.997362+00:00"
+  }
+]
