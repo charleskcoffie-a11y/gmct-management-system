@@ -328,16 +328,65 @@ const App: React.FC = () => {
             .catch(err => console.error('Failed to load harvest pledges:', err));
     }, [settings.supabaseUrl, settings.supabaseKey]);
     
+    // --- Scoped Society Datasets ---
+    const societyEntries = useMemo(() => {
+        const targetSocId = (selectedSociety?.id || 'gmct').toLowerCase();
+        return entries.filter(e => {
+            const sId = (e.societyId || 'gmct').toLowerCase();
+            return sId === targetSocId;
+        });
+    }, [entries, selectedSociety]);
+
+    const societyMembers = useMemo(() => {
+        const targetSocId = (selectedSociety?.id || 'gmct').toLowerCase();
+        return members.filter(m => {
+            const sId = (m.societyId || 'gmct').toLowerCase();
+            return sId === targetSocId;
+        });
+    }, [members, selectedSociety]);
+
+    const societyHarvestEntries = useMemo(() => {
+        const targetSocId = (selectedSociety?.id || 'gmct').toLowerCase();
+        return harvestEntries.filter(h => {
+            const sId = (h.societyId || 'gmct').toLowerCase();
+            return sId === targetSocId;
+        });
+    }, [harvestEntries, selectedSociety]);
+
+    const societyWeeklyHistory = useMemo(() => {
+        const targetSocId = (selectedSociety?.id || 'gmct').toLowerCase();
+        return weeklyHistory.filter(h => {
+            const sId = (h.societyId || 'gmct').toLowerCase();
+            return sId === targetSocId;
+        });
+    }, [weeklyHistory, selectedSociety]);
+
+    const societyRequisitions = useMemo(() => {
+        const targetSocId = (selectedSociety?.id || 'gmct').toLowerCase();
+        return requisitions.filter(r => {
+            const sId = (r.societyId || 'gmct').toLowerCase();
+            return sId === targetSocId;
+        });
+    }, [requisitions, selectedSociety]);
+
+    const societyNoNameEntries = useMemo(() => {
+        const targetSocId = (selectedSociety?.id || 'gmct').toLowerCase();
+        return noNameEntries.filter(n => {
+            const sId = (n.societyId || 'gmct').toLowerCase();
+            return sId === targetSocId;
+        });
+    }, [noNameEntries, selectedSociety]);
+
     // --- Derived State ---
-    const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
+    const membersMap = useMemo(() => new Map(societyMembers.map(m => [m.id, m])), [societyMembers]);
     const membersByNameMap = useMemo(() => {
         const map = new Map<string, Member>();
-        members.forEach(member => {
+        societyMembers.forEach(member => {
             const key = (member.name || '').trim().toLowerCase();
             if (key && !map.has(key)) map.set(key, member);
         });
         return map;
-    }, [members]);
+    }, [societyMembers]);
 
     // Keep Day Born filter aligned with type selection
     useEffect(() => {
@@ -374,7 +423,7 @@ const App: React.FC = () => {
             return undefined;
         };
 
-        const filtered = entries.filter(entry => {
+        const filtered = societyEntries.filter(entry => {
             // Soft Delete check
             if (isDeletedFlag(entry.deleted) && !showDeleted) return false;
             
@@ -1024,12 +1073,12 @@ const App: React.FC = () => {
             }
         };
         switch (activeTab) {
-            case 'home': return <Dashboard entries={entries} members={members} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={requisitions} parkingReceipts={parkingReceipts} wesleyHallReceipts={wesleyHallReceipts}/>;
+            case 'home': return <Dashboard entries={societyEntries} members={societyMembers} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={societyRequisitions} parkingReceipts={parkingReceipts} wesleyHallReceipts={wesleyHallReceipts}/>;
             case 'harvest':
                 return (
                     <Harvest 
-                        members={members}
-                        entries={entries.filter(e => {
+                        members={societyMembers}
+                        entries={societyEntries.filter(e => {
                             const type = (e.type || '').toLowerCase();
                             const note = (e.note || '').toLowerCase();
                             const group = (e.groupName || '').toLowerCase();
@@ -1044,7 +1093,7 @@ const App: React.FC = () => {
                         onCreatePledges={async (newPledges) => {
                             // Reload entries from database after pledges are created
                             if (settings.supabaseUrl && settings.supabaseKey) {
-                                const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                                const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id);
                                 setEntries(updatedEntries);
                             }
                         }}
@@ -1053,11 +1102,11 @@ const App: React.FC = () => {
             case 'reports':
                 return (
                     <Reports 
-                        entries={entries}
-                        harvestEntries={harvestEntries}
-                        members={members}
+                        entries={societyEntries}
+                        harvestEntries={societyHarvestEntries}
+                        members={societyMembers}
                         settings={settings}
-                        history={weeklyHistory}
+                        history={societyWeeklyHistory}
                         setHistory={setWeeklyHistory}
                         setEntries={setEntries}
                     />
@@ -1688,11 +1737,11 @@ const App: React.FC = () => {
                         )}
                     </div>
                 );
-            case 'development-fund': return <DevelopmentFund members={members} entries={entries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} currentUser={currentUser} />;
+            case 'development-fund': return <DevelopmentFund members={societyMembers} entries={societyEntries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} currentUser={currentUser} />;
             case 'harvest-pledges':
                 return (
                     <HarvestPledges 
-                        members={members}
+                        members={societyMembers}
                         pledges={harvestPledges}
                         setPledges={setHarvestPledges}
                         settings={settings}
@@ -1700,14 +1749,14 @@ const App: React.FC = () => {
                         currentUser={currentUser}
                     />
                 );
-            case 'no-name': return <NoName entries={noNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
+            case 'no-name': return <NoName entries={societyNoNameEntries} setEntries={setNoNameEntries} settings={settings} currentUser={currentUser} syncStatus={syncStatus} />;
             case 'financial-control': return <FinancialControl monthLocks={monthLocks} setMonthLocks={setMonthLocks} sundayLocks={sundayLocks} setSundayLocks={setSundayLocks} currentUser={currentUser} settings={settings} />;
-            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} entries={entries} developmentEntries={developmentFund} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
+            case 'members': return <Members members={societyMembers} setMembers={setMembers} settings={settings} entries={societyEntries} developmentEntries={developmentFund} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
             case 'day-born':
                 return (
                     <DayBorn
-                        members={members}
-                        entries={entries}
+                        members={societyMembers}
+                        entries={societyEntries}
                         setEntries={setEntries}
                         settings={settings}
                         currentUser={currentUser}
@@ -1719,17 +1768,17 @@ const App: React.FC = () => {
                 return (
                     <Insights
                         // Use the full active dataset (not the Records tab filters)
-                        entries={entries.filter(e => !isDeletedFlag(e.deleted))}
-                        harvestEntries={harvestEntries.filter(h => !h.deleted)}
+                        entries={societyEntries.filter(e => !isDeletedFlag(e.deleted))}
+                        harvestEntries={societyHarvestEntries.filter(h => !h.deleted)}
                         settings={settings}
                     />
                 );
             case 'tax-receipts':
                 return (
                     <TaxReceipts
-                        entries={entries.filter(e => !isDeletedFlag(e.deleted))}
-                        harvestEntries={harvestEntries.filter(h => !h.deleted)}
-                        members={members}
+                        entries={societyEntries.filter(e => !isDeletedFlag(e.deleted))}
+                        harvestEntries={societyHarvestEntries.filter(h => !h.deleted)}
+                        members={societyMembers}
                         settings={settings}
                         selectedSociety={selectedSociety}
                     />
@@ -1753,7 +1802,7 @@ const App: React.FC = () => {
             case 'attendance':
                 return currentUser.role === 'class-leader' ? (
                     <ClassAttendance
-                        members={members}
+                        members={societyMembers}
                         setMembers={setMembers}
                         settings={settings}
                         currentUser={currentUser}
@@ -1778,7 +1827,7 @@ const App: React.FC = () => {
                         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
                             <h3 className="text-lg font-bold">📅 Weekly History</h3>
                         </div>
-                        <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
+                        <WeeklyHistory history={societyWeeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
                     </div>
                 );
             case 'bible-class-attendance':
@@ -1789,15 +1838,15 @@ const App: React.FC = () => {
                 );
             case 'upcoming-birthdays':
                 return (
-                    <UpcomingBirthdays members={members} />
+                    <UpcomingBirthdays members={societyMembers} />
                 );
             case 'e-transfers':
                 return (
                     <ETransfers settings={settings} />
                 );
             // 'history' moved under Reports tab
-            case 'history': return <Reports entries={entries} harvestEntries={harvestEntries} members={members} settings={settings} history={weeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} targetSection={reportsTarget} onConsumeTarget={() => setReportsTarget(null)} />;
-            case 'users': return <UsersTab users={users} setUsers={setUsers} members={members} settings={settings} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
+            case 'history': return <Reports entries={societyEntries} harvestEntries={societyHarvestEntries} members={societyMembers} settings={settings} history={societyWeeklyHistory} setHistory={setWeeklyHistory} setEntries={setEntries} targetSection={reportsTarget} onConsumeTarget={() => setReportsTarget(null)} />;
+            case 'users': return <UsersTab users={users} setUsers={setUsers} members={societyMembers} settings={settings} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={currentUser} classLeaders={classLeaders} setClassLeaders={setClassLeaders} selectedSociety={selectedSociety} onUpdateSocietyFeatures={(socId, newFeatures) => {
                 const target = CANADA_MISSION_SOCIETIES.find(s => s.id === socId);
                 if (target) {

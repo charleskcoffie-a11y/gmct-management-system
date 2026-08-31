@@ -225,36 +225,42 @@ begin
     -- members
     if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'members') then
         alter table public.members add column if not exists society_id text references public.societies(id) default 'gmct';
+        update public.members set society_id = 'gmct' where society_id is null;
         create index if not exists idx_members_society_id on public.members(society_id);
     end if;
 
     -- entries
     if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'entries') then
         alter table public.entries add column if not exists society_id text references public.societies(id) default 'gmct';
+        update public.entries set society_id = 'gmct' where society_id is null;
         create index if not exists idx_entries_society_id on public.entries(society_id);
     end if;
 
     -- harvest_pledges
     if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'harvest_pledges') then
         alter table public.harvest_pledges add column if not exists society_id text references public.societies(id) default 'gmct';
+        update public.harvest_pledges set society_id = 'gmct' where society_id is null;
         create index if not exists idx_harvest_pledges_society_id on public.harvest_pledges(society_id);
     end if;
 
     -- requisitions
     if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'requisitions') then
         alter table public.requisitions add column if not exists society_id text references public.societies(id) default 'gmct';
+        update public.requisitions set society_id = 'gmct' where society_id is null;
         create index if not exists idx_requisitions_society_id on public.requisitions(society_id);
     end if;
 
     -- weekly_history
     if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'weekly_history') then
         alter table public.weekly_history add column if not exists society_id text references public.societies(id) default 'gmct';
+        update public.weekly_history set society_id = 'gmct' where society_id is null;
         create index if not exists idx_weekly_history_society_id on public.weekly_history(society_id);
     end if;
 
     -- app_users
     if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'app_users') then
         alter table public.app_users add column if not exists society_id text references public.societies(id) default 'gmct';
+        update public.app_users set society_id = 'gmct' where society_id is null;
         create index if not exists idx_app_users_society_id on public.app_users(society_id);
     end if;
 end $$;
