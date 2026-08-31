@@ -22,7 +22,7 @@ export const CANADA_MISSION_SOCIETIES: Society[] = [
         province: 'Ontario',
         provinceCode: 'ON',
         isPrimary: true,
-        address: '1907 Wilson Ave, North York, ON M9M 1A9',
+        address: '69 Milvan Drive, North York, ON M9L 1Y8',
         description: 'Main Head Society & Mission Headquarters',
         accentColor: 'indigo',
         features: {

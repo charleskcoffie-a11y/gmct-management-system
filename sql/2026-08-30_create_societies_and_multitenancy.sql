@@ -34,7 +34,7 @@ values
         'Ontario',
         'ON',
         true,
-        '1907 Wilson Ave, North York, ON M9M 1A9',
+        '69 Milvan Drive, North York, ON M9L 1Y8',
         '{"wesleyHall": true, "parking": true, "etransfers": true, "requisitions": true, "harvest": true, "harvestPledges": true, "developmentFund": true, "taxReceipts": true, "assets": true, "organizationFunds": true, "dayBorn": true, "childrensMinistry": true}'::jsonb,
         'indigo'
     ),
