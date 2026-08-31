@@ -562,13 +562,39 @@ const App: React.FC = () => {
     const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#f43f5e', '#0ea5e9', '#8b5cf6'];
 
     // --- Handlers ---
-    const handleLogin = ({ username, password = '', skipPassword = false }: LoginRequest) => {
+    const handleLogin = ({ username, password = '', skipPassword = false, role }: LoginRequest) => {
         console.log('🔐 Login attempt:', { username, role: 'checking...' });
         console.log('  classLeaders in state:', classLeaders.length, classLeaders);
         const normalize = (val: string | undefined) => (val || '').trim().toLowerCase();
-        const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+
+        // Build society-specific fallback users
+        const defaultPassword = selectedSociety.isPrimary ? 'GMCT' : (selectedSociety.societyCode || 'CANADA');
+        const societyFallbackUsers: User[] = [
+            { username: 'Admin', password: defaultPassword, role: 'admin', societyId: selectedSociety.id },
+            { username: 'FinanceTeam', password: defaultPassword, role: 'finance-team', societyId: selectedSociety.id },
+            { username: 'Pastor', password: defaultPassword, role: 'pastor', societyId: selectedSociety.id },
+            { username: 'DataEntry', password: defaultPassword, role: 'data-entry', societyId: selectedSociety.id },
+            { username: 'ClassLeader', role: 'class-leader', societyId: selectedSociety.id },
+        ];
+
+        // Filter users for this society
+        const societyUsers = users.filter(u => {
+            if (u.societyId) {
+                return u.societyId.toLowerCase() === selectedSociety.id.toLowerCase();
+            }
+            return selectedSociety.isPrimary;
+        });
+
+        const mergedUsers = [...societyUsers];
+        for (const fallback of societyFallbackUsers) {
+            if (!mergedUsers.some(u => u.username.toLowerCase() === fallback.username.toLowerCase())) {
+                mergedUsers.push(fallback);
+            }
+        }
+
+        const foundUser = mergedUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         const classLeaderFallback = username.trim().toLowerCase() === 'classleader'
-            ? ({ username: 'ClassLeader', role: 'class-leader' as UserRole })
+            ? ({ username: 'ClassLeader', role: 'class-leader' as UserRole, societyId: selectedSociety.id })
             : null;
         const user = foundUser || classLeaderFallback;
 
@@ -594,7 +620,7 @@ const App: React.FC = () => {
                     setLoginError('Class leader has no assigned class. Contact admin.');
                     return;
                 }
-                const sessionUser = { username: matchedLeaderByUsername.username, role: 'class-leader' as UserRole, assignedClass } as User;
+                const sessionUser = { username: matchedLeaderByUsername.username, role: 'class-leader' as UserRole, assignedClass, societyId: selectedSociety.id } as User;
                 setCurrentUser(sessionUser);
                 setLoginError(null);
                 setActiveTab('attendance');
@@ -632,7 +658,7 @@ const App: React.FC = () => {
                 return;
             }
 
-            const sessionUser = { ...user, assignedClass, role: 'class-leader' as UserRole } as User;
+            const sessionUser = { ...user, assignedClass, role: 'class-leader' as UserRole, societyId: selectedSociety.id } as User;
             setCurrentUser(sessionUser);
             setLoginError(null);
             setActiveTab('attendance');
@@ -646,7 +672,10 @@ const App: React.FC = () => {
         }
 
         const skipAllowed = foundUser.role === 'data-entry';
-        if (!skipPassword && foundUser.password !== password) {
+        const passwordMatches = (foundUser.password === password) ||
+            (foundUser.password?.toLowerCase() === password.trim().toLowerCase());
+
+        if (!skipPassword && !passwordMatches) {
             setLoginError('Invalid username or password.');
             return;
         }
@@ -655,7 +684,7 @@ const App: React.FC = () => {
             return;
         }
 
-        setCurrentUser(foundUser);
+        setCurrentUser({ ...foundUser, societyId: selectedSociety.id });
         setLoginError(null);
         // Intelligent Redirect based on Role
         if (foundUser.role === 'admin' || foundUser.role === 'finance-chair' || foundUser.role === 'pastor') setActiveTab('home');
