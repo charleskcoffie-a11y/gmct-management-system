@@ -232,6 +232,11 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (activeTab !== 'records' || !settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
+        if (!selectedSociety.isPrimary) {
+            setParkingReceipts([]);
+            setWesleyHallReceipts([]);
+            return;
+        }
 
         Promise.all([
             loadParkingReceipts(settings.supabaseUrl, settings.supabaseKey),
@@ -240,7 +245,7 @@ const App: React.FC = () => {
             setParkingReceipts(loadedParkingReceipts);
             setWesleyHallReceipts(loadedWesleyHallReceipts);
         }).catch(err => console.warn('Shared income receipts refresh failed:', err));
-    }, [activeTab, settings.supabaseUrl, settings.supabaseKey, syncStatus.state]);
+    }, [activeTab, settings.supabaseUrl, settings.supabaseKey, syncStatus.state, selectedSociety.isPrimary]);
 
     // --- Seed ClassLeader user to database if it doesn't exist ---
     useEffect(() => {
@@ -542,8 +547,12 @@ const App: React.FC = () => {
             if (endDateFilter && receiptDate > endDateFilter) return false;
             return searchFilter.trim() === '' && classFilter === 'all' && typeFilter === 'all';
         };
-        const activeParkingReceipts = parkingReceipts.filter(receipt => !isDeletedFlag(receipt.deleted) && matchesSharedReceiptFilters(receipt));
-        const activeWesleyHallReceipts = wesleyHallReceipts.filter(receipt => !isDeletedFlag(receipt.deleted) && matchesSharedReceiptFilters(receipt));
+        const activeParkingReceipts = selectedSociety.isPrimary 
+            ? parkingReceipts.filter(receipt => !isDeletedFlag(receipt.deleted) && matchesSharedReceiptFilters(receipt))
+            : [];
+        const activeWesleyHallReceipts = selectedSociety.isPrimary
+            ? wesleyHallReceipts.filter(receipt => !isDeletedFlag(receipt.deleted) && matchesSharedReceiptFilters(receipt))
+            : [];
         const parkingTotal = activeParkingReceipts.reduce((sum, receipt) => sum + toNumericAmount(receipt.amount), 0);
         const wesleyHallTotal = activeWesleyHallReceipts.reduce((sum, receipt) => sum + toNumericAmount(receipt.amount), 0);
         const total = activeEntries.reduce((sum, e) => sum + toNumericAmount(e.amount), 0) + parkingTotal + wesleyHallTotal;
@@ -558,8 +567,10 @@ const App: React.FC = () => {
             const typeKey = normalizeEntryTypeKey(e.type) === 'dayborn' ? 'day-born' : e.type;
             typeDistribution[typeKey] = (typeDistribution[typeKey] || 0) + toNumericAmount(e.amount);
         });
-        typeDistribution.parking = parkingTotal;
-        typeDistribution['wesley-hall'] = wesleyHallTotal;
+        if (selectedSociety.isPrimary) {
+            typeDistribution.parking = parkingTotal;
+            typeDistribution['wesley-hall'] = wesleyHallTotal;
+        }
         
         const chartData = Object.entries(typeDistribution).map(([name, value]) => ({
             name: capitalize(name.replace(/-/g, ' ')),
@@ -567,7 +578,7 @@ const App: React.FC = () => {
         })).sort((a, b) => b.value - a.value);
 
         return { total, count, chartData };
-    }, [filteredAndSortedEntries, parkingReceipts, wesleyHallReceipts, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter]);
+    }, [filteredAndSortedEntries, parkingReceipts, wesleyHallReceipts, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter, selectedSociety.isPrimary]);
 
     const dailyMethodBreakdown = useMemo(() => {
         const normalizeMethodForBalance = (method?: string): 'cash' | 'check' | 'e-transfer' | 'other' => {
