@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Society } from '../types';
 import { CANADA_MISSION_SOCIETIES } from '../constants';
 import { ChurchIcon } from './icons';
@@ -13,6 +13,9 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
     currentSocietyId = 'gmct',
 }) => {
     const [selectedId, setSelectedId] = useState<string>(currentSocietyId);
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     const primarySociety = useMemo(
         () => CANADA_MISSION_SOCIETIES.find(s => s.isPrimary) || CANADA_MISSION_SOCIETIES[0],
@@ -24,21 +27,51 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
         [selectedId, primarySociety]
     );
 
-    // Group societies by province for clean dropdown organization
+    // Filter societies based on search input
+    const filteredSocieties = useMemo(() => {
+        if (!searchQuery.trim()) return CANADA_MISSION_SOCIETIES;
+        const q = searchQuery.toLowerCase().trim();
+        return CANADA_MISSION_SOCIETIES.filter(s =>
+            s.name.toLowerCase().includes(q) ||
+            s.city.toLowerCase().includes(q) ||
+            s.province.toLowerCase().includes(q) ||
+            s.provinceCode.toLowerCase().includes(q) ||
+            s.societyCode.toLowerCase().includes(q) ||
+            s.shortName.toLowerCase().includes(q)
+        );
+    }, [searchQuery]);
+
+    // Group filtered societies by province
     const groupedByProvince = useMemo(() => {
         const map = new Map<string, Society[]>();
-        CANADA_MISSION_SOCIETIES.forEach(s => {
+        filteredSocieties.forEach(s => {
             const list = map.get(s.province) || [];
             list.push(s);
             map.set(s.province, list);
         });
         return Array.from(map.entries()).sort((a, b) => {
-            // Ontario first, then alphabetical
             if (a[0] === 'Ontario') return -1;
             if (b[0] === 'Ontario') return 1;
             return a[0].localeCompare(b[0]);
         });
+    }, [filteredSocieties]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const handleSelectSociety = (soc: Society) => {
+        setSelectedId(soc.id);
+        setIsDropdownOpen(false);
+        setSearchQuery('');
+    };
 
     const handleEnterPortal = () => {
         onSelectSociety(activeSociety);
@@ -51,10 +84,10 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
 
             <div className="relative w-full max-w-xl z-10 my-auto">
                 {/* Modern Glass Card */}
-                <div className="backdrop-blur-xl bg-slate-900/85 border border-white/10 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 md:p-10">
+                <div className="backdrop-blur-xl bg-slate-900/90 border border-white/10 rounded-3xl shadow-2xl overflow-visible p-6 sm:p-8 md:p-10">
                     
                     {/* Header */}
-                    <div className="text-center mb-8">
+                    <div className="text-center mb-6">
                         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-400/30 text-indigo-300 text-xs font-semibold tracking-wider uppercase mb-3">
                             <span>🇨🇦</span> Canada Mission • The Methodist Church Ghana
                         </div>
@@ -62,38 +95,112 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
                             Mission Portal
                         </h1>
                         <p className="text-xs sm:text-sm text-indigo-200/80 mt-1.5">
-                            Select your parish or society to access member and financial services.
+                            Search or select your society to access local church records and administration.
                         </p>
                     </div>
 
-                    {/* Modern Combobox */}
+                    {/* Interactive Searchable Combobox */}
                     <div className="space-y-5">
-                        <div>
+                        <div ref={dropdownRef} className="relative">
                             <label className="block text-xs font-bold uppercase tracking-wider text-indigo-200 mb-2 flex items-center justify-between">
-                                <span>Select Society</span>
-                                <span className="text-[11px] text-indigo-300/80 font-normal">13 Active Branches</span>
+                                <span>Search & Select Society</span>
+                                <span className="text-[11px] text-indigo-300/80 font-normal">
+                                    {filteredSocieties.length} of {CANADA_MISSION_SOCIETIES.length} societies
+                                </span>
                             </label>
-                            
+
+                            {/* Search Input Bar */}
                             <div className="relative">
-                                <select
-                                    value={selectedId}
-                                    onChange={e => setSelectedId(e.target.value)}
-                                    className="w-full bg-slate-950/90 border-2 border-indigo-400/40 hover:border-indigo-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 rounded-2xl px-4 py-3.5 text-sm sm:text-base font-semibold text-white shadow-inner appearance-none cursor-pointer outline-none transition-all pr-12"
-                                >
-                                    {groupedByProvince.map(([prov, socs]) => (
-                                        <optgroup key={prov} label={`📍 ${prov}`} className="bg-slate-900 text-indigo-300 font-bold py-1">
-                                            {socs.map(s => (
-                                                <option key={s.id} value={s.id} className="bg-slate-950 text-white font-medium py-1">
-                                                    {s.name} ({s.city}, {s.provinceCode}) {s.isPrimary ? '⭐ [Head Office]' : `• [${s.societyCode}]`}
-                                                </option>
-                                            ))}
-                                        </optgroup>
-                                    ))}
-                                </select>
-                                <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-indigo-300 text-lg">
-                                    ▾
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-indigo-400">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onFocus={() => setIsDropdownOpen(true)}
+                                    onChange={e => {
+                                        setSearchQuery(e.target.value);
+                                        setIsDropdownOpen(true);
+                                    }}
+                                    placeholder="Type to search (e.g. Toronto, Hamilton, Wesley, Calgary)..."
+                                    className="w-full bg-slate-950/95 border-2 border-indigo-400/40 hover:border-indigo-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 rounded-2xl pl-11 pr-20 py-3.5 text-sm sm:text-base font-semibold text-white shadow-inner placeholder-slate-400 outline-none transition-all"
+                                />
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 gap-1">
+                                    {searchQuery && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSearchQuery('')}
+                                            className="text-xs text-slate-400 hover:text-white px-1.5 py-1 rounded bg-slate-800/80"
+                                            title="Clear search"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                        className="text-indigo-300 hover:text-white p-1 text-base focus:outline-none"
+                                        title="Toggle list"
+                                    >
+                                        {isDropdownOpen ? '▴' : '▾'}
+                                    </button>
                                 </div>
                             </div>
+
+                            {/* Dropdown Menu Popup */}
+                            {isDropdownOpen && (
+                                <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-slate-950/95 border border-indigo-400/30 rounded-2xl shadow-2xl max-h-72 overflow-y-auto backdrop-blur-xl divide-y divide-white/5">
+                                    {groupedByProvince.length > 0 ? (
+                                        groupedByProvince.map(([prov, socs]) => (
+                                            <div key={prov} className="p-2">
+                                                <div className="px-3 py-1 text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
+                                                    📍 {prov}
+                                                </div>
+                                                {socs.map(s => {
+                                                    const isSelected = s.id === selectedId;
+                                                    return (
+                                                        <div
+                                                            key={s.id}
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault();
+                                                                handleSelectSociety(s);
+                                                            }}
+                                                            className={`px-3 py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between ${
+                                                                isSelected
+                                                                    ? 'bg-indigo-600 text-white font-bold'
+                                                                    : 'hover:bg-slate-800/80 text-slate-200'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                                                    isSelected ? 'bg-indigo-800 text-white' : 'bg-slate-800 text-indigo-300 border border-white/5'
+                                                                }`}>
+                                                                    {s.provinceCode}
+                                                                </span>
+                                                                <div className="truncate">
+                                                                    <div className="text-sm truncate">
+                                                                        {s.name} {s.isPrimary && '⭐'}
+                                                                    </div>
+                                                                    <div className={`text-xs ${isSelected ? 'text-indigo-100' : 'text-slate-400'}`}>
+                                                                        {s.city}, {s.province} • [{s.societyCode}]
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            {isSelected && <span className="text-xs shrink-0">✓ Selected</span>}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="p-6 text-center text-sm text-slate-400">
+                                            No society matches "{searchQuery}".
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Selected Society Card Preview */}
