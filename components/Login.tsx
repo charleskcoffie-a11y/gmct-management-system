@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChurchIcon, AdminIcon, FinanceIcon, DataEntryIcon, ClassLeaderIcon, PastorIcon, StatisticianIcon } from './icons';
-import type { User, UserRole, Settings } from '../types';
+import type { User, UserRole, Settings, Society } from '../types';
 
 type LoginRequest = { username: string; password?: string; skipPassword?: boolean; role?: UserRole };
 
@@ -9,6 +9,8 @@ interface LoginProps {
     onLogin: (request: LoginRequest) => void;
     error: string | null;
     settings: Settings;
+    selectedSociety?: Society;
+    onChangeSociety?: () => void;
 }
 
 const roleLabels: Record<UserRole, string> = {
@@ -82,13 +84,16 @@ const roleIconMap: Record<UserRole, { icon: React.ReactNode; color: string; bgCo
     },
 };
 
-const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
+const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selectedSociety, onChangeSociety }) => {
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
     const [selectedUser, setSelectedUser] = useState('');
     const [selectedClass, setSelectedClass] = useState('');
     const [password, setPassword] = useState('');
     const [showUserModal, setShowUserModal] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
+
+    const societyName = selectedSociety?.name || 'GMCT Management System';
+    const societyLocation = selectedSociety ? `${selectedSociety.city}, ${selectedSociety.province}` : 'Toronto, ON';
 
     // Keep emergency local users available when cloud users are empty/restricted.
     const userOptions: User[] = useMemo(() => {
@@ -161,13 +166,34 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings }) => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Sign-in Card */}
                     <div className="backdrop-blur-md bg-white/10 border border-white/10 shadow-2xl rounded-2xl overflow-hidden relative">
-                        <div className="px-8 pt-8 pb-4 flex items-center gap-4">
+                        {/* Society Switcher Top Bar */}
+                        {onChangeSociety && (
+                            <div className="px-8 pt-6 pb-0 flex items-center justify-between text-xs border-b border-white/5 pb-3">
+                                <span className="text-indigo-300 font-semibold flex items-center gap-1.5">
+                                    <span>🇨🇦</span> Canada Mission
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={onChangeSociety}
+                                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 transition-colors"
+                                >
+                                    <span>←</span>
+                                    <span>Switch Society</span>
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="px-8 pt-6 pb-4 flex items-center gap-4">
                             <div className="shrink-0">
                                 <ChurchIcon />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-extrabold tracking-tight">GMCT Management System</h1>
-                                <p className="text-sm text-indigo-100/80">Choose your role to continue</p>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-2xl font-extrabold tracking-tight text-white">{societyName}</h1>
+                                </div>
+                                <p className="text-sm text-indigo-100/80">
+                                    {societyLocation} {selectedSociety?.societyCode && `• [${selectedSociety.societyCode}]`} — Choose your role to continue
+                                </p>
                             </div>
                         </div>
                         <div className="px-8 pb-8 space-y-4">

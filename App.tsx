@@ -15,12 +15,13 @@ import BulkChildrenMinistryModal from './components/BulkChildrenMinistryModal';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST, isEntryWindowOpen, formatMethod } from './utils';
-import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition, ParkingReceipt, WesleyHallReceipt } from './types';
-import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
+import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition, ParkingReceipt, WesleyHallReceipt, Society } from './types';
+import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY, CANADA_MISSION_SOCIETIES, DEFAULT_SOCIETY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, loadParkingReceipts, loadWesleyHallReceipts, saveUserToSupabase, checkEntryDuplicateInSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 import ProfileModal from './components/ProfileModal';
+import SocietySelector from './components/SocietySelector';
 
 // Lazy-load heavier pages to keep the initial bundle smaller
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -118,6 +119,14 @@ const App: React.FC = () => {
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
     const [classLeaders, setClassLeaders] = useState<ClassLeader[]>([]);
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
+
+    // Multi-tenant Canada Mission Society Selection
+    const [selectedSocietyId, setSelectedSocietyId] = useLocalStorage<string>('canada-mission-society-id', 'gmct');
+    const [isSelectingSociety, setIsSelectingSociety] = useState(false);
+
+    const selectedSociety: Society = useMemo(() => {
+        return CANADA_MISSION_SOCIETIES.find(s => s.id === selectedSocietyId) || DEFAULT_SOCIETY;
+    }, [selectedSocietyId]);
 
     const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
     const [developmentFund, setDevelopmentFund] = useState<DevelopmentFundEntry[]>([]);
@@ -871,7 +880,27 @@ const App: React.FC = () => {
     }
 
     if (!currentUser) {
-        return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
+        if (isSelectingSociety) {
+            return (
+                <SocietySelector
+                    currentSocietyId={selectedSocietyId}
+                    onSelectSociety={(soc) => {
+                        setSelectedSocietyId(soc.id);
+                        setIsSelectingSociety(false);
+                    }}
+                />
+            );
+        }
+        return (
+            <Login
+                users={users}
+                onLogin={handleLogin}
+                error={loginError}
+                settings={settings}
+                selectedSociety={selectedSociety}
+                onChangeSociety={() => setIsSelectingSociety(true)}
+            />
+        );
     }
 
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "mens-harvest", "youth-harvest", "youth-harvest-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
@@ -1864,10 +1893,25 @@ const App: React.FC = () => {
         },
     ];
 
+    const isFeatureEnabled = (itemId: string): boolean => {
+        const features = selectedSociety.features || {};
+        if (itemId === 'wesley-hall') return features.wesleyHall !== false;
+        if (itemId === 'parking') return features.parking !== false;
+        if (itemId === 'reports-etransfers' || itemId === 'e-transfers') return features.etransfers !== false;
+        if (itemId === 'requisitions' || itemId === 'my-approvals') return features.requisitions !== false;
+        if (itemId === 'harvest' || itemId === 'harvest-pledges') return features.harvest !== false;
+        if (itemId === 'development-fund') return features.developmentFund !== false;
+        if (itemId === 'tax-receipts') return features.taxReceipts !== false;
+        if (itemId === 'assets') return features.assets !== false;
+        if (itemId === 'organization-funds') return features.organizationFunds !== false;
+        if (itemId === 'day-born') return features.dayBorn !== false;
+        return true;
+    };
+
     const visibleSections = navSections
         .map(section => ({
             ...section,
-            items: section.items.filter(item => item.roles.includes(currentUser.role))
+            items: section.items.filter(item => item.roles.includes(currentUser.role) && isFeatureEnabled(item.id))
         }))
         .filter(section => 
             section.items.length > 0 && section.roles.some(role => currentUser.role === role)
@@ -1876,7 +1920,7 @@ const App: React.FC = () => {
     return (
         <div className="bg-slate-50 min-h-screen font-sans text-slate-900">
             <div className="w-full px-4 sm:px-6 lg:px-8">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings} onPasswordChange={() => setIsPasswordModalOpen(true)}/>
+                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} syncStatus={syncStatus} settings={settings} onPasswordChange={() => setIsPasswordModalOpen(true)} selectedSociety={selectedSociety} onSwitchSociety={() => { setCurrentUser(null); setIsSelectingSociety(true); }}/>
                 {syncStatus.state !== 'synced' && (
                     <div className="no-print mt-2 mb-4 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-sm flex items-center gap-2"
                         style={{

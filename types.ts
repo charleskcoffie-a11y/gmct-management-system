@@ -112,6 +112,39 @@ export interface User {
     role: UserRole;
     classLed?: string; // For class-leader role: which class they manage
     assignedClass?: string; // Alias for classLed (more semantic)
+    societyId?: string; // Multi-tenant society association
+}
+
+export interface SocietyFeatures {
+    wesleyHall?: boolean;
+    parking?: boolean;
+    etransfers?: boolean;
+    requisitions?: boolean;
+    harvest?: boolean;
+    harvestPledges?: boolean;
+    developmentFund?: boolean;
+    taxReceipts?: boolean;
+    assets?: boolean;
+    organizationFunds?: boolean;
+    dayBorn?: boolean;
+    childrensMinistry?: boolean;
+}
+
+export interface Society {
+    id: string; // e.g. 'gmct', 'ebenezer-hamilton'
+    name: string; // e.g. 'Ghana Methodist Church Toronto'
+    shortName: string; // e.g. 'GMCT'
+    societyCode: string; // e.g. 'GMCT', 'EBEN-HAM'
+    city: string; // e.g. 'Toronto'
+    province: string; // e.g. 'Ontario'
+    provinceCode: string; // e.g. 'ON'
+    isPrimary?: boolean; // true for GMCT
+    address?: string;
+    phone?: string;
+    email?: string;
+    features: SocietyFeatures;
+    accentColor?: string;
+    description?: string;
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { sanitizeString } from '../utils';
-import type { Entry, User, SyncStatus, Settings } from '../types';
+import type { Entry, User, SyncStatus, Settings, Society } from '../types';
 import { ChurchIcon } from './icons';
 
 interface HeaderProps {
@@ -13,9 +13,11 @@ interface HeaderProps {
     syncStatus?: SyncStatus;
     settings: Settings;
     onPasswordChange?: () => void;
+    selectedSociety?: Society;
+    onSwitchSociety?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, settings, onPasswordChange }) => {
+const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, settings, onPasswordChange, selectedSociety, onSwitchSociety }) => {
     
     // Debug: Log logo status
     React.useEffect(() => {
@@ -88,9 +90,24 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, sett
                     
                     {/* Title Section */}
                     <div>
-                        <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow-sm">GMCT Management System</h1>
-                        <div className="flex items-center gap-4 mt-2">
-                            <p className="text-base text-slate-300 font-medium">Comprehensive Church Management Solution</p>
+                        <div className="flex flex-wrap items-center gap-2.5">
+                            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white drop-shadow-sm">
+                                {selectedSociety?.name || 'GMCT Management System'}
+                            </h1>
+                            {selectedSociety?.isPrimary ? (
+                                <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                                    Primary Society
+                                </span>
+                            ) : selectedSociety ? (
+                                <span className="bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                                    {selectedSociety.societyCode}
+                                </span>
+                            ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 mt-2">
+                            <p className="text-sm sm:text-base text-slate-300 font-medium">
+                                🇨🇦 Canada Mission • {selectedSociety ? `${selectedSociety.city}, ${selectedSociety.province}` : 'Comprehensive Church Management'}
+                            </p>
                             {getSyncBadge()}
                         </div>
                     </div>
