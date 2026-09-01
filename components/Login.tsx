@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChurchIcon, AdminIcon, FinanceIcon, DataEntryIcon, ClassLeaderIcon, PastorIcon, StatisticianIcon } from './icons';
 import type { User, UserRole, Settings, Society } from '../types';
 
@@ -98,10 +98,15 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
     const [showUserModal, setShowUserModal] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
 
+    useEffect(() => {
+        if (error) setPassword('');
+    }, [error]);
+
     const societyName = selectedSociety?.name || 'GMCT Management System';
     const societyLocation = selectedSociety ? `${selectedSociety.city}, ${selectedSociety.province}` : 'Toronto, ON';
     const societyCode = selectedSociety?.societyCode || 'GMCT';
     const isPrimary = selectedSociety?.isPrimary ?? true;
+    const usesTenantPin = !isPrimary && selectedRole !== 'admin' && selectedRole !== 'software-admin';
 
     // Build emergency fallback users specific to the current society
     const societyFallbackUsers: User[] = useMemo(() => {
@@ -163,7 +168,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
         }
 
         if (role === 'software-admin') {
-            setSelectedUser('');
+            setSelectedUser('gmct-admin');
             setShowUserModal(true);
             return;
         }
@@ -375,11 +380,11 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-semibold text-indigo-100/90 mb-1">User</label>
-                                {selectedRole === 'software-admin' ? (
+                                {selectedRole === 'software-admin' || !isPrimary ? (
                                 <input
                                     value={selectedUser}
                                     onChange={(e) => setSelectedUser(e.target.value)}
-                                    placeholder="Software administrator username"
+                                    placeholder={selectedRole === 'software-admin' ? 'Software administrator username' : 'Society username'}
                                     className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
                                     autoFocus
                                 />
@@ -402,7 +407,11 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
                                 <input
                                     type="password"
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) => setPassword(usesTenantPin ? e.target.value.replace(/\D/g, '').slice(0, 6) : e.target.value)}
+                                    inputMode={usesTenantPin ? 'numeric' : undefined}
+                                    pattern={usesTenantPin ? '[0-9]{6}' : undefined}
+                                    minLength={usesTenantPin ? 6 : undefined}
+                                    maxLength={usesTenantPin ? 6 : undefined}
                                     className="block w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-white/10 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400/60"
                                     autoFocus
                                 />

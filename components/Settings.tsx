@@ -54,6 +54,18 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
     const [tenantAdminPassword, setTenantAdminPassword] = useState('');
     const [isInitializingTenantSecurity, setIsInitializingTenantSecurity] = useState(false);
     const [tenantSecurityInitialized, setTenantSecurityInitialized] = useState(false);
+    const [pilotAdminUsername, setPilotAdminUsername] = useState('admin');
+    const [pilotAdminPassword, setPilotAdminPassword] = useState('');
+    const [isCreatingPilotAdmin, setIsCreatingPilotAdmin] = useState(false);
+    const [resetAdminUsername, setResetAdminUsername] = useState('admin');
+    const [resetAdminPassword, setResetAdminPassword] = useState('');
+    const [isResettingAdminPassword, setIsResettingAdminPassword] = useState(false);
+    const [societyAdministrators, setSocietyAdministrators] = useState<{ username: string; enabled: boolean }[]>([]);
+    const [isLoadingSocietyAdministrators, setIsLoadingSocietyAdministrators] = useState(false);
+    const [regularUserRole, setRegularUserRole] = useState<'finance-team' | 'data-entry' | 'pastor' | 'statistician' | 'class-leader'>('finance-team');
+    const [regularUsername, setRegularUsername] = useState('FinanceTeam');
+    const [regularUserPin, setRegularUserPin] = useState('');
+    const [isCreatingRegularUser, setIsCreatingRegularUser] = useState(false);
 
     useEffect(() => setSocietiesList(societies), [societies]);
 
@@ -64,6 +76,28 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             .then(result => setTenantSecurityInitialized(!!result?.initialized))
             .catch(() => {});
     }, [selectedSociety?.isPrimary, localSettings.supabaseUrl]);
+
+    useEffect(() => {
+        const society = societiesList.find(item => item.id === selectedSocietyToManage);
+        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+        if (!society || society.isPrimary || !tenantSession || !localSettings.supabaseUrl) {
+            setSocietyAdministrators([]);
+            return;
+        }
+        setIsLoadingSocietyAdministrators(true);
+        fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/credential-status`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ societyId: society.id }),
+        })
+            .then(async response => {
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Unable to load administrator status.');
+                setSocietyAdministrators(result.administrators || []);
+            })
+            .catch(() => setSocietyAdministrators([]))
+            .finally(() => setIsLoadingSocietyAdministrators(false));
+    }, [selectedSocietyToManage, societiesList, localSettings.supabaseUrl]);
     
     // Class Leaders Management State
     const [isAddingLeader, setIsAddingLeader] = useState(false);
@@ -520,6 +554,160 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                                         ))}
                                     </select>
                                 </div>
+
+                                {!activeSocietyObj.isPrimary && tenantSecurityInitialized && (
+                                    <>
+                                    <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-900">Society Administrator Status</p>
+                                            <p className="text-xs text-slate-600">{isLoadingSocietyAdministrators ? 'Checking secure tenant accounts...' : societyAdministrators.length ? societyAdministrators.map(admin => `${admin.username} (${admin.enabled ? 'Active' : 'Disabled'})`).join(', ') : 'No secure society administrator has been created.'}</p>
+                                        </div>
+                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${societyAdministrators.some(admin => admin.enabled) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                            {societyAdministrators.some(admin => admin.enabled) ? 'Ready' : 'Setup required'}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <form onSubmit={async event => {
+                                        event.preventDefault();
+                                        if (pilotAdminPassword.length < 8) {
+                                            showToast('Use a password with at least 8 characters.', 'error', 4000);
+                                            return;
+                                        }
+                                        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+                                        if (!tenantSession) {
+                                            showToast('Your Software Admin session has expired. Please sign in again.', 'error', 5000);
+                                            return;
+                                        }
+                                        setIsCreatingPilotAdmin(true);
+                                        try {
+                                            const response = await fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/credentials`, {
+                                                method: 'POST',
+                                                headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ username: pilotAdminUsername, password: pilotAdminPassword, societyId: activeSocietyObj.id, role: 'admin' }),
+                                            });
+                                            const result = await response.json();
+                                            if (!response.ok) throw new Error(result.error || 'Unable to create society administrator.');
+                                            setPilotAdminPassword('');
+                                            setSocietyAdministrators(previous => [...previous.filter(admin => admin.username !== pilotAdminUsername), { username: pilotAdminUsername, enabled: true }]);
+                                            showToast(`Secure administrator login created for ${activeSocietyObj.shortName}.`, 'success', 5000);
+                                        } catch (error: any) {
+                                            showToast(`Failed to create society administrator: ${error.message || error}`, 'error', 5000);
+                                        } finally {
+                                            setIsCreatingPilotAdmin(false);
+                                        }
+                                    }} className="bg-white p-4 rounded-xl border border-emerald-200">
+                                        <h4 className="text-sm font-bold text-emerald-950">Pilot Society Administrator</h4>
+                                        <p className="text-xs text-slate-600 mt-1">Create the protected administrator login used to pilot {activeSocietyObj.name} through the tenant gateway.</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                            <label className="text-xs font-semibold text-slate-700">Username
+                                                <input required minLength={3} value={pilotAdminUsername} onChange={event => setPilotAdminUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-emerald-200 px-3 py-2 text-sm" />
+                                            </label>
+                                            <label className="text-xs font-semibold text-slate-700">Password
+                                                <input required minLength={8} type="password" value={pilotAdminPassword} onChange={event => setPilotAdminPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-emerald-200 px-3 py-2 text-sm" />
+                                            </label>
+                                        </div>
+                                        <div className="flex justify-end pt-3"><button type="submit" disabled={isCreatingPilotAdmin} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg text-sm">{isCreatingPilotAdmin ? 'Creating...' : 'Create Society Administrator'}</button></div>
+                                    </form>
+
+                                    <form onSubmit={async event => {
+                                        event.preventDefault();
+                                        if (resetAdminPassword.length < 8) {
+                                            showToast('Use a new password with at least 8 characters.', 'error', 4000);
+                                            return;
+                                        }
+                                        if (!window.confirm(`Reset the password for ${resetAdminUsername} at ${activeSocietyObj.name}? Existing sessions will be signed out.`)) return;
+                                        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+                                        if (!tenantSession) {
+                                            showToast('Your Software Admin session has expired. Please sign in again.', 'error', 5000);
+                                            return;
+                                        }
+                                        setIsResettingAdminPassword(true);
+                                        try {
+                                            const response = await fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/reset-credential`, {
+                                                method: 'POST',
+                                                headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ username: resetAdminUsername, password: resetAdminPassword, societyId: activeSocietyObj.id }),
+                                            });
+                                            const result = await response.json();
+                                            if (!response.ok) throw new Error(result.error || 'Unable to reset society administrator password.');
+                                            setResetAdminPassword('');
+                                            showToast(`Administrator password reset for ${activeSocietyObj.shortName}.`, 'success', 5000);
+                                        } catch (error: any) {
+                                            showToast(`Password reset failed: ${error.message || error}`, 'error', 5000);
+                                        } finally {
+                                            setIsResettingAdminPassword(false);
+                                        }
+                                    }} className="bg-white p-4 rounded-xl border border-amber-200">
+                                        <h4 className="text-sm font-bold text-amber-950">Reset Society Administrator Password</h4>
+                                        <p className="text-xs text-slate-600 mt-1">Replace the selected society administrator's password and sign out all existing sessions.</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                            <label className="text-xs font-semibold text-slate-700">Username
+                                                <input required minLength={3} value={resetAdminUsername} onChange={event => setResetAdminUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2 text-sm" />
+                                            </label>
+                                            <label className="text-xs font-semibold text-slate-700">New password
+                                                <input required minLength={8} type="password" value={resetAdminPassword} onChange={event => setResetAdminPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2 text-sm" />
+                                            </label>
+                                        </div>
+                                        <div className="flex justify-end pt-3"><button type="submit" disabled={isResettingAdminPassword} className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg text-sm">{isResettingAdminPassword ? 'Resetting...' : 'Reset Password'}</button></div>
+                                    </form>
+                                    </div>
+
+                                    <form onSubmit={async event => {
+                                        event.preventDefault();
+                                        if (!/^\d{6}$/.test(regularUserPin)) {
+                                            showToast('Enter an exact 6-digit numeric PIN.', 'error', 4000);
+                                            return;
+                                        }
+                                        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+                                        if (!tenantSession) {
+                                            showToast('Your Software Admin session has expired. Please sign in again.', 'error', 5000);
+                                            return;
+                                        }
+                                        setIsCreatingRegularUser(true);
+                                        try {
+                                            const response = await fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/credentials`, {
+                                                method: 'POST',
+                                                headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ username: regularUsername, password: regularUserPin, societyId: activeSocietyObj.id, role: regularUserRole }),
+                                            });
+                                            const result = await response.json();
+                                            if (!response.ok) throw new Error(result.error || 'Unable to create society user.');
+                                            setRegularUserPin('');
+                                            showToast(`${regularUsername} was created for ${activeSocietyObj.shortName}.`, 'success', 5000);
+                                        } catch (error: any) {
+                                            showToast(`Failed to create society user: ${error.message || error}`, 'error', 5000);
+                                        } finally {
+                                            setIsCreatingRegularUser(false);
+                                        }
+                                    }} className="bg-white p-4 rounded-xl border border-sky-200">
+                                        <h4 className="text-sm font-bold text-sky-950">Create Regular Society User</h4>
+                                        <p className="text-xs text-slate-600 mt-1">Regular roles sign in with their username and an easy-to-enter 6-digit PIN.</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                                            <label className="text-xs font-semibold text-slate-700">Role
+                                                <select value={regularUserRole} onChange={event => {
+                                                    const role = event.target.value as typeof regularUserRole;
+                                                    const defaultUsernames = { 'finance-team': 'FinanceTeam', 'data-entry': 'DataEntry', pastor: 'Pastor', statistician: 'Statistician', 'class-leader': 'ClassLeader' };
+                                                    setRegularUserRole(role);
+                                                    setRegularUsername(defaultUsernames[role]);
+                                                }} className="mt-1 w-full rounded-lg border border-sky-200 px-3 py-2 text-sm">
+                                                    <option value="finance-team">Finance Team</option>
+                                                    <option value="data-entry">Data Entry</option>
+                                                    <option value="pastor">Pastor</option>
+                                                    <option value="statistician">Statistician</option>
+                                                    <option value="class-leader">Class Leader</option>
+                                                </select>
+                                            </label>
+                                            <label className="text-xs font-semibold text-slate-700">Username
+                                                <input required minLength={3} value={regularUsername} onChange={event => setRegularUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-sky-200 px-3 py-2 text-sm" />
+                                            </label>
+                                            <label className="text-xs font-semibold text-slate-700">6-digit PIN
+                                                <input required inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} type="password" value={regularUserPin} onChange={event => setRegularUserPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="mt-1 w-full rounded-lg border border-sky-200 px-3 py-2 text-sm" />
+                                            </label>
+                                        </div>
+                                        <div className="flex justify-end pt-3"><button type="submit" disabled={isCreatingRegularUser} className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg text-sm">{isCreatingRegularUser ? 'Creating...' : 'Create Regular User'}</button></div>
+                                    </form>
+                                    </>
+                                )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {featureDefinitions.map(def => {

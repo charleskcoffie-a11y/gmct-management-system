@@ -41,6 +41,29 @@ function createSalt() {
   return toHex(bytes.buffer)
 }
 
+async function requireSoftwareAdmin(request: Request, supabase: ReturnType<typeof createClient>) {
+  const authorization = request.headers.get('Authorization') || ''
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
+  if (!token) return null
+
+  const { data: session } = await supabase
+    .from('tenant_sessions')
+    .select('id, credential_id, expires_at, revoked_at')
+    .eq('token_hash', await sha256(token))
+    .maybeSingle()
+  if (!session || session.revoked_at || new Date(session.expires_at).getTime() <= Date.now()) return null
+
+  const { data: credential } = await supabase
+    .from('tenant_credentials')
+    .select('id, society_id, role, enabled')
+    .eq('id', session.credential_id)
+    .maybeSingle()
+  if (!credential?.enabled || credential.role !== 'software-admin' || credential.society_id !== 'gmct') return null
+
+  await supabase.from('tenant_sessions').update({ last_seen_at: new Date().toISOString() }).eq('id', session.id)
+  return credential
+}
+
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return json({ error: 'Tenant gateway is not configured.' }, 503)
@@ -61,14 +84,159 @@ Deno.serve(async request => {
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405)
 
   const body = await request.json().catch(() => null)
-  const username = typeof body?.username === 'string' ? body.username.trim() : ''
+  if (path === 'societies') {
+    const softwareAdmin = await requireSoftwareAdmin(request, supabase)
+    if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
+
+    const society = body?.society
+    const id = typeof society?.id === 'string' ? society.id.trim().toLowerCase() : ''
+    const code = typeof society?.societyCode === 'string' ? society.societyCode.trim().toUpperCase() : ''
+    const name = typeof society?.name === 'string' ? society.name.trim() : ''
+    const city = typeof society?.city === 'string' ? society.city.trim() : ''
+    const province = typeof society?.province === 'string' ? society.province.trim() : ''
+    const provinceCode = typeof society?.provinceCode === 'string' ? society.provinceCode.trim().toUpperCase() : ''
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) || !code || !name || !city || !province || !provinceCode) {
+      return json({ error: 'Society ID, code, name, city, province, and province code are required.' }, 400)
+    }
+
+    const { data: createdSociety, error: createError } = await supabase.from('societies').insert({
+      id,
+      code,
+      name,
+      short_name: typeof society.shortName === 'string' && society.shortName.trim() ? society.shortName.trim() : name,
+      city,
+      province,
+      province_code: provinceCode,
+      is_primary: false,
+      address: typeof society.address === 'string' && society.address.trim() ? society.address.trim() : null,
+      phone: typeof society.phone === 'string' && society.phone.trim() ? society.phone.trim() : null,
+      email: typeof society.email === 'string' && society.email.trim() ? society.email.trim() : null,
+      features: society.features && typeof society.features === 'object' ? society.features : {},
+      accent_color: typeof society.accentColor === 'string' && society.accentColor.trim() ? society.accentColor.trim() : 'indigo',
+    }).select('id').single()
+    if (createError || !createdSociety) {
+      const conflict = createError?.code === '23505'
+      return json({ error: conflict ? 'A society with that ID or code already exists.' : 'Unable to create society.' }, conflict ? 409 : 500)
+    }
+
+    await supabase.from('tenant_audit_log').insert({
+      society_id: id,
+      credential_id: softwareAdmin.id,
+      action: 'society_created',
+      details: { code, name },
+    })
+    return json({ ok: true, societyId: id }, 201)
+  }
+
+  if (path === 'credentials') {
+    const softwareAdmin = await requireSoftwareAdmin(request, supabase)
+    if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
+
+    const username = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : ''
+    const password = typeof body?.password === 'string' ? body.password : ''
+    const societyId = typeof body?.societyId === 'string' ? body.societyId.trim().toLowerCase() : ''
+    const role = typeof body?.role === 'string' ? body.role.trim() : ''
+    const allowedRoles = ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor', 'statistician', 'class-leader']
+    const passwordIsValid = role === 'admin' ? password.length >= 8 : /^\d{6}$/.test(password)
+    if (username.length < 3 || !passwordIsValid || !societyId || !allowedRoles.includes(role)) {
+      return json({ error: role === 'admin' ? 'Society Administrator passwords require at least 8 characters.' : 'Regular society users require an exact 6-digit numeric PIN.' }, 400)
+    }
+
+    const { data: society } = await supabase.from('societies').select('id, status').eq('id', societyId).maybeSingle()
+    if (!society || society.status === 'archived') return json({ error: 'The selected society is unavailable.' }, 404)
+
+    const passwordSalt = createSalt()
+    const { data: credential, error: createError } = await supabase.from('tenant_credentials').insert({
+      username,
+      society_id: societyId,
+      role,
+      password_salt: passwordSalt,
+      password_hash: await derivePasswordHash(password, passwordSalt),
+      must_change_password: false,
+    }).select('id').single()
+    if (createError || !credential) {
+      const conflict = createError?.code === '23505'
+      return json({ error: conflict ? 'That username already exists for this society.' : 'Unable to create tenant user.' }, conflict ? 409 : 500)
+    }
+
+    await supabase.from('tenant_audit_log').insert({
+      society_id: societyId,
+      credential_id: softwareAdmin.id,
+      action: 'tenant_credential_created',
+      details: { credentialId: credential.id, username, role },
+    })
+    return json({ ok: true, credentialId: credential.id }, 201)
+  }
+
+  if (path === 'credential-status') {
+    const softwareAdmin = await requireSoftwareAdmin(request, supabase)
+    if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
+
+    const societyId = typeof body?.societyId === 'string' ? body.societyId.trim().toLowerCase() : ''
+    if (!societyId || societyId === 'gmct') return json({ error: 'Select a branch society.' }, 400)
+
+    const { data: administrators, error: statusError } = await supabase
+      .from('tenant_credentials')
+      .select('username, enabled, updated_at')
+      .eq('society_id', societyId)
+      .eq('role', 'admin')
+      .order('username')
+    if (statusError) return json({ error: 'Unable to load society administrator status.' }, 500)
+    return json({ administrators: administrators || [] })
+  }
+
+  if (path === 'reset-credential') {
+    const softwareAdmin = await requireSoftwareAdmin(request, supabase)
+    if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
+
+    const username = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : ''
+    const password = typeof body?.password === 'string' ? body.password : ''
+    const societyId = typeof body?.societyId === 'string' ? body.societyId.trim().toLowerCase() : ''
+    if (username.length < 3 || password.length < 8 || !societyId || societyId === 'gmct') {
+      return json({ error: 'Use a valid branch society, username, and password of at least 8 characters.' }, 400)
+    }
+
+    const { data: credential, error: credentialError } = await supabase
+      .from('tenant_credentials')
+      .select('id')
+      .eq('username', username)
+      .eq('society_id', societyId)
+      .eq('role', 'admin')
+      .maybeSingle()
+    if (credentialError) return json({ error: 'Unable to load the society administrator.' }, 500)
+    if (!credential) return json({ error: 'That society administrator account was not found.' }, 404)
+
+    const passwordSalt = createSalt()
+    const { error: updateError } = await supabase.from('tenant_credentials').update({
+      password_salt: passwordSalt,
+      password_hash: await derivePasswordHash(password, passwordSalt),
+      enabled: true,
+      must_change_password: false,
+      updated_at: new Date().toISOString(),
+    }).eq('id', credential.id)
+    if (updateError) return json({ error: 'Unable to reset the society administrator password.' }, 500)
+
+    const revokedAt = new Date().toISOString()
+    await Promise.all([
+      supabase.from('tenant_sessions').update({ revoked_at: revokedAt }).eq('credential_id', credential.id).is('revoked_at', null),
+      supabase.from('tenant_audit_log').insert({
+        society_id: societyId,
+        credential_id: softwareAdmin.id,
+        action: 'tenant_admin_password_reset',
+        details: { credentialId: credential.id, username },
+      }),
+    ])
+    return json({ ok: true, message: 'Society administrator password reset successfully.' })
+  }
+
+  const username = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : ''
   const password = typeof body?.password === 'string' ? body.password : ''
   const societyId = typeof body?.societyId === 'string' ? body.societyId.trim() : ''
   if (!username || !password || !societyId) return json({ error: 'Username, password, and society are required.' }, 400)
-  if (username.length < 3 || password.length < 12) return json({ error: 'Use a username of at least 3 characters and a password of at least 12 characters.' }, 400)
 
   if (path === 'bootstrap') {
     if (societyId !== 'gmct') return json({ error: 'The first tenant administrator must belong to GMCT.' }, 400)
+    if (username.length < 3 || password.length < 12) return json({ error: 'Use a username of at least 3 characters and a password of at least 12 characters.' }, 400)
     const { count, error: countError } = await supabase.from('tenant_credentials').select('id', { count: 'exact', head: true })
     if (countError) return json({ error: 'Unable to initialize tenant security.' }, 500)
     if ((count || 0) > 0) return json({ error: 'Tenant security has already been initialized.' }, 409)

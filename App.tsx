@@ -18,7 +18,7 @@ import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitize
 import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition, ParkingReceipt, WesleyHallReceipt, Society } from './types';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY, CANADA_MISSION_SOCIETIES, DEFAULT_SOCIETY } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, loadParkingReceipts, loadWesleyHallReceipts, saveUserToSupabase, checkEntryDuplicateInSupabase, loadSocietiesFromSupabase, createSocietyInSupabase } from './services/supabase';
+import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, loadParkingReceipts, loadWesleyHallReceipts, saveUserToSupabase, checkEntryDuplicateInSupabase, loadSocietiesFromSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
 import ProfileModal from './components/ProfileModal';
 import SocietySelector from './components/SocietySelector';
@@ -652,6 +652,28 @@ const App: React.FC = () => {
                 setActiveTab('settings');
             } catch (error: any) {
                 setLoginError(error.message || 'Software administrator sign-in failed.');
+            }
+            return;
+        }
+
+        if (!selectedSociety.isPrimary) {
+            try {
+                const response = await fetch(`${settings.supabaseUrl}/functions/v1/tenant-gateway/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, societyId: selectedSociety.id }),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Society sign-in failed.');
+                const tenantUser = result.user as User;
+                sessionStorage.setItem('gmct-tenant-session', result.token);
+                setCurrentUser({ username: tenantUser.username, role: tenantUser.role, societyId: tenantUser.societyId });
+                setLoginError(null);
+                if (tenantUser.role === 'admin' || tenantUser.role === 'finance-chair' || tenantUser.role === 'pastor') setActiveTab('home');
+                else if (tenantUser.role === 'statistician') setActiveTab('weekly-history');
+                else setActiveTab('records');
+            } catch (error: any) {
+                setLoginError(error.message || 'Society sign-in failed.');
             }
             return;
         }
@@ -1891,7 +1913,15 @@ const App: React.FC = () => {
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={{ ...currentUser, role: 'admin' }} classLeaders={classLeaders} setClassLeaders={setClassLeaders} selectedSociety={selectedSociety} societies={societies} onUpdateSocietyFeatures={(socId, newFeatures) => {
                 setSocieties(previousSocieties => previousSocieties.map(society => society.id === socId ? { ...society, features: newFeatures } : society));
             }} onCreateSociety={async (society) => {
-                await createSocietyInSupabase(settings.supabaseUrl, settings.supabaseKey, society);
+                const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+                if (!tenantSession) throw new Error('Your Software Admin session has expired. Please sign in again.');
+                const response = await fetch(`${settings.supabaseUrl}/functions/v1/tenant-gateway/societies`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ society }),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Unable to create society.');
                 setSocieties(previousSocieties => [...previousSocieties, society]);
             }} allData={{
                 entries,
