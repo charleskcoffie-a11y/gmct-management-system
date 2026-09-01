@@ -96,9 +96,12 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
                         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-400/30 text-indigo-300 text-xs font-semibold tracking-wider uppercase mb-3">
                             <span>🇨🇦</span> Canada Mission • The Methodist Church Ghana
                         </div>
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight">
-                            Canada Mission Management System
-                        </h1>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                                Canada Mission Management System
+                            </h1>
+                            <span className="rounded-md border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs font-extrabold text-cyan-200">CMMS</span>
+                        </div>
                         <p className="text-xs sm:text-sm text-indigo-200/80 mt-1.5">
                             Search or select your society to access local church records and administration.
                         </p>
