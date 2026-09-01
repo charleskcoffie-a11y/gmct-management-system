@@ -128,6 +128,94 @@ Deno.serve(async request => {
     return json({ ok: true, societyId: id }, 201)
   }
 
+  if (path === 'update-society') {
+    const softwareAdmin = await requireSoftwareAdmin(request, supabase)
+    if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
+
+    const societyId = typeof body?.societyId === 'string' ? body.societyId.trim().toLowerCase() : ''
+    const action = typeof body?.action === 'string' ? body.action : 'edit'
+    if (!societyId || societyId === 'gmct') return json({ error: 'Select a branch society.' }, 400)
+
+    if (action === 'archive' || action === 'reactivate') {
+      const status = action === 'archive' ? 'archived' : 'active'
+      const { error: lifecycleError } = await supabase.from('societies').update({
+        status,
+        archived_at: status === 'archived' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', societyId).eq('is_primary', false)
+      if (lifecycleError) return json({ error: `Unable to ${action} society.` }, 500)
+
+      if (status === 'archived') {
+        const { data: credentials } = await supabase.from('tenant_credentials').select('id').eq('society_id', societyId)
+        const credentialIds = (credentials || []).map(credential => credential.id)
+        if (credentialIds.length) {
+          await supabase.from('tenant_sessions').update({ revoked_at: new Date().toISOString() }).in('credential_id', credentialIds).is('revoked_at', null)
+        }
+      }
+      await supabase.from('tenant_audit_log').insert({ society_id: societyId, credential_id: softwareAdmin.id, action: `society_${status}` })
+      return json({ ok: true, status })
+    }
+
+    const society = body?.society
+    const name = typeof society?.name === 'string' ? society.name.trim() : ''
+    const shortName = typeof society?.shortName === 'string' ? society.shortName.trim() : ''
+    const code = typeof society?.societyCode === 'string' ? society.societyCode.trim().toUpperCase() : ''
+    const city = typeof society?.city === 'string' ? society.city.trim() : ''
+    const province = typeof society?.province === 'string' ? society.province.trim() : ''
+    const provinceCode = typeof society?.provinceCode === 'string' ? society.provinceCode.trim().toUpperCase() : ''
+    if (!name || !shortName || !code || !city || !province || !provinceCode) return json({ error: 'Complete all required society details.' }, 400)
+    const { error: editError } = await supabase.from('societies').update({
+      name,
+      short_name: shortName,
+      code,
+      city,
+      province,
+      province_code: provinceCode,
+      address: typeof society.address === 'string' && society.address.trim() ? society.address.trim() : null,
+      phone: typeof society.phone === 'string' && society.phone.trim() ? society.phone.trim() : null,
+      email: typeof society.email === 'string' && society.email.trim() ? society.email.trim() : null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', societyId).eq('is_primary', false)
+    if (editError) return json({ error: editError.code === '23505' ? 'That society code is already in use.' : 'Unable to update society.' }, editError.code === '23505' ? 409 : 500)
+    await supabase.from('tenant_audit_log').insert({ society_id: societyId, credential_id: softwareAdmin.id, action: 'society_updated', details: { code, name } })
+    return json({ ok: true })
+  }
+
+  if (path === 'oversight') {
+    const softwareAdmin = await requireSoftwareAdmin(request, supabase)
+    if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
+
+    const { data: societies, error: societiesError } = await supabase
+      .from('societies')
+      .select('id, code, name, city, province_code, is_primary, status, features')
+      .order('is_primary', { ascending: false })
+      .order('name')
+    if (societiesError) return json({ error: 'Unable to load Mission oversight.' }, 500)
+
+    const summaries = await Promise.all((societies || []).map(async society => {
+      const [membersResult, entriesResult, credentialsResult] = await Promise.all([
+        supabase.from('members').select('id', { count: 'exact', head: true }).eq('society_id', society.id),
+        supabase.from('entries').select('amount, deleted').eq('society_id', society.id),
+        supabase.from('tenant_credentials').select('id', { count: 'exact', head: true }).eq('society_id', society.id).eq('enabled', true),
+      ])
+      const activeEntries = (entriesResult.data || []).filter(entry => !entry.deleted)
+      return {
+        id: society.id,
+        code: society.code,
+        name: society.name,
+        location: `${society.city}, ${society.province_code}`,
+        isPrimary: society.is_primary,
+        status: society.status || 'active',
+        maxClasses: society.is_primary ? 14 : society.features?.maxClasses ?? 5,
+        memberCount: membersResult.count || 0,
+        entryCount: activeEntries.length,
+        contributionTotal: activeEntries.reduce((total, entry) => total + Number(entry.amount || 0), 0),
+        activeUserCount: credentialsResult.count || 0,
+      }
+    }))
+    return json({ societies: summaries })
+  }
+
   if (path === 'credentials') {
     const softwareAdmin = await requireSoftwareAdmin(request, supabase)
     if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
@@ -255,6 +343,9 @@ Deno.serve(async request => {
     return json({ ok: true, message: 'GMCT tenant administrator created. The bootstrap route is now closed.' }, 201)
   }
   if (path !== 'login') return json({ error: 'Unknown gateway action.' }, 404)
+
+  const { data: loginSociety } = await supabase.from('societies').select('status').eq('id', societyId).maybeSingle()
+  if (!loginSociety || loginSociety.status === 'archived') return json({ error: 'This society is not currently active.' }, 403)
 
   const { data: credential, error } = await supabase
     .from('tenant_credentials')

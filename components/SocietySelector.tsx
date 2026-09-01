@@ -18,22 +18,23 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const activeSocieties = useMemo(() => societies.filter(society => society.status !== 'archived'), [societies]);
 
     const primarySociety = useMemo(
-        () => societies.find(s => s.isPrimary) || societies[0],
-        [societies]
+        () => activeSocieties.find(s => s.isPrimary) || activeSocieties[0],
+        [activeSocieties]
     );
 
     const activeSociety = useMemo(
-        () => societies.find(s => s.id === selectedId) || primarySociety,
-        [selectedId, primarySociety, societies]
+        () => activeSocieties.find(s => s.id === selectedId) || primarySociety,
+        [selectedId, primarySociety, activeSocieties]
     );
 
     // Filter societies based on search input
     const filteredSocieties = useMemo(() => {
-        if (!searchQuery.trim()) return societies;
+        if (!searchQuery.trim()) return activeSocieties;
         const q = searchQuery.toLowerCase().trim();
-        return societies.filter(s =>
+        return activeSocieties.filter(s =>
             s.name.toLowerCase().includes(q) ||
             s.city.toLowerCase().includes(q) ||
             s.province.toLowerCase().includes(q) ||
@@ -41,7 +42,7 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
             s.societyCode.toLowerCase().includes(q) ||
             s.shortName.toLowerCase().includes(q)
         );
-    }, [searchQuery, societies]);
+    }, [searchQuery, activeSocieties]);
 
     // Group filtered societies by province
     const groupedByProvince = useMemo(() => {
@@ -107,7 +108,7 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
                             <label className="block text-xs font-bold uppercase tracking-wider text-indigo-200 mb-2 flex items-center justify-between">
                                 <span>Search & Select Society</span>
                                 <span className="text-[11px] text-indigo-300/80 font-normal">
-                                    {filteredSocieties.length} of {societies.length} societies
+                                    {filteredSocieties.length} of {activeSocieties.length} societies
                                 </span>
                             </label>
 

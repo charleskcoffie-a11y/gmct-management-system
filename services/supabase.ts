@@ -1659,6 +1659,8 @@ export const loadSocietiesFromSupabase = async (url: string, key: string): Promi
             logoUrl: s.logo_url,
             features: s.features || {},
             accentColor: s.accent_color || 'indigo',
+            status: s.status || 'active',
+            archivedAt: s.archived_at || undefined,
         }));
     } catch (e: any) {
         console.warn('Load societies error:', e.message || e);

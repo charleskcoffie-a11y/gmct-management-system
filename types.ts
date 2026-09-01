@@ -154,6 +154,8 @@ export interface Society {
     features: SocietyFeatures;
     accentColor?: string;
     description?: string;
+    status?: 'active' | 'archived';
+    archivedAt?: string;
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';

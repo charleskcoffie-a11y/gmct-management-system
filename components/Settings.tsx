@@ -18,6 +18,7 @@ interface SettingsProps {
     selectedSociety?: Society;
     societies: Society[];
     onUpdateSocietyFeatures?: (societyId: string, features: SocietyFeatures) => void;
+    onUpdateSociety?: (societyId: string, updates: Partial<Society>) => void;
     onCreateSociety?: (society: Society) => Promise<void>;
     // Data props needed for sync and locking
     allData?: {
@@ -36,7 +37,7 @@ interface SettingsProps {
     };
 }
 
-const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser, classLeaders, setClassLeaders, selectedSociety, societies, onUpdateSocietyFeatures, onCreateSociety }) => {
+const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, allData, currentUser, classLeaders, setClassLeaders, selectedSociety, societies, onUpdateSocietyFeatures, onUpdateSociety, onCreateSociety }) => {
     const { showToast } = useToast();
     const [localSettings, setLocalSettings] = useState<Settings>(settings);
     const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
@@ -66,8 +67,29 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
     const [regularUsername, setRegularUsername] = useState('FinanceTeam');
     const [regularUserPin, setRegularUserPin] = useState('');
     const [isCreatingRegularUser, setIsCreatingRegularUser] = useState(false);
+    const [isSavingSocietyDetails, setIsSavingSocietyDetails] = useState(false);
+    const [isChangingSocietyStatus, setIsChangingSocietyStatus] = useState(false);
+    const [societyDetails, setSocietyDetails] = useState({ name: '', shortName: '', societyCode: '', city: '', province: '', provinceCode: '', address: '', phone: '', email: '' });
+    const [oversightSocieties, setOversightSocieties] = useState<{ id: string; code: string; name: string; location: string; status: string; maxClasses: number; memberCount: number; entryCount: number; contributionTotal: number; activeUserCount: number }[]>([]);
+    const [isLoadingOversight, setIsLoadingOversight] = useState(false);
 
     useEffect(() => setSocietiesList(societies), [societies]);
+
+    useEffect(() => {
+        const society = societiesList.find(item => item.id === selectedSocietyToManage);
+        if (!society) return;
+        setSocietyDetails({
+            name: society.name,
+            shortName: society.shortName,
+            societyCode: society.societyCode,
+            city: society.city,
+            province: society.province,
+            provinceCode: society.provinceCode,
+            address: society.address || '',
+            phone: society.phone || '',
+            email: society.email || '',
+        });
+    }, [selectedSocietyToManage, societiesList]);
 
     useEffect(() => {
         if (!selectedSociety?.isPrimary || !localSettings.supabaseUrl) return;
@@ -76,6 +98,30 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             .then(result => setTenantSecurityInitialized(!!result?.initialized))
             .catch(() => {});
     }, [selectedSociety?.isPrimary, localSettings.supabaseUrl]);
+
+    const loadMissionOversight = async () => {
+        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+        if (!tenantSession || !localSettings.supabaseUrl) return;
+        setIsLoadingOversight(true);
+        try {
+            const response = await fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/oversight`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to load Mission oversight.');
+            setOversightSocieties(result.societies || []);
+        } catch (error: any) {
+            showToast(`Mission oversight failed: ${error.message || error}`, 'error', 5000);
+        } finally {
+            setIsLoadingOversight(false);
+        }
+    };
+
+    useEffect(() => {
+        if (tenantSecurityInitialized) loadMissionOversight();
+    }, [tenantSecurityInitialized]);
 
     useEffect(() => {
         const society = societiesList.find(item => item.id === selectedSocietyToManage);
@@ -452,6 +498,33 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
 
                     {tenantSecurityInitialized && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Tenant administration has been initialized for GMCT.</div>}
 
+                    {tenantSecurityInitialized && (
+                        <div className="mb-5 bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-950">Canada Mission Oversight</h4>
+                                    <p className="text-xs text-slate-600 mt-1">Operational totals across societies. No individual records are shown.</p>
+                                </div>
+                                <button type="button" onClick={loadMissionOversight} disabled={isLoadingOversight} className="bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white font-bold py-2 px-3 rounded-lg text-xs">{isLoadingOversight ? 'Refreshing...' : 'Refresh'}</button>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-xs">
+                                    <thead className="bg-slate-50 text-slate-600 uppercase"><tr><th className="px-4 py-2">Society</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Classes</th><th className="px-3 py-2 text-right">Users</th><th className="px-3 py-2 text-right">Members</th><th className="px-3 py-2 text-right">Entries</th><th className="px-4 py-2 text-right">Contributions</th></tr></thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {oversightSocieties.map(society => (
+                                            <tr key={society.id} className="text-slate-800">
+                                                <td className="px-4 py-3"><button type="button" onClick={() => setSelectedSocietyToManage(society.id)} className="text-left font-bold text-indigo-700 hover:underline">{society.name}</button><div className="text-[11px] text-slate-500">{society.location} · {society.code}</div></td>
+                                                <td className="px-3 py-3"><span className={`font-bold ${society.status === 'archived' ? 'text-slate-500' : 'text-emerald-700'}`}>{society.status === 'archived' ? 'Archived' : 'Active'}</span></td>
+                                                <td className="px-3 py-3 text-right font-semibold">{society.maxClasses}</td><td className="px-3 py-3 text-right">{society.activeUserCount}</td><td className="px-3 py-3 text-right">{society.memberCount}</td><td className="px-3 py-3 text-right">{society.entryCount}</td><td className="px-4 py-3 text-right font-bold">{new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(society.contributionTotal)}</td>
+                                            </tr>
+                                        ))}
+                                        {!isLoadingOversight && oversightSocieties.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">No oversight data available.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
                     {(() => {
                         const activeSocietyObj = societiesList.find(s => s.id === selectedSocietyToManage) || societiesList[0];
                         const features = activeSocietyObj.features || {};
@@ -561,6 +634,74 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                                         ))}
                                     </select>
                                 </div>
+
+                                {!activeSocietyObj.isPrimary && (
+                                    <form onSubmit={async event => {
+                                        event.preventDefault();
+                                        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+                                        if (!tenantSession) return showToast('Your Software Admin session has expired. Please sign in again.', 'error', 5000);
+                                        setIsSavingSocietyDetails(true);
+                                        try {
+                                            const response = await fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/update-society`, {
+                                                method: 'POST',
+                                                headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ societyId: activeSocietyObj.id, action: 'edit', society: societyDetails }),
+                                            });
+                                            const result = await response.json();
+                                            if (!response.ok) throw new Error(result.error || 'Unable to update society.');
+                                            const updates = { ...societyDetails, societyCode: societyDetails.societyCode.toUpperCase(), provinceCode: societyDetails.provinceCode.toUpperCase() };
+                                            setSocietiesList(previous => previous.map(society => society.id === activeSocietyObj.id ? { ...society, ...updates } : society));
+                                            onUpdateSociety?.(activeSocietyObj.id, updates);
+                                            showToast(`${societyDetails.shortName} details updated.`, 'success', 4000);
+                                        } catch (error: any) {
+                                            showToast(`Society update failed: ${error.message || error}`, 'error', 5000);
+                                        } finally {
+                                            setIsSavingSocietyDetails(false);
+                                        }
+                                    }} className="bg-white p-4 rounded-xl border border-blue-200">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                            <div>
+                                                <h4 className="text-sm font-bold text-blue-950">Society Details & Status</h4>
+                                                <p className="text-xs text-slate-600 mt-1">Edit contact information or temporarily remove this society from the Mission portal.</p>
+                                            </div>
+                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${activeSocietyObj.status === 'archived' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>{activeSocietyObj.status === 'archived' ? 'Archived' : 'Active'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            {([['name', 'Society name *'], ['shortName', 'Short name *'], ['societyCode', 'Society code *'], ['city', 'City *'], ['province', 'Province *'], ['provinceCode', 'Province code *'], ['address', 'Address'], ['phone', 'Phone'], ['email', 'Email']] as const).map(([field, label]) => (
+                                                <label key={field} className="text-xs font-semibold text-slate-700">{label}
+                                                    <input required={['name', 'shortName', 'societyCode', 'city', 'province', 'provinceCode'].includes(field)} value={societyDetails[field]} onChange={event => setSocietyDetails(previous => ({ ...previous, [field]: event.target.value }))} className="mt-1 w-full rounded-lg border border-blue-200 px-3 py-2 text-sm" />
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <div className="flex flex-wrap justify-end gap-3 pt-4">
+                                            <button type="button" disabled={isChangingSocietyStatus} onClick={async () => {
+                                                const action = activeSocietyObj.status === 'archived' ? 'reactivate' : 'archive';
+                                                if (action === 'archive' && !window.confirm(`Archive ${activeSocietyObj.name}? Its users will be signed out and it will disappear from the Mission portal.`)) return;
+                                                const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+                                                if (!tenantSession) return showToast('Your Software Admin session has expired. Please sign in again.', 'error', 5000);
+                                                setIsChangingSocietyStatus(true);
+                                                try {
+                                                    const response = await fetch(`${localSettings.supabaseUrl}/functions/v1/tenant-gateway/update-society`, {
+                                                        method: 'POST',
+                                                        headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ societyId: activeSocietyObj.id, action }),
+                                                    });
+                                                    const result = await response.json();
+                                                    if (!response.ok) throw new Error(result.error || `Unable to ${action} society.`);
+                                                    const updates: Partial<Society> = { status: result.status, archivedAt: result.status === 'archived' ? new Date().toISOString() : undefined };
+                                                    setSocietiesList(previous => previous.map(society => society.id === activeSocietyObj.id ? { ...society, ...updates } : society));
+                                                    onUpdateSociety?.(activeSocietyObj.id, updates);
+                                                    showToast(`${activeSocietyObj.shortName} is now ${result.status}.`, 'success', 4000);
+                                                } catch (error: any) {
+                                                    showToast(`Status change failed: ${error.message || error}`, 'error', 5000);
+                                                } finally {
+                                                    setIsChangingSocietyStatus(false);
+                                                }
+                                            }} className={`${activeSocietyObj.status === 'archived' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-600 hover:bg-slate-700'} disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg text-sm`}>{activeSocietyObj.status === 'archived' ? 'Reactivate Society' : 'Archive Society'}</button>
+                                            <button type="submit" disabled={isSavingSocietyDetails} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg text-sm">{isSavingSocietyDetails ? 'Saving...' : 'Save Society Details'}</button>
+                                        </div>
+                                    </form>
+                                )}
 
                                 {!activeSocietyObj.isPrimary && tenantSecurityInitialized && (
                                     <>

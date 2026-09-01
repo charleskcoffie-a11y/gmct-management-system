@@ -1919,6 +1919,8 @@ const App: React.FC = () => {
             case 'users': return <UsersTab users={users} setUsers={setUsers} members={societyMembers} settings={settings} syncStatus={syncStatus} selectedSocietyId={selectedSociety.id} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={() => {}} onImport={() => {}} currentUser={{ ...currentUser, role: 'admin' }} classLeaders={classLeaders} setClassLeaders={setClassLeaders} selectedSociety={selectedSociety} societies={societies} onUpdateSocietyFeatures={(socId, newFeatures) => {
                 setSocieties(previousSocieties => previousSocieties.map(society => society.id === socId ? { ...society, features: newFeatures } : society));
+            }} onUpdateSociety={(socId, updates) => {
+                setSocieties(previousSocieties => previousSocieties.map(society => society.id === socId ? { ...society, ...updates } : society));
             }} onCreateSociety={async (society) => {
                 const tenantSession = sessionStorage.getItem('gmct-tenant-session');
                 if (!tenantSession) throw new Error('Your Software Admin session has expired. Please sign in again.');
