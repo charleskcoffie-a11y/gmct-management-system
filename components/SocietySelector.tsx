@@ -7,12 +7,14 @@ interface SocietySelectorProps {
     onSelectSociety: (society: Society) => void;
     currentSocietyId?: string;
     societies?: Society[];
+    logoUrl?: string;
 }
 
 export const SocietySelector: React.FC<SocietySelectorProps> = ({
     onSelectSociety,
     currentSocietyId = 'gmct',
     societies = CANADA_MISSION_SOCIETIES,
+    logoUrl,
 }) => {
     const [selectedId, setSelectedId] = useState<string>(currentSocietyId);
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -95,7 +97,7 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
                             <span>🇨🇦</span> Canada Mission • The Methodist Church Ghana
                         </div>
                         <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight">
-                            Mission Portal
+                            Canada Mission Management System
                         </h1>
                         <p className="text-xs sm:text-sm text-indigo-200/80 mt-1.5">
                             Search or select your society to access local church records and administration.
@@ -210,7 +212,7 @@ export const SocietySelector: React.FC<SocietySelectorProps> = ({
                         <div className="bg-gradient-to-r from-indigo-950/70 via-purple-950/50 to-slate-950/80 border border-indigo-500/30 rounded-2xl p-4 sm:p-5 shadow-lg">
                             <div className="flex items-start gap-4">
                                 <div className="h-12 w-12 rounded-xl bg-indigo-600/80 border border-indigo-400/40 flex items-center justify-center text-white shrink-0 shadow-md">
-                                    <ChurchIcon />
+                                    {logoUrl ? <img src={logoUrl} alt="Canada Mission logo" className="h-10 w-10 object-contain bg-white rounded-lg p-1" /> : <ChurchIcon />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">

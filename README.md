@@ -1,7 +1,7 @@
 
-# GMCT Management System - Setup & Deployment Guide
+# Canada Mission Management System - Setup & Deployment Guide
 
-This guide provides step-by-step instructions to configure and deploy the GMCT Management System using **Supabase** as the backend database.
+This guide provides step-by-step instructions to configure and deploy the Canada Mission Management System using **Supabase** as the backend database. GMCT remains the primary society within the multi-society platform.
 
 ---
 
@@ -13,7 +13,7 @@ You need to create a free Supabase project to store your data in the cloud.
 
 1.  Go to [Supabase.com](https://supabase.com) and sign in.
 2.  Click **"New Project"**.
-3.  Choose your organization and enter a **Name** (e.g., `GMCT System`).
+3.  Choose your organization and enter a **Name** (e.g., `Canada Mission System`).
 4.  Set a strong **Database Password** (save this, though the app uses API keys).
 5.  Choose a region close to you.
 6.  Click **"Create new project"**.

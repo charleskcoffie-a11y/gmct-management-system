@@ -1034,6 +1034,7 @@ const App: React.FC = () => {
                 <SocietySelector
                     currentSocietyId={selectedSocietyId}
                     societies={societies}
+                    logoUrl={settings.logoUrl}
                     onSelectSociety={(soc) => {
                         setSelectedSocietyId(soc.id);
                         setIsSelectingSociety(false);

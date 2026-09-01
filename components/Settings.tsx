@@ -316,6 +316,20 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         }));
     };
 
+    const handleMissionLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (file.size > 1024 * 1024) {
+            showToast('The Canada Mission logo must be smaller than 1 MB.', 'error', 4000);
+            event.target.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => setLocalSettings(previous => ({ ...previous, logoUrl: String(reader.result || '') }));
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
+
     const handleTestSupabase = async () => {
         setTestResult(null);
         setIsTesting(true);
@@ -407,6 +421,18 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-blue-200">
                     <h3 className="text-xl font-bold text-blue-800 border-b-2 border-blue-100 pb-3 mb-4">System Configuration</h3>
                     <div className="space-y-5">
+                        <div className="bg-white rounded-lg p-4 border border-blue-200">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    {localSettings.logoUrl ? <img src={localSettings.logoUrl} alt="Canada Mission logo preview" className="h-16 w-16 object-contain border border-slate-200 rounded-lg p-1" /> : <div className="h-16 w-16 flex items-center justify-center rounded-lg bg-slate-100 text-slate-400 text-xs font-bold text-center">No logo</div>}
+                                    <div><h4 className="font-bold text-blue-900">Canada Mission Branding</h4><p className="text-xs text-slate-600 mt-1">One shared logo for every society, login screen, header, and tax receipt.</p></div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Upload Logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleMissionLogoUpload} className="hidden" /></label>
+                                    {localSettings.logoUrl && <button type="button" onClick={() => setLocalSettings(previous => ({ ...previous, logoUrl: undefined }))} className="border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold py-2 px-3 rounded-lg text-sm">Remove</button>}
+                                </div>
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label htmlFor="currency" className="block font-bold text-blue-800 text-sm uppercase mb-2">💷 Currency Symbol</label>

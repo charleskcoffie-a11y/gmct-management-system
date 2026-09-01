@@ -78,7 +78,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     useEffect(() => {
         setReceiptProfile({
             charityNumber: selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : ''),
-            logoImage: selectedSociety?.logoUrl || (selectedSociety?.isPrimary ? settings.logoUrl || '' : ''),
+            logoImage: settings.logoUrl || '',
             ministerName: selectedSociety?.isPrimary ? 'Minister in Charge' : '',
             ministerSignature: '',
             treasurerName: selectedSociety?.isPrimary ? 'Peggy Asary, Treasurer' : '',
@@ -97,9 +97,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
         }).then(async response => {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Unable to load receipt details.');
-            if (result.profile) setReceiptProfile(result.profile);
+            if (result.profile) setReceiptProfile({ ...result.profile, logoImage: settings.logoUrl || '' });
         }).catch(error => setProfileMessage(error.message || 'Unable to load receipt details.'));
-    }, [selectedSociety?.id, currentUser.role, settings.supabaseUrl]);
+    }, [selectedSociety?.id, currentUser.role, settings.supabaseUrl, settings.logoUrl]);
 
     const classOptions = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
 
@@ -386,10 +386,10 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const charityNumber = receiptProfile.charityNumber || 'Registration Pending';
     const canManageReceiptProfile = currentUser.role === 'admin' && !selectedSociety?.isPrimary;
 
-    const handleImageUpload = (field: 'logoImage' | 'ministerSignature' | 'treasurerSignature', file?: File) => {
+    const handleImageUpload = (field: 'ministerSignature' | 'treasurerSignature', file?: File) => {
         if (!file) return;
         if (file.size > 1024 * 1024) {
-            setProfileMessage('Logo and signature images must be smaller than 1 MB.');
+            setProfileMessage('Signature images must be smaller than 1 MB.');
             return;
         }
         const reader = new FileReader();
@@ -462,9 +462,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                 placeholder="e.g. 123456789RR0001"
                                 className="w-full border-slate-300 rounded-lg shadow-sm text-sm"
                             />
-                            <label className="block text-xs font-bold text-slate-700 mt-3 mb-1">Church logo</label>
-                            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => handleImageUpload('logoImage', event.target.files?.[0])} className="w-full text-xs text-slate-600" />
-                            {receiptProfile.logoImage && <img src={receiptProfile.logoImage} alt="Church logo preview" className="mt-2 h-14 w-14 object-contain border border-slate-200 rounded" />}
+                            {receiptProfile.logoImage && <div className="mt-3"><span className="block text-xs font-bold text-slate-700 mb-1">Canada Mission logo</span><img src={receiptProfile.logoImage} alt="Canada Mission logo" className="h-14 w-14 object-contain border border-slate-200 rounded" /></div>}
                         </div>
                         {(['minister', 'treasurer'] as const).map(role => <div key={role} className="space-y-2">
                             <label className="block text-xs font-bold text-slate-700">{role === 'minister' ? 'Minister in Charge' : 'Finance Treasurer'} name</label>

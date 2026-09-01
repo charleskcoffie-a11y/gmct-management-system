@@ -92,7 +92,7 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, syncStatus, sett
                     <div>
                         <div className="flex flex-wrap items-center gap-2.5">
                             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white drop-shadow-sm">
-                                {selectedSociety?.name || 'GMCT Management System'}
+                                {selectedSociety?.name || 'Canada Mission Management System'}
                             </h1>
                             {selectedSociety?.isPrimary ? (
                                 <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 text-xs px-2.5 py-0.5 rounded-full font-bold">

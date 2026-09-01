@@ -102,7 +102,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
         if (error) setPassword('');
     }, [error]);
 
-    const societyName = selectedSociety?.name || 'GMCT Management System';
+    const societyName = selectedSociety?.name || 'Canada Mission Management System';
     const societyLocation = selectedSociety ? `${selectedSociety.city}, ${selectedSociety.province}` : 'Toronto, ON';
     const societyCode = selectedSociety?.societyCode || 'GMCT';
     const isPrimary = selectedSociety?.isPrimary ?? true;
@@ -225,7 +225,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, error, settings, selected
 
                         <div className="px-8 pt-6 pb-4 flex items-center gap-4">
                             <div className="shrink-0">
-                                <ChurchIcon />
+                                {settings.logoUrl ? <img src={settings.logoUrl} alt="Canada Mission logo" className="h-12 w-12 object-contain bg-white rounded-xl p-1" /> : <ChurchIcon />}
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
