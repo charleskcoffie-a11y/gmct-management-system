@@ -12,9 +12,10 @@ interface DevelopmentFundProps {
     settings: Settings;
     syncStatus?: SyncStatus;
     currentUser?: import('../types').User | null;
+    selectedSocietyId: string;
 }
 
-const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, setEntries, settings, syncStatus, currentUser }) => {
+const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, setEntries, settings, syncStatus, currentUser, selectedSocietyId }) => {
     // --- State ---
     const [memberInput, setMemberInput] = useState('');
     const [startDate, setStartDate] = useState(''); // Empty = show all
@@ -264,6 +265,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             createdAt: getNowEST(),
             createdBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
             updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+            societyId: selectedSocietyId,
             deleted: false
         };
 
@@ -274,7 +276,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 if (hasCloudDuplicate) {
                     setDuplicateWarning(true);
                     alert(`Duplicate blocked by cloud check for ${selectedMember.name} on ${newDate}.`);
-                    const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                    const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
                     setEntries(refreshedEntries);
                     return;
                 }
@@ -438,7 +440,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                     const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
                     if (hasCloudDuplicate) {
                         alert(`Duplicate blocked by cloud check for ${entry.memberName} on ${entry.date}.`);
-                        const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                        const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
                         setEntries(refreshedEntries);
                         setBulkSaving(false);
                         return;
@@ -547,6 +549,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
             createdAt: new Date().toISOString(),
             createdBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
             updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
+            societyId: selectedSocietyId,
             deleted: false
         };
     };
@@ -559,7 +562,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
         }
         try {
             if (settings.supabaseUrl && settings.supabaseKey) {
-                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, lastDeleted);
+                await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, { ...lastDeleted, societyId: selectedSocietyId });
             }
             setEntries(prev => [...prev, lastDeleted]);
             setLastDeleted(null);
@@ -613,7 +616,7 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                 alert('Error: Entry not found');
                 return;
             }
-            const newEntry = { ...updatedEntry, date: editDate, amount: amountVal, note: editDesc || generatePaymentDescription(editPaymentMonth), method: editMethod || 'cash', updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown' };
+            const newEntry = { ...updatedEntry, date: editDate, amount: amountVal, note: editDesc || generatePaymentDescription(editPaymentMonth), method: editMethod || 'cash', updatedBy: (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown', societyId: selectedSocietyId };
             console.log('New entry data:', newEntry);
             if (settings.supabaseUrl && settings.supabaseKey) {
                 console.log('Saving to Supabase...');

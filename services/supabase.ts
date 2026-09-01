@@ -902,7 +902,10 @@ export const decideRequisition = async (url: string, key: string, approval: Requ
 
 // --- Individual Entry Operations (for multi-user real-time collaboration) ---
 export const saveEntryToSupabase = async (url: string, key: string, entry: Entry) => {
-    if (entry.societyId && entry.societyId.toLowerCase() !== 'gmct') {
+    const societyId = entry.societyId?.trim();
+    if (!societyId) throw new Error('Entry society is required. Reload the selected society and try again.');
+
+    if (societyId.toLowerCase() !== 'gmct') {
         await tenantGatewayRequest(url, { resource: 'entries', operation: 'upsert', record: mapEntryToDB(entry) });
         return { success: true };
     }

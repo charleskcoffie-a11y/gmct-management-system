@@ -173,6 +173,12 @@ Deno.serve(async request => {
     if (operation !== 'upsert' || !body?.record || typeof body.record !== 'object') return json({ error: 'Unsupported tenant operation.' }, 400)
 
     const record = { ...body.record, society_id: tenantUser.society_id }
+    if (resource === 'entries') {
+      const memberId = typeof record.member_id === 'string' ? record.member_id : ''
+      if (!memberId) return json({ error: 'A valid society member is required for an entry.' }, 400)
+      const { data: member, error: memberError } = await supabase.from('members').select('id').eq('id', memberId).eq('society_id', tenantUser.society_id).maybeSingle()
+      if (memberError || !member) return json({ error: 'This member does not belong to the selected society.' }, 403)
+    }
     const { data, error } = await supabase.from(resource).upsert(record, { onConflict: 'id' }).select('*').single()
     if (error) return json({ error: `Unable to save ${resource}.` }, 500)
     await supabase.from('tenant_audit_log').insert({ society_id: tenantUser.society_id, credential_id: tenantUser.id, action: `${resource}_upserted`, details: { recordId: data.id } })

@@ -16,6 +16,7 @@ interface DayBornProps {
     currentUser?: User | null;
     monthLocks?: MonthLock[];
     syncStatus?: SyncStatus;
+    selectedSocietyId: string;
 }
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -58,7 +59,7 @@ const deriveMemberDayKey = (member: Member): string => {
     return '';
 };
 
-const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, settings, currentUser, monthLocks = [], syncStatus }) => {
+const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, settings, currentUser, monthLocks = [], syncStatus, selectedSocietyId }) => {
     const { showToast } = useToast();
     const [selectedDay, setSelectedDay] = useState<string>('Sunday');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -200,7 +201,8 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
             fund: 'General',
             method: 'cash',
             amount: 0,
-            createdBy: currentUser?.username
+            createdBy: currentUser?.username,
+            societyId: selectedSocietyId
         };
         setSelectedEntry(newEntry);
         setIsModalOpen(true);
@@ -223,7 +225,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
 
     const persistEntry = async (entry: Entry) => {
         if (!canCloudSave) throw new Error('Supabase not configured');
-        await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
+        await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, { ...entry, societyId: selectedSocietyId });
     };
 
     const handleSaveEntry = async (entry: Entry) => {
@@ -232,7 +234,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
             const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
             if (hasCloudDuplicate) {
                 showToast(`❌ Duplicate blocked: a ${entry.type.replace(/-/g, ' ')} entry already exists for this member on ${entry.date}.`, 'error', 5000);
-                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
                 setEntries(refreshedEntries);
                 return;
             }
@@ -259,7 +261,7 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
             const hasCloudDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
             if (hasCloudDuplicate) {
                 showToast(`❌ Duplicate blocked: a ${entry.type.replace(/-/g, ' ')} entry already exists for this member on ${entry.date}.`, 'error', 5000);
-                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
                 setEntries(refreshedEntries);
                 return;
             }
@@ -278,7 +280,8 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                 fund: 'General',
                 method: 'cash',
                 amount: 0,
-                createdBy: currentUser?.username
+                createdBy: currentUser?.username,
+                societyId: selectedSocietyId
             };
             setSelectedEntry(nextEntry);
         } catch (error: any) {

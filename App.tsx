@@ -1115,6 +1115,7 @@ const App: React.FC = () => {
                 note: `Harvest pledge payment (Pledge ID: ${pledge.id.substring(0, 8)})`,
                 createdBy: currentUser?.username,
                 createdAt: getNowEST(),
+                societyId: selectedSociety.id,
             };
 
             // Update pledge remaining amount
@@ -1161,6 +1162,7 @@ const App: React.FC = () => {
                         settings={settings}
                         currentUser={currentUser}
                         syncStatus={syncStatus}
+                        selectedSocietyId={selectedSociety.id}
                         onCreatePledges={async (newPledges) => {
                             // Reload entries from database after pledges are created
                             if (settings.supabaseUrl && settings.supabaseKey) {
@@ -1808,7 +1810,7 @@ const App: React.FC = () => {
                         )}
                     </div>
                 );
-            case 'development-fund': return <DevelopmentFund members={societyMembers} entries={societyEntries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} currentUser={currentUser} />;
+            case 'development-fund': return <DevelopmentFund members={societyMembers} entries={societyEntries} setEntries={setEntries} settings={settings} syncStatus={syncStatus} currentUser={currentUser} selectedSocietyId={selectedSociety.id} />;
             case 'harvest-pledges':
                 return (
                     <HarvestPledges 
@@ -1833,6 +1835,7 @@ const App: React.FC = () => {
                         currentUser={currentUser}
                         monthLocks={monthLocks}
                         syncStatus={syncStatus}
+                        selectedSocietyId={selectedSociety.id}
                     />
                 );
             case 'insights':

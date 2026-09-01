@@ -3,7 +3,7 @@ import { useToast } from './ToastProvider';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import type { Entry, Member, Settings, SyncStatus, User } from '../types';
 import { formatCurrency, getTodayEST, getNowEST } from '../utils';
-import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, saveEntryToSupabase, loadEntriesFromSupabase, getSupabaseClient } from '../services/supabase';
+import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, saveEntryToSupabase, loadEntriesFromSupabase, checkEntryDuplicateInSupabase } from '../services/supabase';
 
 interface HarvestProps {
     members: Member[];
@@ -12,10 +12,11 @@ interface HarvestProps {
     settings: Settings;
     currentUser?: User | null;
     syncStatus?: SyncStatus;
+    selectedSocietyId: string;
     onCreatePledges?: (pledges: Entry[]) => void;
 }
 
-const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, settings, currentUser, syncStatus, onCreatePledges }) => {
+const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, settings, currentUser, syncStatus, selectedSocietyId, onCreatePledges }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [selectedDateForModal, setSelectedDateForModal] = useState<string | null>(null);
@@ -425,9 +426,10 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             return;
         }
 
-        const entryToSave = selectedEntry
-            ? { ...formData, updatedBy: currentUser?.username, lastUpdated: getNowEST() }
-            : formData;
+        const entryToSave = {
+            ...(selectedEntry ? { ...formData, updatedBy: currentUser?.username, lastUpdated: getNowEST() } : formData),
+            societyId: selectedSocietyId,
+        };
 
         // First guard: local duplicate check in currently loaded entries.
         const localDuplicate = entries.some(existing => {
@@ -447,36 +449,13 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
 
         try {
             // Second guard: cloud duplicate check to avoid race conditions / stale local cache.
-            const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseKey);
-            if (!supabase) {
-                showToast('Supabase connection is invalid. Cannot validate duplicates.', 'error');
-                return;
-            }
-
-            const { data: dbPotentialDupes, error: dupeCheckError } = await supabase
-                .from('entries')
-                .select('id, amount, note, group_name')
-                .eq('date', entryToSave.date)
-                .eq('type', entryToSave.type)
-                .eq('member_id', entryToSave.memberID)
-                .or('deleted.is.null,deleted.eq.false')
-                .limit(10);
-
-            if (dupeCheckError) {
-                showToast(`Duplicate check failed: ${dupeCheckError.message}`, 'error');
-                return;
-            }
-
-            const dbHasDuplicate = (dbPotentialDupes || []).some(row => {
-                if (row.id === entryToSave.id) return false;
-                return Number(row.amount) === Number(entryToSave.amount);
-            });
+            const dbHasDuplicate = await checkEntryDuplicateInSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
             if (dbHasDuplicate) {
                 showToast('Possible duplicate detected in the cloud record. It has been flagged for verification.', 'warning');
             }
 
             await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entryToSave);
-            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+            const updatedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
             setEntries(updatedEntries);
             setIsModalOpen(false);
             showToast('Harvest entry saved successfully', 'success');
@@ -501,7 +480,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 for (const entry of updatedEntries) {
                     await saveEntryToSupabase(settings.supabaseUrl, settings.supabaseKey, entry);
                 }
-                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const refreshedEntries = await loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
                 setEntries(refreshedEntries);
             } else {
                 setEntries(prev => prev.map(item => {
