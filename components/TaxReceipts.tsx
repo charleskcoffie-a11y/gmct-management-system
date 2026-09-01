@@ -1,6 +1,6 @@
 // components/TaxReceipts.tsx
-import React, { useMemo, useState } from 'react';
-import type { Entry, HarvestEntry, Member, Settings, Society } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { Entry, HarvestEntry, Member, Settings, Society, User } from '../types';
 import { formatCurrency, sanitizeEntryType } from '../utils';
 
 interface TaxReceiptsProps {
@@ -9,6 +9,7 @@ interface TaxReceiptsProps {
     members: Member[];
     settings: Settings;
     selectedSociety?: Society;
+    currentUser: User;
 }
 
 interface MemberTotals {
@@ -73,20 +74,42 @@ const Barcode: React.FC<{ serial: string }> = ({ serial }) => {
     );
 };
 
-const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, members, settings, selectedSociety }) => {
+const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, members, settings, selectedSociety, currentUser }) => {
     const currentYear = new Date().getFullYear().toString();
     const [year, setYear] = useState(currentYear);
     const [selectedClass, setSelectedClass] = useState<string>('all');
     const [minAmount, setMinAmount] = useState<number>(20);
 
     // Society-specific charity configuration
-    const [societyCharityNumber, setSocietyCharityNumber] = useState<string>(
-        selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : '')
-    );
-    const [societySignature, setSocietySignature] = useState<string>(
-        selectedSociety?.signatureImage || (selectedSociety?.isPrimary ? settings.signatureImage || '' : '')
-    );
+    const [receiptProfile, setReceiptProfile] = useState({ charityNumber: '', ministerName: '', ministerSignature: '', treasurerName: '', treasurerSignature: '' });
     const [isConfigOpen, setIsConfigOpen] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [profileMessage, setProfileMessage] = useState('');
+
+    useEffect(() => {
+        setReceiptProfile({
+            charityNumber: selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : ''),
+            ministerName: selectedSociety?.isPrimary ? 'Minister in Charge' : '',
+            ministerSignature: '',
+            treasurerName: selectedSociety?.isPrimary ? 'Peggy Asary, Treasurer' : '',
+            treasurerSignature: selectedSociety?.signatureImage || (selectedSociety?.isPrimary ? settings.signatureImage || '' : ''),
+        });
+    }, [selectedSociety, settings.charityNumber, settings.signatureImage]);
+
+    useEffect(() => {
+        if (!selectedSociety || selectedSociety.isPrimary || currentUser.role !== 'admin') return;
+        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+        if (!tenantSession) return;
+        fetch(`${settings.supabaseUrl}/functions/v1/tenant-gateway/receipt-profile`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operation: 'load' }),
+        }).then(async response => {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to load receipt details.');
+            if (result.profile) setReceiptProfile(result.profile);
+        }).catch(error => setProfileMessage(error.message || 'Unable to load receipt details.'));
+    }, [selectedSociety?.id, currentUser.role, settings.supabaseUrl]);
 
     const classOptions = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
 
@@ -186,8 +209,48 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const orgPhone = selectedSociety?.phone || settings.orgPhone || '416-901-5900';
     const orgEmail = selectedSociety?.email || settings.orgEmail || '';
     const orgWebsite = 'https://gmct-ca.org/';
-    const charityNumber = societyCharityNumber || selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : 'Registration Pending');
-    const signatureImage = societySignature || (selectedSociety?.isPrimary ? settings.signatureImage : undefined);
+    const charityNumber = receiptProfile.charityNumber || 'Registration Pending';
+    const canManageReceiptProfile = currentUser.role === 'admin' && !selectedSociety?.isPrimary;
+
+    const handleSignatureUpload = (field: 'ministerSignature' | 'treasurerSignature', file?: File) => {
+        if (!file) return;
+        if (file.size > 1024 * 1024) {
+            setProfileMessage('Signature images must be smaller than 1 MB.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => setReceiptProfile(previous => ({ ...previous, [field]: String(reader.result || '') }));
+        reader.readAsDataURL(file);
+    };
+
+    const handleSaveReceiptProfile = async () => {
+        if (!selectedSociety || !canManageReceiptProfile) return;
+        if (!receiptProfile.charityNumber.trim() || !receiptProfile.ministerName.trim() || !receiptProfile.treasurerName.trim()) {
+            setProfileMessage('Charity number, minister name, and treasurer name are required.');
+            return;
+        }
+        const tenantSession = sessionStorage.getItem('gmct-tenant-session');
+        if (!tenantSession) {
+            setProfileMessage('Your society session has expired. Please sign in again.');
+            return;
+        }
+        setIsSavingProfile(true);
+        setProfileMessage('');
+        try {
+            const response = await fetch(`${settings.supabaseUrl}/functions/v1/tenant-gateway/receipt-profile`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${tenantSession}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile: receiptProfile }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to save receipt details.');
+            setProfileMessage('Receipt signing authority saved.');
+        } catch (error: any) {
+            setProfileMessage(error.message || 'Unable to save receipt details.');
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -199,13 +262,13 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <button
+                    {canManageReceiptProfile && <button
                         type="button"
                         onClick={() => setIsConfigOpen(!isConfigOpen)}
                         className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white font-semibold rounded-lg shadow text-sm"
                     >
                         ⚙️ Receipt Details
-                    </button>
+                    </button>}
                     <button onClick={handlePrint} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow">Print / Save PDF</button>
                 </div>
             </div>
@@ -219,29 +282,20 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                             <label className="block text-xs font-bold text-slate-700 mb-1">CRA / Charity Registration #</label>
                             <input
                                 type="text"
-                                value={societyCharityNumber}
-                                onChange={e => setSocietyCharityNumber(e.target.value)}
+                                value={receiptProfile.charityNumber}
+                                onChange={e => setReceiptProfile(previous => ({ ...previous, charityNumber: e.target.value }))}
                                 placeholder="e.g. 123456789RR0001"
                                 className="w-full border-slate-300 rounded-lg shadow-sm text-sm"
                             />
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">Authorized Signature (Image upload)</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={e => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                        const reader = new FileReader();
-                                        reader.onload = () => setSocietySignature(reader.result as string);
-                                        reader.readAsDataURL(file);
-                                    }
-                                }}
-                                className="w-full text-xs text-slate-600"
-                            />
-                        </div>
+                        {(['minister', 'treasurer'] as const).map(role => <div key={role} className="space-y-2">
+                            <label className="block text-xs font-bold text-slate-700">{role === 'minister' ? 'Minister in Charge' : 'Finance Treasurer'} name</label>
+                            <input type="text" value={receiptProfile[`${role}Name`]} onChange={event => setReceiptProfile(previous => ({ ...previous, [`${role}Name`]: event.target.value }))} className="w-full border-slate-300 rounded-lg shadow-sm text-sm" />
+                            <label className="block text-xs font-bold text-slate-700">{role === 'minister' ? 'Minister' : 'Treasurer'} signature</label>
+                            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => handleSignatureUpload(`${role}Signature`, event.target.files?.[0])} className="w-full text-xs text-slate-600" />
+                        </div>)}
                     </div>
+                    <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-slate-700">{profileMessage}</p><button type="button" onClick={handleSaveReceiptProfile} disabled={isSavingProfile} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-lg text-sm">{isSavingProfile ? 'Saving...' : 'Save Receipt Details'}</button></div>
                 </div>
             )}
 
@@ -324,17 +378,16 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                 </div>
 
                                 {/* Signature and Total Amount */}
-                                <div className="mt-2 flex justify-between items-center">
-                                    <div className="text-[9px]">
-                                        {signatureImage ? (
-                                            <img src={signatureImage} alt="Signature" className="h-8 object-contain mb-1" />
-                                        ) : (
-                                            <div className="h-8 flex items-end font-script italic text-slate-500">Authorized Officer</div>
-                                        )}
-                                        <div className="font-bold text-slate-900">
-                                            {selectedSociety?.isPrimary ? 'Peggy Asary, Treasurer' : `${orgName} Authorized Officer`}
-                                        </div>
-                                    </div>
+                                <div className="mt-2 grid grid-cols-3 gap-2 items-end">
+                                    {(['minister', 'treasurer'] as const).map(role => {
+                                        const signature = receiptProfile[`${role}Signature`];
+                                        const name = receiptProfile[`${role}Name`] || (role === 'minister' ? 'Minister in Charge' : 'Finance Treasurer');
+                                        return <div key={role} className="text-[9px]">
+                                            {signature ? <img src={signature} alt={`${role} signature`} className="h-8 object-contain mb-1" /> : <div className="h-8 border-b border-slate-400" />}
+                                            <div className="font-bold text-slate-900">{name}</div>
+                                            <div className="text-slate-500">{role === 'minister' ? 'Minister in Charge' : 'Finance Treasurer'}</div>
+                                        </div>;
+                                    })}
                                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded p-2 text-center">
                                         <div className="text-[9px] text-slate-600 uppercase font-bold">Total Eligible Amount</div>
                                         <div className="text-2xl font-extrabold text-green-700">{formatCurrency(member.total, settings.currency || 'CAD')}</div>

@@ -10,6 +10,7 @@ interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
     setHistory: React.Dispatch<React.SetStateAction<WeeklyHistoryRecord[]>>;
     settings: Settings;
+    selectedSocietyId: string;
 }
 
 const initialFormState = (): WeeklyHistoryRecord => ({
@@ -47,7 +48,7 @@ const serviceTypeOptions = [
     'Other'
 ];
 
-const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, settings }) => {
+const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, settings, selectedSocietyId }) => {
     const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
     const [formData, setFormData] = useState<WeeklyHistoryRecord>(initialFormState());
     const [showArchive, setShowArchive] = useState(false);
@@ -147,14 +148,14 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
         
         setIsSaving(true);
         try {
-            const sanitized = sanitizeWeeklyHistoryRecord(formData);
+            const sanitized = { ...sanitizeWeeklyHistoryRecord(formData), societyId: selectedSocietyId };
             
             // Save to Supabase if configured
             if (settings.supabaseUrl && settings.supabaseKey) {
                 await saveWeeklyHistoryToSupabase(settings.supabaseUrl, settings.supabaseKey, sanitized);
                 
                 // Fetch fresh data from Supabase to ensure we have the latest
-                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
                 setHistory(cloudData.history);
             } else {
                 // Fallback to local state if Supabase not configured
@@ -201,10 +202,10 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
         try {
             // Delete from Supabase if configured
             if (settings.supabaseUrl && settings.supabaseKey) {
-                await deleteWeeklyHistoryFromSupabase(settings.supabaseUrl, settings.supabaseKey, id);
+                await deleteWeeklyHistoryFromSupabase(settings.supabaseUrl, settings.supabaseKey, id, selectedSocietyId);
                 
                 // Fetch fresh data from Supabase to ensure we have the latest
-                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey);
+                const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSocietyId);
                 setHistory(cloudData.history);
             } else {
                 // Fallback to local state if Supabase not configured

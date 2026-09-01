@@ -280,12 +280,13 @@ const mapHistoryToDB = (h: WeeklyHistoryRecord) => ({
     id: h.id,
     date_of_service: h.dateOfService,
     society_name: h.societyName,
-    data: h 
+    data: h,
+    society_id: h.societyId || 'gmct'
 });
 
 const mapHistoryFromDB = (h: any): WeeklyHistoryRecord => {
     if (h.data && typeof h.data === 'object') {
-        return { ...h.data, id: h.id, dateOfService: h.date_of_service, societyName: h.society_name };
+        return { ...h.data, id: h.id, dateOfService: h.date_of_service, societyName: h.society_name, societyId: h.society_id || h.data.societyId || 'gmct' };
     }
     return h; 
 };
@@ -478,19 +479,19 @@ export const downloadDataFromSupabase = async (url: string, key: string, society
     }
     const users = usersDB?.map(mapUserFromDB) || [];
 
-    let histQuery = supabase.from('weekly_history').select('*');
-    if (societyId) {
-        if (societyId.toLowerCase() === 'gmct') {
+    let history: WeeklyHistoryRecord[] = [];
+    if (usesTenantGateway) {
+        const historyDB = await tenantGatewayRequest(url, { resource: 'weekly_history', operation: 'list' });
+        history = (historyDB || []).map(mapHistoryFromDB);
+    } else {
+        let histQuery = supabase.from('weekly_history').select('*');
+        if (societyId) {
             histQuery = histQuery.or('society_id.eq.gmct,society_id.is.null');
-        } else {
-            histQuery = histQuery.eq('society_id', societyId);
         }
+        const { data: historyDB, error: histErr } = await histQuery;
+        if (histErr) throw new Error(`Fetch History failed: ${histErr.message}`);
+        history = historyDB?.map(mapHistoryFromDB) || [];
     }
-    const { data: historyDB, error: histErr } = await histQuery;
-    if (histErr && !(histErr.message?.includes('society_id') || (histErr as any).code === '42703')) {
-        throw new Error(`Fetch History failed: ${histErr.message}`);
-    }
-    const history = historyDB?.map(mapHistoryFromDB) || [];
     
     let monthLocks: MonthLock[] = [];
     try {
@@ -818,6 +819,15 @@ export const deleteOrganizationFundTransaction = async (url: string, key: string
 };
 
 export const loadRequisitions = async (url: string, key: string, societyId?: string): Promise<Requisition[]> => {
+    if (societyId && societyId.toLowerCase() !== 'gmct') {
+        try {
+            const data = await tenantGatewayRequest(url, { resource: 'requisitions', operation: 'list' });
+            return (data || []).map(mapRequisitionFromDB);
+        } catch (error: any) {
+            console.warn('Failed to load tenant requisitions:', error.message || error);
+            return [];
+        }
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
     let query = supabase.from('requisitions').select('*');
@@ -831,10 +841,6 @@ export const loadRequisitions = async (url: string, key: string, societyId?: str
     query = query.order('created_at', { ascending: false });
     const { data, error } = await query;
     if (error) {
-        if (societyId && (error.message?.includes('society_id') || (error as any).code === '42703')) {
-            const { data: fbData } = await supabase.from('requisitions').select('*').order('created_at', { ascending: false });
-            return (fbData || []).map(mapRequisitionFromDB);
-        }
         console.warn('Failed to load requisitions:', error.message);
         return [];
     }
@@ -1816,6 +1822,10 @@ export const loadAttendanceReport = async (url: string, key: string, startDate: 
 };
 
 export const saveWeeklyHistoryToSupabase = async (url: string, key: string, record: WeeklyHistoryRecord) => {
+    if (record.societyId && record.societyId.toLowerCase() !== 'gmct') {
+        await tenantGatewayRequest(url, { resource: 'weekly_history', operation: 'upsert', record: mapHistoryToDB(record) });
+        return { success: true };
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
 
@@ -1824,7 +1834,11 @@ export const saveWeeklyHistoryToSupabase = async (url: string, key: string, reco
     return { success: true };
 };
 
-export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, id: string) => {
+export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, id: string, societyId?: string) => {
+    if (societyId && societyId.toLowerCase() !== 'gmct') {
+        await tenantGatewayRequest(url, { resource: 'weekly_history', operation: 'delete', recordId: id });
+        return { success: true };
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
 

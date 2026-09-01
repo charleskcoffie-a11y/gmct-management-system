@@ -98,19 +98,25 @@ Deno.serve(async request => {
 
     const resource = body?.resource
     const operation = body?.operation
-    if (!['members', 'entries'].includes(resource)) return json({ error: 'Unsupported tenant resource.' }, 400)
+    if (!['members', 'entries', 'requisitions', 'weekly_history'].includes(resource)) return json({ error: 'Unsupported tenant resource.' }, 400)
 
     if (operation === 'list') {
-      const orderColumn = resource === 'members' ? 'name' : 'date'
+      const orderColumn = resource === 'members' ? 'name' : resource === 'weekly_history' ? 'date_of_service' : resource === 'requisitions' ? 'created_at' : 'date'
       const { data, error } = await supabase.from(resource).select('*').eq('society_id', tenantUser.society_id).order(orderColumn, { ascending: resource === 'members' })
       if (error) return json({ error: `Unable to load ${resource}.` }, 500)
       return json({ data: data || [] })
     }
 
-    const writeRoles = resource === 'members'
-      ? ['admin', 'class-leader']
+    const writeRoles = resource === 'members' ? ['admin', 'class-leader']
+      : resource === 'weekly_history' ? ['admin', 'pastor', 'statistician']
       : ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor']
     if (!writeRoles.includes(tenantUser.role)) return json({ error: 'Your role cannot modify this resource.' }, 403)
+    if (operation === 'delete' && typeof body?.recordId === 'string') {
+      const { error } = await supabase.from(resource).delete().eq('id', body.recordId).eq('society_id', tenantUser.society_id)
+      if (error) return json({ error: `Unable to delete ${resource}.` }, 500)
+      await supabase.from('tenant_audit_log').insert({ society_id: tenantUser.society_id, credential_id: tenantUser.id, action: `${resource}_deleted`, details: { recordId: body.recordId } })
+      return json({ ok: true })
+    }
     if (operation !== 'upsert' || !body?.record || typeof body.record !== 'object') return json({ error: 'Unsupported tenant operation.' }, 400)
 
     const record = { ...body.record, society_id: tenantUser.society_id }
@@ -118,6 +124,48 @@ Deno.serve(async request => {
     if (error) return json({ error: `Unable to save ${resource}.` }, 500)
     await supabase.from('tenant_audit_log').insert({ society_id: tenantUser.society_id, credential_id: tenantUser.id, action: `${resource}_upserted`, details: { recordId: data.id } })
     return json({ data })
+  }
+
+  if (path === 'receipt-profile') {
+    const tenantUser = await requireTenantUser(request, supabase)
+    if (!tenantUser || tenantUser.role !== 'admin' || tenantUser.society_id === 'gmct') {
+      return json({ error: 'A branch Society Administrator session is required.' }, 401)
+    }
+
+    if (body?.operation === 'load') {
+      const { data: profile, error: loadError } = await supabase.from('tenant_receipt_profiles').select('*').eq('society_id', tenantUser.society_id).maybeSingle()
+      if (loadError) return json({ error: 'Receipt profile storage is not ready. Run the tenant receipt profile migration.' }, 503)
+      return json({ profile: profile ? {
+        charityNumber: profile.charity_number,
+        ministerName: profile.minister_name,
+        ministerSignature: profile.minister_signature || '',
+        treasurerName: profile.treasurer_name,
+        treasurerSignature: profile.treasurer_signature || '',
+      } : null })
+    }
+
+    const profile = body?.profile
+    const charityNumber = typeof profile?.charityNumber === 'string' ? profile.charityNumber.trim() : ''
+    const ministerName = typeof profile?.ministerName === 'string' ? profile.ministerName.trim() : ''
+    const treasurerName = typeof profile?.treasurerName === 'string' ? profile.treasurerName.trim() : ''
+    const ministerSignature = typeof profile?.ministerSignature === 'string' ? profile.ministerSignature : ''
+    const treasurerSignature = typeof profile?.treasurerSignature === 'string' ? profile.treasurerSignature : ''
+    if (!charityNumber || !ministerName || !treasurerName) return json({ error: 'Charity number, minister name, and treasurer name are required.' }, 400)
+    if ([ministerSignature, treasurerSignature].some(signature => signature.length > 1400000)) return json({ error: 'Each signature image must be smaller than 1 MB.' }, 413)
+
+    const receiptProfile = { charityNumber, ministerName, ministerSignature, treasurerName, treasurerSignature }
+    const { error: updateError } = await supabase.from('tenant_receipt_profiles').upsert({
+      society_id: tenantUser.society_id,
+      charity_number: charityNumber,
+      minister_name: ministerName,
+      minister_signature: ministerSignature || null,
+      treasurer_name: treasurerName,
+      treasurer_signature: treasurerSignature || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'society_id' })
+    if (updateError) return json({ error: 'Unable to save receipt signing authority.' }, 500)
+    await supabase.from('tenant_audit_log').insert({ society_id: tenantUser.society_id, credential_id: tenantUser.id, action: 'receipt_profile_updated', details: { ministerName, treasurerName } })
+    return json({ ok: true, profile: receiptProfile })
   }
 
   if (path === 'societies') {

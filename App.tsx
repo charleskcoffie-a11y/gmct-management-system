@@ -1851,6 +1851,7 @@ const App: React.FC = () => {
                         members={societyMembers}
                         settings={settings}
                         selectedSociety={selectedSociety}
+                        currentUser={currentUser}
                     />
                 );
             case 'wesley-hall':
@@ -1897,7 +1898,7 @@ const App: React.FC = () => {
                         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
                             <h3 className="text-lg font-bold">📅 Weekly History</h3>
                         </div>
-                        <WeeklyHistory history={societyWeeklyHistory} setHistory={setWeeklyHistory} settings={settings} />
+                        <WeeklyHistory history={societyWeeklyHistory} setHistory={setWeeklyHistory} settings={settings} selectedSocietyId={selectedSociety.id} />
                     </div>
                 );
             case 'bible-class-attendance':
@@ -1987,7 +1988,7 @@ const App: React.FC = () => {
     const refreshRequisitions = async () => {
         if (!settings.supabaseUrl || !settings.supabaseKey) return;
         try {
-            const updatedRequisitions = await loadRequisitions(settings.supabaseUrl, settings.supabaseKey);
+            const updatedRequisitions = await loadRequisitions(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id);
             setRequisitions(updatedRequisitions);
         } catch (err) {
             console.warn('Failed to refresh requisitions:', err);
