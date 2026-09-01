@@ -219,8 +219,8 @@ const App: React.FC = () => {
             loadEntriesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Entries load failed:', err); return []; }),
             loadHarvestPledgesFromSupabase(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Harvest pledges load failed:', err); return []; }),
             loadRequisitions(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Requisitions load failed:', err); return []; }),
-            loadParkingReceipts(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Parking receipts load failed:', err); return []; }),
-            loadWesleyHallReceipts(settings.supabaseUrl, settings.supabaseKey, selectedSociety.id).catch(err => { console.warn('Wesley Hall receipts load failed:', err); return []; })
+            selectedSociety.isPrimary ? loadParkingReceipts(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Parking receipts load failed:', err); return []; }) : Promise.resolve([]),
+            selectedSociety.isPrimary ? loadWesleyHallReceipts(settings.supabaseUrl, settings.supabaseKey).catch(err => { console.warn('Wesley Hall receipts load failed:', err); return []; }) : Promise.resolve([])
         ]).then(([loadedMembers, loadedEntries, loadedPledges, loadedRequisitions, loadedParkingReceipts, loadedWesleyHallReceipts]) => {
             setMembers(loadedMembers || []);
             setEntries(loadedEntries || []);
@@ -229,7 +229,7 @@ const App: React.FC = () => {
             setParkingReceipts(loadedParkingReceipts || []);
             setWesleyHallReceipts(loadedWesleyHallReceipts || []);
         }).catch(err => console.error('Failed to load data from database:', err));
-    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, selectedSociety.id]);
+    }, [settings.supabaseUrl, settings.supabaseKey, syncStatus.state, selectedSociety.id, selectedSociety.isPrimary]);
 
     useEffect(() => {
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
@@ -1136,7 +1136,7 @@ const App: React.FC = () => {
             }
         };
         switch (activeTab) {
-            case 'home': return <Dashboard entries={societyEntries} members={societyMembers} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={societyRequisitions} parkingReceipts={parkingReceipts} wesleyHallReceipts={wesleyHallReceipts}/>;
+            case 'home': return <Dashboard entries={societyEntries} members={societyMembers} settings={settings} currentUser={currentUser} monthLocks={monthLocks} sundayLocks={sundayLocks} requisitions={societyRequisitions} parkingReceipts={selectedSociety.isPrimary ? parkingReceipts : []} wesleyHallReceipts={selectedSociety.isPrimary ? wesleyHallReceipts : []}/>;
             case 'harvest':
                 return (
                     <Harvest 
