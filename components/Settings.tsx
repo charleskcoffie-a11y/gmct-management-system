@@ -478,6 +478,13 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                             setSocietiesList(prev => prev.map(s => s.id === activeSocietyObj.id ? { ...s, features: updatedFeatures } : s));
                         };
 
+                        const handleMaxClassesChange = (value: number) => {
+                            const maxClasses = Math.min(50, Math.max(1, value || 1));
+                            setSocietiesList(previous => previous.map(society => society.id === activeSocietyObj.id
+                                ? { ...society, features: { ...society.features, maxClasses } }
+                                : society));
+                        };
+
                         const handleSaveFeatures = async () => {
                             setIsSavingSocietyFeatures(true);
                             try {
@@ -516,7 +523,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                                             phone: newSociety.phone.trim() || undefined,
                                             email: newSociety.email.trim() || undefined,
                                             accentColor: 'indigo',
-                                            features: { etransfers: true, requisitions: true, harvest: true, harvestPledges: true, taxReceipts: true, assets: true, organizationFunds: true, dayBorn: true, childrensMinistry: true },
+                                            features: { maxClasses: 5, etransfers: true, requisitions: true, harvest: true, harvestPledges: true, taxReceipts: true, assets: true, organizationFunds: true, dayBorn: true, childrensMinistry: true },
                                         };
                                         await onCreateSociety?.(society);
                                         setSelectedSocietyToManage(society.id);
@@ -741,6 +748,18 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                                         );
                                     })}
                                 </div>
+
+                                {!activeSocietyObj.isPrimary && <div className="bg-white p-4 rounded-xl border border-cyan-200">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <h4 className="text-sm font-bold text-cyan-950">Number of Bible Classes</h4>
+                                            <p className="text-xs text-slate-600 mt-1">Set the class count available throughout {activeSocietyObj.shortName}.</p>
+                                        </div>
+                                        <label className="text-xs font-semibold text-slate-700">Total classes
+                                            <input type="number" min={1} max={50} value={features.maxClasses ?? 5} onChange={event => handleMaxClassesChange(Number(event.target.value))} className="mt-1 block w-28 rounded-lg border border-cyan-300 px-3 py-2 text-base font-bold text-cyan-950" />
+                                        </label>
+                                    </div>
+                                </div>}
 
                                 <div className="flex justify-end pt-2">
                                     <button

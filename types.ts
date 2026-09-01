@@ -121,6 +121,7 @@ export interface User {
 }
 
 export interface SocietyFeatures {
+    maxClasses?: number;
     wesleyHall?: boolean;
     parking?: boolean;
     etransfers?: boolean;

@@ -118,7 +118,7 @@ const App: React.FC = () => {
     const [members, setMembers] = useState<Member[]>([]);
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
     const [classLeaders, setClassLeaders] = useState<ClassLeader[]>([]);
-    const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
+    const [storedSettings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
 
     // Multi-tenant Canada Mission Society Selection
     const [selectedSocietyId, setSelectedSocietyId] = useLocalStorage<string>('canada-mission-society-id', 'gmct');
@@ -128,6 +128,13 @@ const App: React.FC = () => {
     const selectedSociety: Society = useMemo(() => {
         return societies.find(s => s.id === selectedSocietyId) || DEFAULT_SOCIETY;
     }, [selectedSocietyId, societies]);
+
+    const settings = useMemo<Settings>(() => ({
+        ...storedSettings,
+        maxClasses: selectedSociety.isPrimary
+            ? storedSettings.maxClasses
+            : selectedSociety.features.maxClasses ?? 5,
+    }), [storedSettings, selectedSociety]);
 
     const [weeklyHistory, setWeeklyHistory] = useState<WeeklyHistoryRecord[]>([]);
     const [developmentFund, setDevelopmentFund] = useState<DevelopmentFundEntry[]>([]);
