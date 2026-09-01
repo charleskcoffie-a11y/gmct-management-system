@@ -31,6 +31,19 @@ export const getSupabaseClient = (url: string, key: string): SupabaseClient | nu
     }
 };
 
+const tenantGatewayRequest = async (url: string, payload: Record<string, unknown>) => {
+    const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('gmct-tenant-session') : null;
+    if (!token) throw new Error('Your society session has expired. Please sign in again.');
+    const response = await fetch(`${url}/functions/v1/tenant-gateway/tenant-data`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Tenant data request failed.');
+    return result.data;
+};
+
 // --- Connection Test ---
 export const testSupabaseConnection = async (url: string, key: string) => {
     try {
@@ -422,29 +435,30 @@ export const downloadDataFromSupabase = async (url: string, key: string, society
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    let memQuery = supabase.from('members').select('*');
-    if (societyId) {
+    const usesTenantGateway = !!societyId && societyId.toLowerCase() !== 'gmct';
+    let members: Member[] = [];
+    if (usesTenantGateway) {
+        const membersDB = await tenantGatewayRequest(url, { resource: 'members', operation: 'list' });
+        members = (membersDB || []).map(mapMemberFromDB);
+    } else {
+        let memQuery = supabase.from('members').select('*');
+        if (societyId) {
         if (societyId.toLowerCase() === 'gmct') {
             memQuery = memQuery.or('society_id.eq.gmct,society_id.is.null');
         } else {
             memQuery = memQuery.eq('society_id', societyId);
         }
-    }
-    const { data: membersDB, error: memErr } = await memQuery;
-    if (memErr) {
-        // Fallback if society_id column doesn't exist yet
-        if (memErr.message?.includes('society_id') || (memErr as any).code === '42703') {
-            const { data: fbData } = await supabase.from('members').select('*');
-            memErr.message = '';
-        } else {
-            throw new Error(`Fetch Members failed: ${memErr.message}`);
         }
+        const { data: membersDB, error: memErr } = await memQuery;
+        if (memErr) throw new Error(`Fetch Members failed: ${memErr.message}`);
+        members = membersDB?.map(mapMemberFromDB) || [];
     }
-    const members = membersDB?.map(mapMemberFromDB) || [];
 
     let entriesDB: any[] = [];
     try {
-        entriesDB = await fetchAllRows(supabase, 'entries', 'date', false, societyId);
+        entriesDB = usesTenantGateway
+            ? await tenantGatewayRequest(url, { resource: 'entries', operation: 'list' })
+            : await fetchAllRows(supabase, 'entries', 'date', false, societyId);
     } catch (entErr: any) {
         throw new Error(`Fetch Entries failed: ${entErr.message}`);
     }
@@ -882,6 +896,10 @@ export const decideRequisition = async (url: string, key: string, approval: Requ
 
 // --- Individual Entry Operations (for multi-user real-time collaboration) ---
 export const saveEntryToSupabase = async (url: string, key: string, entry: Entry) => {
+    if (entry.societyId && entry.societyId.toLowerCase() !== 'gmct') {
+        await tenantGatewayRequest(url, { resource: 'entries', operation: 'upsert', record: mapEntryToDB(entry) });
+        return { success: true };
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
     
@@ -1000,6 +1018,15 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
 };
 
 export const loadEntriesFromSupabase = async (url: string, key: string, societyId?: string): Promise<Entry[]> => {
+    if (societyId && societyId.toLowerCase() !== 'gmct') {
+        try {
+            const data = await tenantGatewayRequest(url, { resource: 'entries', operation: 'list' });
+            return (data || []).map(mapEntryFromDB);
+        } catch (error: any) {
+            console.warn('Failed to load tenant entries:', error.message || error);
+            return [];
+        }
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
     try {
@@ -1012,6 +1039,15 @@ export const loadEntriesFromSupabase = async (url: string, key: string, societyI
 };
 
 export const loadMembersFromSupabase = async (url: string, key: string, societyId?: string): Promise<Member[]> => {
+    if (societyId && societyId.toLowerCase() !== 'gmct') {
+        try {
+            const data = await tenantGatewayRequest(url, { resource: 'members', operation: 'list' });
+            return (data || []).map(mapMemberFromDB);
+        } catch (error: any) {
+            console.warn('Failed to load tenant members:', error.message || error);
+            return [];
+        }
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return [];
     try {
@@ -1041,6 +1077,10 @@ export const loadMembersFromSupabase = async (url: string, key: string, societyI
 };
 
 export const saveMemberToSupabase = async (url: string, key: string, member: Member) => {
+    if (member.societyId && member.societyId.toLowerCase() !== 'gmct') {
+        const data = await tenantGatewayRequest(url, { resource: 'members', operation: 'upsert', record: mapMemberToDB(member) });
+        return { success: true, member: mapMemberFromDB(data) } as { success: true; member: Member };
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
     

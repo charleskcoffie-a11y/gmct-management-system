@@ -41,7 +41,7 @@ function createSalt() {
   return toHex(bytes.buffer)
 }
 
-async function requireSoftwareAdmin(request: Request, supabase: ReturnType<typeof createClient>) {
+async function requireTenantUser(request: Request, supabase: ReturnType<typeof createClient>) {
   const authorization = request.headers.get('Authorization') || ''
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
   if (!token) return null
@@ -58,10 +58,18 @@ async function requireSoftwareAdmin(request: Request, supabase: ReturnType<typeo
     .select('id, society_id, role, enabled')
     .eq('id', session.credential_id)
     .maybeSingle()
-  if (!credential?.enabled || credential.role !== 'software-admin' || credential.society_id !== 'gmct') return null
+  if (!credential?.enabled) return null
+
+  const { data: society } = await supabase.from('societies').select('status').eq('id', credential.society_id).maybeSingle()
+  if (!society || society.status === 'archived') return null
 
   await supabase.from('tenant_sessions').update({ last_seen_at: new Date().toISOString() }).eq('id', session.id)
   return credential
+}
+
+async function requireSoftwareAdmin(request: Request, supabase: ReturnType<typeof createClient>) {
+  const credential = await requireTenantUser(request, supabase)
+  return credential?.role === 'software-admin' && credential.society_id === 'gmct' ? credential : null
 }
 
 Deno.serve(async request => {
@@ -84,6 +92,34 @@ Deno.serve(async request => {
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405)
 
   const body = await request.json().catch(() => null)
+  if (path === 'tenant-data') {
+    const tenantUser = await requireTenantUser(request, supabase)
+    if (!tenantUser || tenantUser.role === 'software-admin') return json({ error: 'A valid society session is required.' }, 401)
+
+    const resource = body?.resource
+    const operation = body?.operation
+    if (!['members', 'entries'].includes(resource)) return json({ error: 'Unsupported tenant resource.' }, 400)
+
+    if (operation === 'list') {
+      const orderColumn = resource === 'members' ? 'name' : 'date'
+      const { data, error } = await supabase.from(resource).select('*').eq('society_id', tenantUser.society_id).order(orderColumn, { ascending: resource === 'members' })
+      if (error) return json({ error: `Unable to load ${resource}.` }, 500)
+      return json({ data: data || [] })
+    }
+
+    const writeRoles = resource === 'members'
+      ? ['admin', 'class-leader']
+      : ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor']
+    if (!writeRoles.includes(tenantUser.role)) return json({ error: 'Your role cannot modify this resource.' }, 403)
+    if (operation !== 'upsert' || !body?.record || typeof body.record !== 'object') return json({ error: 'Unsupported tenant operation.' }, 400)
+
+    const record = { ...body.record, society_id: tenantUser.society_id }
+    const { data, error } = await supabase.from(resource).upsert(record, { onConflict: 'id' }).select('*').single()
+    if (error) return json({ error: `Unable to save ${resource}.` }, 500)
+    await supabase.from('tenant_audit_log').insert({ society_id: tenantUser.society_id, credential_id: tenantUser.id, action: `${resource}_upserted`, details: { recordId: data.id } })
+    return json({ data })
+  }
+
   if (path === 'societies') {
     const softwareAdmin = await requireSoftwareAdmin(request, supabase)
     if (!softwareAdmin) return json({ error: 'A valid Software Admin session is required.' }, 401)
