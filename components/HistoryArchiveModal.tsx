@@ -1,5 +1,6 @@
 // components/HistoryArchiveModal.tsx
 import React, { useMemo, useState } from 'react';
+import jsPDF from 'jspdf';
 import type { WeeklyHistoryRecord } from '../types';
 
 interface HistoryArchiveModalProps {
@@ -13,6 +14,8 @@ interface HistoryArchiveModalProps {
 const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClose, history, onEditRecord, onDeleteRecord }) => {
     const [yearFilter, setYearFilter] = useState<string>('all');
     const [monthFilter, setMonthFilter] = useState<string>('all');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
     const availableYears = useMemo(() => {
@@ -27,9 +30,68 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
             const month = rec.dateOfService.slice(5, 7);
             if (yearFilter !== 'all' && year !== yearFilter) return false;
             if (monthFilter !== 'all' && month !== monthFilter) return false;
+            if (startDate && rec.dateOfService < startDate) return false;
+            if (endDate && rec.dateOfService > endDate) return false;
             return true;
         }).sort((a, b) => b.dateOfService.localeCompare(a.dateOfService));
-    }, [history, yearFilter, monthFilter]);
+    }, [history, yearFilter, monthFilter, startDate, endDate]);
+
+    const downloadCombinedReport = () => {
+        if (!filteredHistory.length) return;
+
+        const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 42;
+        const contentWidth = pageWidth - margin * 2;
+        let y = margin;
+
+        const addPage = () => {
+            pdf.addPage();
+            y = margin;
+        };
+        const writeLines = (text: string, size = 9, bold = false) => {
+            if (!text.trim()) return;
+            pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+            pdf.setFontSize(size);
+            const lines = pdf.splitTextToSize(text, contentWidth);
+            if (y + lines.length * (size + 3) > pageHeight - margin) addPage();
+            pdf.text(lines, margin, y);
+            y += lines.length * (size + 3) + 7;
+        };
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(18);
+        pdf.text('Weekly History Archive Report', margin, y);
+        y += 21;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        const rangeLabel = startDate || endDate ? `${startDate || 'Beginning'} to ${endDate || 'Present'}` : 'All selected archive records';
+        pdf.text(`${rangeLabel} | ${filteredHistory.length} record${filteredHistory.length === 1 ? '' : 's'}`, margin, y);
+        y += 22;
+
+        [...filteredHistory].reverse().forEach((record, index) => {
+            if (y + 115 > pageHeight - margin) addPage();
+            pdf.setDrawColor(203, 213, 225);
+            pdf.line(margin, y, pageWidth - margin, y);
+            y += 14;
+            writeLines(`${index + 1}. ${record.societyName || 'Weekly Service'} - ${record.dateOfService}`, 13, true);
+            writeLines(`Officiant: ${record.officiant || '-'} | Liturgist: ${record.liturgist || '-'} | Prepared by: ${record.preparedBy || '-'}`);
+            writeLines(`Service: ${record.serviceTypes.join(', ') || '-'}${record.serviceTypeOther ? ` (${record.serviceTypeOther})` : ''}`);
+            const attendance = record.attendance || { men: 0, women: 0, junior: 0, children: 0, visitors: 0, catechumens: 0 };
+            const total = attendance.men + attendance.women + attendance.junior + attendance.children + attendance.visitors + attendance.catechumens;
+            writeLines(`Attendance: ${total} total | Men ${attendance.men}, Women ${attendance.women}, Junior ${attendance.junior}, Children ${attendance.children}, Visitors ${attendance.visitors}, Catechumens ${attendance.catechumens}`);
+            writeLines(`Sermon Topic: ${record.sermonTopic || '-'}${record.memoryVerse ? ` | Memory Verse: ${record.memoryVerse}` : ''}`);
+            writeLines(`Visitors: ${record.visitorsList.length ? record.visitorsList.map(visitor => `${visitor.name}${visitor.from ? ` (${visitor.from})` : ''}`).join('; ') : 'None'}`);
+            writeLines(`Donations: ${record.donationsList.length ? record.donationsList.map(donation => `${donation.donor}: $${Number(donation.amount || 0).toFixed(2)}${donation.description ? ` (${donation.description})` : ''}`).join('; ') : 'None'}`);
+            writeLines(`Events: ${record.events || '-'}`);
+            writeLines(`Worship Highlights: ${record.worshipHighlights || '-'}`);
+            writeLines(`Observations: ${record.observations || '-'}`);
+            y += 5;
+        });
+
+        pdf.save(`weekly-history-archive-${startDate || 'all'}-to-${endDate || 'present'}.pdf`);
+    };
 
     if (!isOpen) return null;
 
@@ -48,7 +110,7 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
                 </div>
 
                 {/* Filters */}
-                <div className="bg-gradient-to-r from-slate-50 to-slate-100 p-6 border-b border-slate-200 flex flex-col md:flex-row gap-4 items-end">
+                <div className="bg-gradient-to-r from-slate-50 to-slate-100 p-6 border-b border-slate-200 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-end">
                     <div className="flex-1">
                         <label className="block text-sm font-bold uppercase text-slate-700 mb-2">📅 Year</label>
                         <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="w-full border-2 border-slate-300 rounded-lg py-2 px-3 font-bold text-slate-700 focus:ring-2 focus:ring-slate-400 focus:border-slate-400">
@@ -66,6 +128,14 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
                                 <option key={month} value={month}>Month {month}</option>
                             ))}
                         </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold uppercase text-slate-700 mb-2">Start Date</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border-2 border-slate-300 rounded-lg py-2 px-3 font-bold text-slate-700" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold uppercase text-slate-700 mb-2">End Date</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border-2 border-slate-300 rounded-lg py-2 px-3 font-bold text-slate-700" />
                     </div>
                     <div className="text-sm font-bold text-slate-700 bg-white px-4 py-2 rounded-lg border border-slate-300">
                         📋 {filteredHistory.length} record{filteredHistory.length !== 1 ? 's' : ''}
@@ -184,6 +254,9 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
 
                 {/* Footer */}
                 <div className="bg-slate-100 border-t border-slate-200 p-4 flex justify-end gap-3">
+                    <button onClick={downloadCombinedReport} disabled={!filteredHistory.length} className="bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">
+                        Download Combined PDF
+                    </button>
                     <button onClick={onClose} className="bg-gradient-to-br from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">
                         Close Archive
                     </button>
