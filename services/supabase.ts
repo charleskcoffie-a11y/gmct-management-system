@@ -938,9 +938,26 @@ export const saveEntryToSupabase = async (url: string, key: string, entry: Entry
 };
 
 export const checkEntryDuplicateInSupabase = async (url: string, key: string, entry: Entry): Promise<boolean> => {
+    if (!entry.memberID || !entry.date || !entry.type) return false;
+
+    if (entry.societyId && entry.societyId.toLowerCase() !== 'gmct') {
+        try {
+            return Boolean(await tenantGatewayRequest(url, {
+                resource: 'entries',
+                operation: 'exists',
+                memberId: entry.memberID,
+                date: entry.date,
+                type: entry.type,
+                entryId: entry.id,
+            }));
+        } catch (error: any) {
+            console.warn('Tenant duplicate check failed:', error.message);
+            return false;
+        }
+    }
+
     const supabase = getSupabaseClient(url, key);
     if (!supabase) return false;
-    if (!entry.memberID || !entry.date || !entry.type) return false;
 
     const { data, error } = await supabase
         .from('entries')
@@ -965,8 +982,19 @@ export const markEntryAsDeletedInSupabase = async (
     key: string,
     entryId: string,
     deletedBy: string,
-    deletedReason: string
+    deletedReason: string,
+    entry?: Entry
 ) => {
+    if (entry?.societyId && entry.societyId.toLowerCase() !== 'gmct') {
+        await tenantGatewayRequest(url, {
+            resource: 'entries',
+            operation: 'mark-deleted',
+            entry,
+            deletedBy,
+            deletedReason,
+        });
+        return { success: true };
+    }
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
 
@@ -993,6 +1021,7 @@ export const logEntryDeletionToSupabase = async (
     deletedBy: string,
     deletionReason: string
 ) => {
+    if (entry.societyId && entry.societyId.toLowerCase() !== 'gmct') return { success: true };
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
 

@@ -317,7 +317,8 @@ const DayBorn: React.FC<DayBornProps> = ({ members, entries, setEntries, setting
                 settings.supabaseKey,
                 deleteId,
                 (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
-                deleteReason
+                deleteReason,
+                entry
             );
             
             // Log the deletion

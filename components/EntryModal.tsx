@@ -507,7 +507,8 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                                                         settings.supabaseKey,
                                                                         entry.id,
                                                                         currentUser?.username || 'Unknown',
-                                                                        deleteReason
+                                                                        deleteReason,
+                                                                        entry
                                                                     );
                                                                 }
                                                                 

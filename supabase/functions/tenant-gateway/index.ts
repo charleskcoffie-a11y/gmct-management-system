@@ -107,6 +107,59 @@ Deno.serve(async request => {
       return json({ data: data || [] })
     }
 
+    if (resource === 'entries' && operation === 'exists') {
+      const memberId = typeof body?.memberId === 'string' ? body.memberId : ''
+      const date = typeof body?.date === 'string' ? body.date : ''
+      const type = typeof body?.type === 'string' ? body.type : ''
+      const entryId = typeof body?.entryId === 'string' ? body.entryId : ''
+      if (!memberId || !date || !type) return json({ error: 'Member, date, and entry type are required.' }, 400)
+
+      const { data, error } = await supabase.from('entries').select('id')
+        .eq('society_id', tenantUser.society_id)
+        .eq('member_id', memberId)
+        .eq('date', date)
+        .eq('type', type)
+        .or('deleted.is.null,deleted.eq.false')
+        .limit(2)
+      if (error) return json({ error: 'Unable to check for duplicate entries.' }, 500)
+      return json({ data: (data || []).some(entry => entry.id !== entryId) })
+    }
+
+    if (resource === 'entries' && operation === 'mark-deleted') {
+      const entry = body?.entry
+      const entryId = typeof entry?.id === 'string' ? entry.id : ''
+      const deletedBy = typeof body?.deletedBy === 'string' && body.deletedBy.trim() ? body.deletedBy.trim() : 'Unknown'
+      const deletedReason = typeof body?.deletedReason === 'string' && body.deletedReason.trim() ? body.deletedReason.trim() : 'No reason provided'
+      if (!entryId || !entry || typeof entry !== 'object') return json({ error: 'The entry to delete is required.' }, 400)
+
+      const deletedAt = new Date().toISOString()
+      const { data: updatedEntry, error: updateError } = await supabase.from('entries').update({
+        deleted: true,
+        deleted_by: deletedBy,
+        deleted_reason: deletedReason,
+        deleted_at: deletedAt,
+        updated_by: deletedBy,
+        last_updated: deletedAt,
+      }).eq('id', entryId).eq('society_id', tenantUser.society_id).select('id').maybeSingle()
+      if (updateError || !updatedEntry) return json({ error: 'Unable to delete entry.' }, 500)
+
+      const { error: logError } = await supabase.from('entry_deletions').insert({
+        entry_id: entryId,
+        entry_type: entry.type,
+        member_id: entry.memberID || null,
+        member_name: entry.memberName || null,
+        amount: entry.amount ?? null,
+        original_date: entry.date || null,
+        deletion_reason: deletedReason,
+        deleted_by: deletedBy,
+        deleted_at: deletedAt,
+        original_entry_data: entry,
+      })
+      if (logError) return json({ error: 'Entry was deleted but its audit log could not be saved.' }, 500)
+      await supabase.from('tenant_audit_log').insert({ society_id: tenantUser.society_id, credential_id: tenantUser.id, action: 'entry_deleted', details: { entryId, deletedReason } })
+      return json({ ok: true })
+    }
+
     const writeRoles = resource === 'members' ? ['admin', 'class-leader']
       : resource === 'weekly_history' ? ['admin', 'pastor', 'statistician']
       : ['admin', 'finance-chair', 'finance-team', 'data-entry', 'pastor']

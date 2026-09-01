@@ -548,7 +548,8 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                 settings.supabaseKey,
                 deleteId,
                 (typeof currentUser === 'object' && currentUser?.username) ? currentUser.username : 'Unknown',
-                deleteReason
+                deleteReason,
+                entry
             );
             
             // Log the deletion

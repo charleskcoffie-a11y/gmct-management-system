@@ -365,7 +365,8 @@ const DevelopmentFund: React.FC<DevelopmentFundProps> = ({ members, entries, set
                     settings.supabaseKey, 
                     deleteId,
                     currentUser.username,
-                    deleteReason
+                    deleteReason,
+                    entry
                 );
             }
             
