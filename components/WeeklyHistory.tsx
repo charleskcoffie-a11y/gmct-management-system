@@ -487,7 +487,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
             <h2 className="text-3xl font-bold mb-6 text-white bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-3 rounded-lg inline-block">📅 Weekly History</h2>
 
             {/* Show empty state when no history and no active editing */}
-            {history.length === 0 && !selectedRecordId ? (
+            {history.length === 0 && !selectedRecordId && !isFullEditorOpen ? (
                 <div className="text-center py-20 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border-2 border-amber-200">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto mb-6 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
