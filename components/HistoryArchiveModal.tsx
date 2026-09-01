@@ -167,33 +167,12 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
                                     </div>
                                 </div>
 
-                                {/* Details Row */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 text-xs">
-                                    <div className="bg-blue-100 border border-blue-300 rounded-lg p-2 text-center">
-                                        <div className="font-bold text-blue-900">👥 Attendance</div>
-                                        <div className="font-extrabold text-lg text-blue-700">{rec.attendance.men + rec.attendance.women + rec.attendance.children + rec.attendance.visitors}</div>
-                                    </div>
-                                    <div className="bg-emerald-100 border border-emerald-300 rounded-lg p-2 text-center">
-                                        <div className="font-bold text-emerald-900">🤝 Visitors</div>
-                                        <div className="font-extrabold text-lg text-emerald-700">{rec.visitorsList.length}</div>
-                                    </div>
-                                    <div className="bg-amber-100 border border-amber-300 rounded-lg p-2 text-center">
-                                        <div className="font-bold text-amber-900">💝 Donations</div>
-                                        <div className="font-extrabold text-lg text-amber-700">{rec.donationsList.length}</div>
-                                    </div>
-                                    <div className="bg-purple-100 border border-purple-300 rounded-lg p-2 text-center">
-                                        <div className="font-bold text-purple-900">📝 By</div>
-                                        <div className="font-bold text-purple-700 truncate">{rec.preparedBy || '—'}</div>
-                                    </div>
-                                </div>
-
-                                {/* Expand Details & Edit Button */}
                                 <div className="flex gap-2">
                                     <button 
                                         onClick={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
                                         className="flex-1 bg-slate-300 hover:bg-slate-400 text-slate-900 font-bold py-1 px-3 rounded text-sm"
                                     >
-                                        {expandedId === rec.id ? '▼ Collapse' : '▶ Details'}
+                                        {expandedId === rec.id ? '▼ Hide Details' : '▶ View Details'}
                                     </button>
                                     {onEditRecord && (
                                         <button 
@@ -220,9 +199,27 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
                                     )}
                                 </div>
 
-                                {/* Expanded Details */}
                                 {expandedId === rec.id && (
-                                    <div className="mt-3 pt-3 border-t border-slate-300 grid grid-cols-2 gap-2 text-xs">
+                                    <div className="mt-3 pt-3 border-t border-slate-300 space-y-3 text-xs">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <div className="bg-blue-100 border border-blue-300 rounded-lg p-2 text-center">
+                                                <div className="font-bold text-blue-900">👥 Attendance</div>
+                                                <div className="font-extrabold text-lg text-blue-700">{rec.attendance.men + rec.attendance.women + rec.attendance.children + rec.attendance.visitors}</div>
+                                            </div>
+                                            <div className="bg-emerald-100 border border-emerald-300 rounded-lg p-2 text-center">
+                                                <div className="font-bold text-emerald-900">🤝 Visitors</div>
+                                                <div className="font-extrabold text-lg text-emerald-700">{rec.visitorsList.length}</div>
+                                            </div>
+                                            <div className="bg-amber-100 border border-amber-300 rounded-lg p-2 text-center">
+                                                <div className="font-bold text-amber-900">💝 Donations</div>
+                                                <div className="font-extrabold text-lg text-amber-700">{rec.donationsList.length}</div>
+                                            </div>
+                                            <div className="bg-purple-100 border border-purple-300 rounded-lg p-2 text-center">
+                                                <div className="font-bold text-purple-900">📝 By</div>
+                                                <div className="font-bold text-purple-700 truncate">{rec.preparedBy || '—'}</div>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
                                         <div className="bg-white p-2 rounded border border-slate-200">
                                             <span className="font-bold text-slate-600">Liturgist:</span> {rec.liturgist || '—'}
                                         </div>
@@ -239,6 +236,7 @@ const HistoryArchiveModal: React.FC<HistoryArchiveModalProps> = ({ isOpen, onClo
                                                 <span className="font-bold text-slate-600">Observations:</span> {rec.observations}
                                             </div>
                                         )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
