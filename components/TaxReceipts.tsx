@@ -73,6 +73,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileMessage, setProfileMessage] = useState('');
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [excludedMemberIds, setExcludedMemberIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         setReceiptProfile({
@@ -190,9 +191,14 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
             });
     }, [combinedEntries, membersById, minAmount, selectedClass, year]);
 
+    const selectedReceiptMembers = useMemo(
+        () => filteredTotals.filter(member => !excludedMemberIds.has(member.memberId)),
+        [filteredTotals, excludedMemberIds]
+    );
+
     const handleDownloadPdf = async () => {
-        if (!filteredTotals.length) {
-            setProfileMessage('No eligible receipts are available for the selected year and amount.');
+        if (!selectedReceiptMembers.length) {
+            setProfileMessage('Select at least one member before downloading receipts.');
             return;
         }
 
@@ -294,9 +300,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                 pdf.text(`Receipt No: ${member.serial} | Tax Year: ${year}`, margin + 10, top + 187);
             };
 
-            for (let index = 0; index < filteredTotals.length; index++) {
+            for (let index = 0; index < selectedReceiptMembers.length; index++) {
                 if (index > 0) pdf.addPage('letter', 'portrait');
-                const member = filteredTotals[index];
+                const member = selectedReceiptMembers[index];
                 drawReceiptCopy(member, 'CRA Copy', 24);
                 drawReceiptCopy(member, 'Donor Copy', 229);
 
@@ -426,7 +432,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                     >
                         ⚙️ Receipt Details
                     </button>}
-                    <button onClick={handleDownloadPdf} disabled={isGeneratingPdf} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-lg shadow">{isGeneratingPdf ? 'Creating PDF...' : 'Download PDF'}</button>
+                    <button onClick={handleDownloadPdf} disabled={isGeneratingPdf || selectedReceiptMembers.length === 0} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-lg shadow">{isGeneratingPdf ? 'Creating PDF...' : `Download PDF (${selectedReceiptMembers.length})`}</button>
                 </div>
             </div>
             {profileMessage && <p className="no-print text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">{profileMessage}</p>}
@@ -482,6 +488,34 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                     </div>
                 </div>
             </div>
+
+            {filteredTotals.length > 0 && (
+                <div className="no-print bg-white border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-900">Select Receipt Members</h3>
+                            <p className="text-xs text-slate-600">{selectedReceiptMembers.length} of {filteredTotals.length} selected</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button type="button" onClick={() => setExcludedMemberIds(new Set())} className="px-3 py-2 text-xs font-bold rounded-lg border border-indigo-300 text-indigo-700 hover:bg-indigo-50">Select All</button>
+                            <button type="button" onClick={() => setExcludedMemberIds(new Set(filteredTotals.map(member => member.memberId)))} className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">Clear All</button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-slate-200 max-h-56 overflow-y-auto">
+                        {filteredTotals.map(member => {
+                            const isSelected = !excludedMemberIds.has(member.memberId);
+                            return <label key={member.memberId} className="flex items-center gap-3 bg-white px-4 py-3 cursor-pointer hover:bg-indigo-50">
+                                <input type="checkbox" checked={isSelected} onChange={() => setExcludedMemberIds(previous => {
+                                    const next = new Set(previous);
+                                    if (isSelected) next.add(member.memberId); else next.delete(member.memberId);
+                                    return next;
+                                })} className="h-5 w-5 text-indigo-600 rounded border-slate-300" />
+                                <span className="min-w-0"><span className="block text-sm font-bold text-slate-900 truncate">{member.memberName}</span><span className="block text-xs text-slate-500">{member.memberNumber ? `#${member.memberNumber} · ` : ''}{formatCurrency(member.total, settings.currency || 'CAD')}</span></span>
+                            </label>;
+                        })}
+                    </div>
+                </div>
+            )}
 
             {filteredTotals.length === 0 ? (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center text-slate-500 no-print">
