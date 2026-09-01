@@ -495,7 +495,11 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                     <p className="text-3xl font-bold text-slate-800 mb-3">No Weekly History Records Yet</p>
                     <p className="text-lg text-slate-600 mb-6">Start recording your weekly service history to track attendance, visitors, and events.</p>
                     <button 
-                        onClick={() => setSelectedRecordId(null)}
+                        onClick={() => {
+                            setFormData(initialFormState());
+                            setSelectedRecordId(null);
+                            setIsFullEditorOpen(true);
+                        }}
                         className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 text-base"
                     >
                         ✏️ Create First Record
