@@ -1902,7 +1902,7 @@ const App: React.FC = () => {
                         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white rounded-xl shadow">
                             <h3 className="text-lg font-bold">📅 Weekly History</h3>
                         </div>
-                        <WeeklyHistory history={societyWeeklyHistory} setHistory={setWeeklyHistory} settings={settings} selectedSocietyId={selectedSociety.id} />
+                        <WeeklyHistory history={societyWeeklyHistory} setHistory={setWeeklyHistory} settings={settings} selectedSocietyId={selectedSociety.id} selectedSocietyName={selectedSociety.name} />
                     </div>
                 );
             case 'bible-class-attendance':

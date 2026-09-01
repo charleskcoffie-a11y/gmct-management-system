@@ -11,12 +11,13 @@ interface WeeklyHistoryProps {
     setHistory: React.Dispatch<React.SetStateAction<WeeklyHistoryRecord[]>>;
     settings: Settings;
     selectedSocietyId: string;
+    selectedSocietyName: string;
 }
 
-const initialFormState = (): WeeklyHistoryRecord => ({
+const initialFormState = (societyName = 'Ghana Methodist Church Toronto (GMCT)'): WeeklyHistoryRecord => ({
     id: uuidv4(),
     dateOfService: new Date().toISOString().slice(0, 10),
-    societyName: 'Ghana Methodist Church Toronto (GMCT)',
+    societyName,
     officiant: '',
     liturgist: '',
     serviceTypes: [],
@@ -48,7 +49,7 @@ const serviceTypeOptions = [
     'Other'
 ];
 
-const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, settings, selectedSocietyId }) => {
+const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, settings, selectedSocietyId, selectedSocietyName }) => {
     const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
     const [formData, setFormData] = useState<WeeklyHistoryRecord>(initialFormState());
     const [showArchive, setShowArchive] = useState(false);
@@ -66,15 +67,15 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     // Always start with a clean slate on load
     useEffect(() => {
         setSelectedRecordId(null);
-        setFormData(initialFormState());
-    }, []);
+        setFormData(initialFormState(selectedSocietyName));
+    }, [selectedSocietyName]);
 
     useEffect(() => {
         if (selectedRecordId) {
             const record = history.find(h => h.id === selectedRecordId);
             if (record) {
                 // Merge to ensure newly added fields (e.g., preparedBy) are present when editing older records
-                setFormData({ ...initialFormState(), ...record });
+                setFormData({ ...initialFormState(selectedSocietyName), ...record });
             }
         }
         // Note: We don't reset to initialFormState here when selectedRecordId is null
@@ -85,7 +86,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     // Clear form when opening new entry
     useEffect(() => {
         if (isFullEditorOpen && !selectedRecordId) {
-            setFormData(initialFormState());
+            setFormData(initialFormState(selectedSocietyName));
         }
     }, [isFullEditorOpen, selectedRecordId]);
 
@@ -170,7 +171,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
             setTimeout(() => setShowSaveSuccess(false), 3000);
             // Reset form for new entry
             setSelectedRecordId(null);
-            setFormData(initialFormState());
+            setFormData(initialFormState(selectedSocietyName));
             setEditingArchiveId(null);
             setActiveModal(null);
             setIsFullEditorOpen(false);
@@ -184,7 +185,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     const handleSaveAndReset = () => {
         handleSubmit();
         setSelectedRecordId(null);
-        setFormData(initialFormState());
+        setFormData(initialFormState(selectedSocietyName));
         setActiveModal(null);
         setIsFullEditorOpen(false);
     };
@@ -192,7 +193,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
     const handleEditArchiveRecord = (record: WeeklyHistoryRecord) => {
         setSelectedRecordId(record.id);
         // Merge to backfill new fields for legacy records
-        setFormData({ ...initialFormState(), ...record });
+        setFormData({ ...initialFormState(selectedSocietyName), ...record });
         setEditingArchiveId(record.id);
         setIsFullEditorOpen(true);
         setShowArchive(false);
@@ -214,7 +215,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
             
             if (selectedRecordId === id) {
                 setSelectedRecordId(null);
-                setFormData(initialFormState());
+                setFormData(initialFormState(selectedSocietyName));
             }
         } catch (error: any) {
             alert(`Failed to delete: ${error.message}`);
@@ -496,7 +497,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                     <p className="text-lg text-slate-600 mb-6">Start recording your weekly service history to track attendance, visitors, and events.</p>
                     <button 
                         onClick={() => {
-                            setFormData(initialFormState());
+                            setFormData(initialFormState(selectedSocietyName));
                             setSelectedRecordId(null);
                             setIsFullEditorOpen(true);
                         }}
@@ -580,14 +581,14 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, sett
                     <span className="bg-white/30 group-hover:bg-white/40 rounded-full px-4 py-1 text-sm font-bold backdrop-blur-sm">{archiveCount}</span>
                 </button>
                 <button 
-                    onClick={() => { const newForm = initialFormState(); setFormData(newForm); setSelectedRecordId(null); setIsFullEditorOpen(true); }} 
+                    onClick={() => { const newForm = initialFormState(selectedSocietyName); setFormData(newForm); setSelectedRecordId(null); setIsFullEditorOpen(true); }}
                     className="bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-center gap-3"
                 >
                     <span className="text-3xl">✏️</span>
                     <span className="text-lg">New Entry</span>
                 </button>
                 <button 
-                    onClick={() => { const newForm = initialFormState(); setFormData(newForm); setSelectedRecordId(null); setActiveModal(null); setIsFullEditorOpen(false); }} 
+                    onClick={() => { const newForm = initialFormState(selectedSocietyName); setFormData(newForm); setSelectedRecordId(null); setActiveModal(null); setIsFullEditorOpen(false); }}
                     className="bg-gradient-to-br from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400 text-gray-800 font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 flex items-center justify-center gap-3"
                 >
                     <span className="text-3xl">🔄</span>
