@@ -137,6 +137,7 @@ Deno.serve(async request => {
       if (loadError) return json({ error: 'Receipt profile storage is not ready. Run the tenant receipt profile migration.' }, 503)
       return json({ profile: profile ? {
         charityNumber: profile.charity_number,
+        logoImage: profile.logo_image || '',
         ministerName: profile.minister_name,
         ministerSignature: profile.minister_signature || '',
         treasurerName: profile.treasurer_name,
@@ -146,17 +147,19 @@ Deno.serve(async request => {
 
     const profile = body?.profile
     const charityNumber = typeof profile?.charityNumber === 'string' ? profile.charityNumber.trim() : ''
+    const logoImage = typeof profile?.logoImage === 'string' ? profile.logoImage : ''
     const ministerName = typeof profile?.ministerName === 'string' ? profile.ministerName.trim() : ''
     const treasurerName = typeof profile?.treasurerName === 'string' ? profile.treasurerName.trim() : ''
     const ministerSignature = typeof profile?.ministerSignature === 'string' ? profile.ministerSignature : ''
     const treasurerSignature = typeof profile?.treasurerSignature === 'string' ? profile.treasurerSignature : ''
     if (!charityNumber || !ministerName || !treasurerName) return json({ error: 'Charity number, minister name, and treasurer name are required.' }, 400)
-    if ([ministerSignature, treasurerSignature].some(signature => signature.length > 1400000)) return json({ error: 'Each signature image must be smaller than 1 MB.' }, 413)
+    if ([logoImage, ministerSignature, treasurerSignature].some(image => image.length > 1400000)) return json({ error: 'Each uploaded image must be smaller than 1 MB.' }, 413)
 
-    const receiptProfile = { charityNumber, ministerName, ministerSignature, treasurerName, treasurerSignature }
+    const receiptProfile = { charityNumber, logoImage, ministerName, ministerSignature, treasurerName, treasurerSignature }
     const { error: updateError } = await supabase.from('tenant_receipt_profiles').upsert({
       society_id: tenantUser.society_id,
       charity_number: charityNumber,
+      logo_image: logoImage || null,
       minister_name: ministerName,
       minister_signature: ministerSignature || null,
       treasurer_name: treasurerName,

@@ -68,7 +68,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const [minAmount, setMinAmount] = useState<number>(20);
 
     // Society-specific charity configuration
-    const [receiptProfile, setReceiptProfile] = useState({ charityNumber: '', ministerName: '', ministerSignature: '', treasurerName: '', treasurerSignature: '' });
+    const [receiptProfile, setReceiptProfile] = useState({ charityNumber: '', logoImage: '', ministerName: '', ministerSignature: '', treasurerName: '', treasurerSignature: '' });
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileMessage, setProfileMessage] = useState('');
@@ -78,6 +78,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     useEffect(() => {
         setReceiptProfile({
             charityNumber: selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : ''),
+            logoImage: selectedSociety?.logoUrl || (selectedSociety?.isPrimary ? settings.logoUrl || '' : ''),
             ministerName: selectedSociety?.isPrimary ? 'Minister in Charge' : '',
             ministerSignature: '',
             treasurerName: selectedSociety?.isPrimary ? 'Peggy Asary, Treasurer' : '',
@@ -212,6 +213,15 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
             const formatAmount = (amount: number) => `${settings.currency || 'CAD'} ${amount.toFixed(2)}`;
             const methodLabel = (method?: string) => method === 'check' ? 'Cheque' : method === 'e-transfer' ? 'E-Transfer' : method === 'cash' ? 'Cash' : 'Other';
             const categoryLabel = (type: string) => type.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+            const addImage = (image: string, x: number, y: number, width: number, height: number) => {
+                if (!image) return;
+                try {
+                    const format = image.startsWith('data:image/png') ? 'PNG' : image.startsWith('data:image/webp') ? 'WEBP' : 'JPEG';
+                    pdf.addImage(image, format, x, y, width, height, undefined, 'FAST');
+                } catch {
+                    // Invalid or unsupported images are omitted without blocking receipt generation.
+                }
+            };
 
             const drawSignature = (image: string, name: string, label: string, x: number, y: number) => {
                 if (image) {
@@ -263,14 +273,15 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                 pdf.text(copyLabel, pageWidth - margin - 8, top + 15, { align: 'right' });
 
                 pdf.setTextColor(17, 24, 39);
+                addImage(receiptProfile.logoImage, margin + 10, top + 31, 38, 38);
                 pdf.setFontSize(9);
-                pdf.text(orgName, margin + 10, top + 40);
+                pdf.text(orgName, margin + 55, top + 40);
                 pdf.setFont('helvetica', 'normal');
                 pdf.setFontSize(7);
-                pdf.text(pdf.splitTextToSize(orgAddress, 220), margin + 10, top + 52);
-                pdf.text(`Phone: ${orgPhone}`, margin + 10, top + 73);
+                pdf.text(pdf.splitTextToSize(orgAddress, 178), margin + 55, top + 52);
+                pdf.text(`Phone: ${orgPhone}`, margin + 55, top + 73);
                 pdf.setFont('courier', 'bold');
-                pdf.text(`BN: ${charityNumber}`, margin + 10, top + 84);
+                pdf.text(`BN: ${charityNumber}`, margin + 55, top + 84);
 
                 pdf.setFont('helvetica', 'bold');
                 pdf.setFontSize(8);
@@ -375,10 +386,10 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const charityNumber = receiptProfile.charityNumber || 'Registration Pending';
     const canManageReceiptProfile = currentUser.role === 'admin' && !selectedSociety?.isPrimary;
 
-    const handleSignatureUpload = (field: 'ministerSignature' | 'treasurerSignature', file?: File) => {
+    const handleImageUpload = (field: 'logoImage' | 'ministerSignature' | 'treasurerSignature', file?: File) => {
         if (!file) return;
         if (file.size > 1024 * 1024) {
-            setProfileMessage('Signature images must be smaller than 1 MB.');
+            setProfileMessage('Logo and signature images must be smaller than 1 MB.');
             return;
         }
         const reader = new FileReader();
@@ -451,12 +462,15 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                 placeholder="e.g. 123456789RR0001"
                                 className="w-full border-slate-300 rounded-lg shadow-sm text-sm"
                             />
+                            <label className="block text-xs font-bold text-slate-700 mt-3 mb-1">Church logo</label>
+                            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => handleImageUpload('logoImage', event.target.files?.[0])} className="w-full text-xs text-slate-600" />
+                            {receiptProfile.logoImage && <img src={receiptProfile.logoImage} alt="Church logo preview" className="mt-2 h-14 w-14 object-contain border border-slate-200 rounded" />}
                         </div>
                         {(['minister', 'treasurer'] as const).map(role => <div key={role} className="space-y-2">
                             <label className="block text-xs font-bold text-slate-700">{role === 'minister' ? 'Minister in Charge' : 'Finance Treasurer'} name</label>
                             <input type="text" value={receiptProfile[`${role}Name`]} onChange={event => setReceiptProfile(previous => ({ ...previous, [`${role}Name`]: event.target.value }))} className="w-full border-slate-300 rounded-lg shadow-sm text-sm" />
                             <label className="block text-xs font-bold text-slate-700">{role === 'minister' ? 'Minister' : 'Treasurer'} signature</label>
-                            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => handleSignatureUpload(`${role}Signature`, event.target.files?.[0])} className="w-full text-xs text-slate-600" />
+                            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => handleImageUpload(`${role}Signature`, event.target.files?.[0])} className="w-full text-xs text-slate-600" />
                         </div>)}
                     </div>
                     <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-slate-700">{profileMessage}</p><button type="button" onClick={handleSaveReceiptProfile} disabled={isSavingProfile} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-lg text-sm">{isSavingProfile ? 'Saving...' : 'Save Receipt Details'}</button></div>
@@ -533,8 +547,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                         
                         // Reusable summary section component
                         const SummarySection = ({ copyLabel }: { copyLabel: string }) => (
-                            <div className="p-2">
+                            <div className="p-2 relative">
                                 <div className="text-center mb-2 pb-1 border-b border-slate-300">
+                                    {receiptProfile.logoImage && <img src={receiptProfile.logoImage} alt={`${orgName} logo`} className="absolute left-2 top-2 h-10 w-10 object-contain" />}
                                     <h2 className="text-sm font-extrabold text-slate-900">OFFICIAL RECEIPT FOR INCOME TAX PURPOSES</h2>
                                     <p className="text-[9px] text-slate-600">Receipt No: {member.serial} | Tax Year: {year}</p>
                                 </div>
