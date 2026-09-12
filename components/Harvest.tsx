@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useToast } from './ToastProvider';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import type { Entry, Member, Settings, SyncStatus, User } from '../types';
-import { formatCurrency, getTodayEST, getNowEST } from '../utils';
+import { formatCurrency, getTodayEST, getNowEST, toCsv } from '../utils';
 import { markEntryAsDeletedInSupabase, logEntryDeletionToSupabase, saveEntryToSupabase, loadEntriesFromSupabase, getSupabaseClient } from '../services/supabase';
 
 interface HarvestProps {
@@ -25,6 +25,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [startDateFilter, setStartDateFilter] = useState('');
     const [endDateFilter, setEndDateFilter] = useState('');
     const [classFilter, setClassFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [searchFilter, setSearchFilter] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
     const [showDuplicatesPanel, setShowDuplicatesPanel] = useState(false);
@@ -41,7 +42,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const [deleteError, setDeleteError] = useState('');
 
     // Harvest types to filter
-    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest', 'youth-harvest-levy'] as const;
+    const harvestTypes = ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'womens-harvest-levy', 'mens-harvest', 'mens-harvest-levy', 'youth-harvest', 'youth-harvest-levy'] as const;
 
     // Form state
     const [formData, setFormData] = useState<Entry>({
@@ -59,7 +60,9 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     });
     const harvestCategories = [
         { value: 'harvest-levy', label: 'Harvest Levy' },
+        { value: 'womens-harvest-levy', label: "Women's Harvest Levy" },
         { value: 'mens-harvest', label: "Men's Harvest" },
+        { value: 'mens-harvest-levy', label: "Men's Harvest Levy" },
         { value: 'womens-harvest', label: "Women's Harvest" },
         { value: 'youth-harvest-levy', label: 'Youth Harvest Levy' },
         { value: 'youth-harvest', label: 'Youth Harvest' },
@@ -91,6 +94,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         return entries.filter(entry => {
             // Only include harvest-related types
             if (!harvestTypes.includes(entry.type as any)) return false;
+            if (categoryFilter !== 'all' && entry.type !== categoryFilter) return false;
             if (entry.deleted && !showDeleted) return false;
             if (startDateFilter && entry.date < startDateFilter) return false;
             if (endDateFilter && entry.date > endDateFilter) return false;
@@ -107,7 +111,44 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             if (classFilter !== 'all' && entryClass !== classFilter) return false;
             return true;
         }).sort((a, b) => b.date.localeCompare(a.date));
-    }, [entries, searchFilter, classFilter, startDateFilter, endDateFilter, showDeleted, membersMap]);
+    }, [entries, searchFilter, classFilter, categoryFilter, startDateFilter, endDateFilter, showDeleted, membersMap]);
+
+    const getCategoryLabel = (type: string) => {
+        const category = harvestCategories.find(item => item.value === type);
+        return category?.label || type.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+    };
+
+    const handleExportCsv = () => {
+        if (filteredEntries.length === 0) {
+            alert('No harvest contributions match the current filters.');
+            return;
+        }
+
+        const exportData = filteredEntries.map(entry => {
+            const member = membersMap.get(entry.memberID);
+            return {
+                date: entry.date,
+                memberName: entry.memberName,
+                memberNumber: member?.memberNumber || '',
+                classNumber: entry.classNumber || member?.classNumber || '',
+                category: getCategoryLabel(entry.type),
+                amount: entry.amount,
+                paymentMethod: entry.method,
+                note: entry.note || '',
+                status: entry.deleted ? 'Deleted' : 'Active',
+            };
+        });
+
+        const categoryName = categoryFilter === 'all' ? 'all-categories' : getCategoryLabel(categoryFilter).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const dateName = startDateFilter || endDateFilter ? `${startDateFilter || 'start'}-to-${endDateFilter || 'end'}` : 'all-dates';
+        const csv = toCsv(exportData);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `harvest-contributions-${categoryName}-${dateName}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    };
 
     // Group by date
     const entriesByDate = useMemo(() => {
@@ -198,7 +239,9 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         if (rawType === 'harvest-levy') return 'harvest-levy';
         if (rawType === 'harvest-pledge') return 'harvest-pledge';
         if (rawType === 'womens-harvest') return 'womens-harvest';
+        if (rawType === 'womens-harvest-levy') return 'womens-harvest-levy';
         if (rawType === 'mens-harvest') return 'mens-harvest';
+        if (rawType === 'mens-harvest-levy') return 'mens-harvest-levy';
         if (rawType === 'youth-harvest-levy') return 'youth-harvest-levy';
         if (rawType === 'youth-harvest') return 'youth-harvest';
 
@@ -268,7 +311,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
         const combinedTokens = getNormalizedTokens(combinedText);
 
         if (harvestTypes.includes(rawType as any)) return true;
-        if (['womens-harvest', 'mens-harvest', 'youth-harvest', 'youth-harvest-levy'].some(type => combinedTokens.includes(type.replace(/-/g, '')))) return true;
+        if (['womens-harvest', 'womens-harvest-levy', 'mens-harvest', 'mens-harvest-levy', 'youth-harvest', 'youth-harvest-levy'].some(type => combinedTokens.includes(type.replace(/-/g, '')))) return true;
         return ['harvest', 'levy', 'pledge', 'launch'].some(keyword => combinedTokens.includes(keyword));
     };
 
@@ -326,6 +369,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
     const summary = useMemo(() => {
         const matchingEntries = entries.filter(entry => {
             if (!harvestTypes.includes(entry.type as any)) return false;
+            if (categoryFilter !== 'all' && entry.type !== categoryFilter) return false;
             if (searchFilter && !entry.memberName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
             if (startDateFilter && entry.date < startDateFilter) return false;
             if (endDateFilter && entry.date > endDateFilter) return false;
@@ -354,7 +398,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
             deletedCount: deletedEntries.length,
             activeByType,
         };
-    }, [entries, harvestTypes, searchFilter, startDateFilter, endDateFilter, classFilter, membersMap]);
+    }, [entries, harvestTypes, categoryFilter, searchFilter, startDateFilter, endDateFilter, classFilter, membersMap]);
 
     const duplicateGroups = useMemo(() => {
         const activeHarvestEntries = entries.filter(entry => harvestTypes.includes(entry.type as any) && !entry.deleted);
@@ -672,6 +716,10 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                 Record Harvest
                             </button>
                         )}
+                        <button onClick={handleExportCsv} className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg text-base flex items-center gap-3 transition-all hover:from-emerald-600 hover:to-teal-700 hover:scale-105">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h7a1 1 0 01.707.293l5 5A1 1 0 0117 8v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm8 1.414V8h3.586L11 4.414zM6 11a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h4a1 1 0 100-2H7z" clipRule="evenodd" /></svg>
+                            Export CSV
+                        </button>
                         <button onClick={() => (window as any).GMCTNavigateTab && (window as any).GMCTNavigateTab('harvest-pledges')} className="bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg text-base flex items-center gap-3 group transition-all hover:from-indigo-600 hover:to-fuchsia-700 hover:scale-105">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 4a1 1 0 011-1h8a1 1 0 01.894.553l3 6A1 1 0 0115 11H9.618l.447 2.236A1 1 0 019.09 14H7a1 1 0 110-2h1.382l-.724-3.618A1 1 0 006.676 8H4a1 1 0 01-1-1V4z" clipRule="evenodd" /></svg>
                             Harvest Pledges
@@ -691,6 +739,13 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                     <select value={classFilter} onChange={e => setClassFilter(e.target.value)} className="block w-full border-2 border-amber-200 rounded-lg shadow-sm py-3 focus:ring-amber-300 focus:border-amber-300 font-medium">
                         <option value="all">All Classes</option>
                         {Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1)).map(num => (<option key={num} value={num}>Class {num}</option>))}
+                    </select>
+                </div>
+                <div className="lg:col-span-1">
+                    <label className="block text-sm font-bold uppercase text-amber-600 mb-1">💷 Category</label>
+                    <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="block w-full border-2 border-amber-200 rounded-lg shadow-sm py-3 focus:ring-amber-300 focus:border-amber-300 font-medium">
+                        <option value="all">All Categories</option>
+                        {harvestCategories.map(category => <option key={category.value} value={category.value}>{category.label}</option>)}
                     </select>
                 </div>
                 <div className="lg:col-span-3 grid grid-cols-2 gap-4">
@@ -837,8 +892,16 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                 <div className="text-sm font-bold">{formatCurrency(summary.activeByType['mens-harvest'] || 0, settings.currency)}</div>
                             </div>
                             <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Men's Harvest Levy</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['mens-harvest-levy'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
                                 <div className="font-bold uppercase tracking-wide">Women's Harvest</div>
                                 <div className="text-sm font-bold">{formatCurrency(summary.activeByType['womens-harvest'] || 0, settings.currency)}</div>
+                            </div>
+                            <div className="bg-white/20 rounded-lg p-2 text-white">
+                                <div className="font-bold uppercase tracking-wide">Women's Harvest Levy</div>
+                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['womens-harvest-levy'] || 0, settings.currency)}</div>
                             </div>
                             <div className="bg-white/20 rounded-lg p-2 text-white">
                                 <div className="font-bold uppercase tracking-wide">Youth Harvest Levy</div>
