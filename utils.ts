@@ -2,7 +2,7 @@
 // utils.ts
 import { v4 as uuidv4 } from 'uuid';
 import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord, DevelopmentFundEntry, MonthLock, NoNameEntry, HarvestEntry } from './types';
-import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY } from './constants';
+import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY, LEGACY_SUPABASE_ANON_KEY } from './constants';
 
 // --- Timezone Helper (EST/Toronto) ---
 
@@ -282,6 +282,12 @@ export function sanitizeUser(raw: any): User {
 }
 
 export function sanitizeSettings(raw: any): Settings {
+    // Upgrade only this project's known legacy browser key. Preserve custom projects/keys.
+    const savedUrl = normalizeSupabaseUrl(raw.supabaseUrl);
+    const savedKey = normalizeSupabaseKey(raw.supabaseKey);
+    const browserKey = savedUrl.replace(/\/+$/, '') === SUPABASE_URL && savedKey === LEGACY_SUPABASE_ANON_KEY
+        ? SUPABASE_KEY
+        : savedKey;
     const UNLIMITED_MAX = 1000000000;
     const defaultApprovalLimits = {
         pastor: { min: 0, max: 500 },
@@ -334,8 +340,8 @@ export function sanitizeSettings(raw: any): Settings {
         currency: sanitizeString(raw.currency) || DEFAULT_CURRENCY,
         maxClasses: typeof raw.maxClasses === 'number' && raw.maxClasses > 0 ? raw.maxClasses : DEFAULT_MAX_CLASSES,
         enforceDirectory: typeof raw.enforceDirectory === 'boolean' ? raw.enforceDirectory : true,
-        supabaseUrl: normalizeSupabaseUrl(raw.supabaseUrl),
-        supabaseKey: normalizeSupabaseKey(raw.supabaseKey),
+        supabaseUrl: savedUrl,
+        supabaseKey: browserKey,
         wesleyHallMonthlyTarget: typeof raw.wesleyHallMonthlyTarget === 'number' && !isNaN(raw.wesleyHallMonthlyTarget) ? raw.wesleyHallMonthlyTarget : 2500,
         parkingMonthlyTarget: typeof raw.parkingMonthlyTarget === 'number' && !isNaN(raw.parkingMonthlyTarget) ? raw.parkingMonthlyTarget : 2500,
         logoUrl: raw.logoUrl ? sanitizeString(raw.logoUrl) : undefined,
