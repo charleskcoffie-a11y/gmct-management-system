@@ -30,6 +30,12 @@ Once the project is created (it takes a minute):
 
 ### Step 1.3: Create Database Tables (SQL)
 
+For existing databases, run [the DayBorn Levy migration](sql/2026-11-05_add_dayborn_levy_entry_type.sql) in the Supabase SQL Editor before recording DayBorn Levy entries. It preserves all existing entry types and adds `dayborn-levy` to the allowed categories.
+
+**DayBorn Levy** is available in Record Harvest and the financial entry form. The Harvest summary includes a separate DayBorn Levy total and includes these contributions in the Harvest Final Total, excluding deleted records and respecting the summary filters. This category is separate from the existing Day Born (`day-born`) contributions.
+
+**Pending contribution review (November 5, 2026):** Nine active contributions totaling CAD 690 are saved as `harvest-levy` with the exact note `Women`: seven on April 26, 2026 (CAD 540) and two on May 3, 2026 (CAD 150). Their intended category may be Women's Harvest or Women's Harvest Levy; the note does not establish which. Leave these records and category totals unchanged until the original collection sheets or receipts are reviewed. The Women's Harvest Levy category was added to the repository on September 12, 2026, after these entries were recorded.
+
 To set up the database structure, run the following SQL script in Supabase:
 
 1.  In your Supabase dashboard, click on **"SQL Editor"** (icon on the left).

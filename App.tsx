@@ -104,6 +104,7 @@ const FINANCIAL_ENTRY_TYPES: EntryType[] = [
     'mens-harvest-levy',
     'youth-harvest',
     'youth-harvest-levy',
+    'dayborn-levy',
     'organizational-anniversary',
     'day-born',
     'lent-donation',
@@ -876,7 +877,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "womens-harvest-levy", "mens-harvest", "mens-harvest-levy", "youth-harvest", "youth-harvest-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "womens-harvest-levy", "mens-harvest", "mens-harvest-levy", "youth-harvest", "youth-harvest-levy", "dayborn-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
         // Class leaders are restricted to attendance only
@@ -972,7 +973,7 @@ const App: React.FC = () => {
                             const note = (e.note || '').toLowerCase();
                             const group = (e.groupName || '').toLowerCase();
                             const combined = `${type} ${note} ${group}`;
-                            return ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest', 'youth-harvest-levy'].includes(type)
+                            return ['harvest-levy', 'harvest', 'harvest-pledge', 'harvest-launch', 'womens-harvest', 'mens-harvest', 'youth-harvest', 'youth-harvest-levy', 'dayborn-levy'].includes(type)
                                 || ['harvest', 'levy', 'pledge', 'launch', 'men', 'women', 'youth'].some(keyword => combined.includes(keyword));
                         })}
                         setEntries={setEntries}
@@ -1074,7 +1075,7 @@ const App: React.FC = () => {
                                 <label className="block text-sm font-bold uppercase text-blue-700 mb-1">💷 Type</label>
                                 <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium">
                                     <option value="all">All Types</option>
-                                    {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
+                                    {ENTRY_TYPES.map(t => <option key={t} value={t}>{t === 'dayborn-levy' ? 'DayBorn Levy' : t.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
                                 </select>
                             </div>
                             {currentUser?.role === 'data-entry' ? (
