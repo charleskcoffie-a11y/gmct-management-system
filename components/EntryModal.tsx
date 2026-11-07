@@ -20,7 +20,7 @@ interface EntryModalProps {
     selectedDay?: string;
 }
 
-const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "womens-harvest-levy", "mens-harvest", "mens-harvest-levy", "youth-harvest", "youth-harvest-levy", "dayborn-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "childrens-ministry", "other"];
+const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "harvest", "womens-harvest", "womens-harvest-levy", "mens-harvest", "mens-harvest-levy", "youth-harvest", "youth-harvest-levy", "dayborn-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "childrens-ministry", "other"];
 
 const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members, settings, currentUser, monthLocks = [], onSave, onSaveAndNew, onClose, onDelete, lockedType = false, selectedDay }) => {
     const [formData, setFormData] = useState<Entry>(entry || sanitizeEntry({}));
@@ -380,7 +380,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, existingEntries, members
                                     }`}>
                                         {ENTRY_TYPES.map(t => (
                                             <option key={t} value={t}>
-                                                {t === 'dayborn-levy' ? 'DayBorn Levy' : t.replace(/-/g, ' ')}
+                                                {t === 'harvest' ? 'Main Harvest' : t === 'dayborn-levy' ? 'DayBorn Levy' : t.replace(/-/g, ' ')}
                                             </option>
                                         ))}
                                     </select>

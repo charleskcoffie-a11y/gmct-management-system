@@ -926,7 +926,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                 <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-pledge'] || 0, settings.currency)}</div>
                             </div>
                             <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Harvest</div>
+                                <div className="font-bold uppercase tracking-wide">Main Harvest</div>
                                 <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest'] || 0, settings.currency)}</div>
                             </div>
                         </div>

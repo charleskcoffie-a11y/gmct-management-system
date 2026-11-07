@@ -98,6 +98,7 @@ const FINANCIAL_ENTRY_TYPES: EntryType[] = [
     'thanksgiving-offering',
     'pledge',
     'harvest-levy',
+    'harvest',
     'womens-harvest',
     'womens-harvest-levy',
     'mens-harvest',
@@ -515,7 +516,7 @@ const App: React.FC = () => {
         typeDistribution['wesley-hall'] = wesleyHallTotal;
         
         const chartData = Object.entries(typeDistribution).map(([name, value]) => ({
-            name: capitalize(name.replace(/-/g, ' ')),
+            name: name === 'harvest' ? 'Main Harvest' : capitalize(name.replace(/-/g, ' ')),
             value
         })).sort((a, b) => b.value - a.value);
 
@@ -877,7 +878,7 @@ const App: React.FC = () => {
         return <Login users={users} onLogin={handleLogin} error={loginError} settings={settings} />;
     }
 
-    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "womens-harvest-levy", "mens-harvest", "mens-harvest-levy", "youth-harvest", "youth-harvest-levy", "dayborn-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
+    const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "harvest", "womens-harvest", "womens-harvest-levy", "mens-harvest", "mens-harvest-levy", "youth-harvest", "youth-harvest-levy", "dayborn-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
         // Class leaders are restricted to attendance only
@@ -1075,7 +1076,7 @@ const App: React.FC = () => {
                                 <label className="block text-sm font-bold uppercase text-blue-700 mb-1">💷 Type</label>
                                 <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="block w-full border-2 border-blue-300 rounded-lg shadow-sm py-3 focus:ring-blue-400 focus:border-blue-400 font-medium">
                                     <option value="all">All Types</option>
-                                    {ENTRY_TYPES.map(t => <option key={t} value={t}>{t === 'dayborn-levy' ? 'DayBorn Levy' : t.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
+                                    {ENTRY_TYPES.map(t => <option key={t} value={t}>{t === 'harvest' ? 'Main Harvest' : t === 'dayborn-levy' ? 'DayBorn Levy' : t.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
                                 </select>
                             </div>
                             {currentUser?.role === 'data-entry' ? (
@@ -1406,7 +1407,7 @@ const App: React.FC = () => {
                                                     className="border-2 border-blue-400 bg-white/95 text-slate-800 rounded-lg px-4 py-2 font-semibold focus:ring-2 focus:ring-white focus:border-white transition-all capitalize"
                                                 >
                                                     <option value="all">All Types</option>
-                                                    {ENTRY_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>)}
+                                                    {ENTRY_TYPES.map(t => <option key={t} value={t}>{t === 'harvest' ? 'Main Harvest' : t.replace(/-/g, ' ')}</option>)}
                                                 </select>
                                             </div>
                                             {showDeleted && (
