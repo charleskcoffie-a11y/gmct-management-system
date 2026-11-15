@@ -48,6 +48,11 @@ export default function ManagementSettings({ settings, setSettings, society, soc
             <label>Charity number<input value={form.charityNumber || ''} onChange={e => setForm({ ...form, charityNumber: e.target.value })} className={input} /></label>
             <label>Number of classes<input type="number" min="1" max="100" value={form.maxClasses} onChange={e => setForm({ ...form, maxClasses: Number(e.target.value) })} className={input} required /></label>
             <label>Logo URL<input type="url" value={form.logoUrl || ''} onChange={e => setForm({ ...form, logoUrl: e.target.value })} className={input} /></label>
+            <fieldset className="rounded-xl border border-amber-200 bg-amber-50 p-4 md:col-span-2">
+                <legend className="px-1 font-bold">Tax receipt approval</legend>
+                <label className="flex items-start gap-3 text-sm font-semibold"><input type="checkbox" checked={form.officialTaxReceiptsEnabled === true} onChange={e => setForm({ ...form, officialTaxReceiptsEnabled: e.target.checked })} className="mt-0.5 h-4 w-4 accent-indigo-600" />Enable official tax receipts for {society.shortName}</label>
+                <p className="mt-2 text-sm text-slate-600">Leave off to generate drafts for review. Enable after reviewing this society's receipt details, then save settings. Turning it off returns future receipts to draft mode.</p>
+            </fieldset>
             <button disabled={busy} className="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white disabled:opacity-50 md:col-span-2">{busy ? 'Saving…' : 'Save settings'}</button>
         </form>
         {softwareAdmin && <form onSubmit={create} className="grid gap-4 rounded-2xl border bg-white p-6 md:grid-cols-2">

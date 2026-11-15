@@ -44,6 +44,12 @@ The Software Administrator can open **Settings → Pages for each society**, sel
 
 Class attendance controls both entry and attendance reports. The same page map filters the navigation and checks pages opened by shortcuts. Home, Settings and Manage Users remain available to their permitted administrator roles. Existing explicit feature choices are preserved; attendance defaults off for a smaller society when it has no saved choice. Newly created societies start with Basic pages.
 
+## Tax receipt approval
+
+Tax receipts start in draft mode for every society in the isolated preview. A Society Administrator or Software Administrator opens **Settings → Tax receipt approval**, enables **official tax receipts**, and saves settings for the current society. This approval is separate from the Tax Receipts page switch. Finance Chairs can read approval but cannot change it. The receipt page refreshes approval when opened, focused, and periodically; PDF downloads recheck the database and fall back to drafts when verification fails. A missing donor mailing address also keeps that donor's receipt in draft mode.
+
+Draft screen and PDF copies use draft references, clearly say **DRAFT - NOT VALID FOR TAX PURPOSES**, omit signature images, and mark continued PDF breakdown pages. Enabling approval does not alter previously downloaded files; generate a new PDF after approval. `sql/cmms_tax_receipt_approval.sql` adds only the management settings flag and preserves the existing admin-only policies and redacted API view.
+
 ## Database setup history
 
 The scripts are saved for review and reproducibility; do not rerun bootstrap on an initialized schema.
@@ -57,10 +63,12 @@ The private credential compatibility tables are not exposed to browser clients. 
 ## Validation
 
 ```sh
-node --test tests/preview-database.test.mjs tests/management-client.test.mjs tests/society-pages.test.mjs
+node --test tests/preview-database.test.mjs tests/management-client.test.mjs tests/society-pages.test.mjs tests/tax-receipts.test.mjs
 npm run build
 ```
 
 `tests/cmms-access-verification.sql` checks planner separation, society isolation, upserts and blocked privilege escalation in a transaction that rolls back all test data and assignments.
+
+`tests/cmms-tax-receipt-approval.sql` verifies administrator approval and revocation, finance read-only access, and society isolation with all changes rolled back.
 
 The repository has pre-existing TypeScript errors outside the new management modules; Vite production builds and the targeted tests are the release checks for this preview.

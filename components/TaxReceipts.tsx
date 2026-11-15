@@ -1,6 +1,7 @@
 // components/TaxReceipts.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import jsPDF from 'jspdf';
+import { createTaxReceiptsPdf } from '../services/taxReceiptsPdf';
+import { loadTaxReceiptApproval, taxReceiptStatus } from '../services/taxReceiptApproval';
 import type { Entry, HarvestEntry, Member, Settings, Society, User } from '../types';
 import { formatCurrency, sanitizeEntryType } from '../utils';
 import { IS_CANADA_MISSION_PREVIEW } from '../constants';
@@ -76,20 +77,34 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     const [profileMessage, setProfileMessage] = useState('');
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [excludedMemberIds, setExcludedMemberIds] = useState<Set<string>>(new Set());
+    const [receiptApproval, setReceiptApproval] = useState(!IS_CANADA_MISSION_PREVIEW);
+
+    useEffect(() => {
+        if (!IS_CANADA_MISSION_PREVIEW) return;
+        let cancelled = false;
+        setReceiptApproval(false);
+        const refresh = () => loadTaxReceiptApproval(getSupabaseClient(settings.supabaseUrl, settings.supabaseKey), selectedSociety?.id || 'gmct')
+            .then(enabled => { if (!cancelled) setReceiptApproval(enabled); })
+            .catch(() => { if (!cancelled) setReceiptApproval(false); });
+        void refresh();
+        window.addEventListener('focus', refresh);
+        const timer = window.setInterval(refresh, 30000);
+        return () => { cancelled = true; window.removeEventListener('focus', refresh); window.clearInterval(timer); };
+    }, [selectedSociety?.id, settings.supabaseUrl, settings.supabaseKey, settings.officialTaxReceiptsEnabled]);
 
     useEffect(() => {
         setReceiptProfile({
-            charityNumber: selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : ''),
+            charityNumber: IS_CANADA_MISSION_PREVIEW ? settings.charityNumber || selectedSociety?.charityNumber || '' : selectedSociety?.charityNumber || (selectedSociety?.isPrimary ? settings.charityNumber || '873990964RP0001' : ''),
             logoImage: settings.logoUrl || '',
             ministerName: selectedSociety?.isPrimary ? 'Minister in Charge' : '',
             ministerSignature: '',
             treasurerName: selectedSociety?.isPrimary ? 'Peggy Asary, Treasurer' : '',
             treasurerSignature: selectedSociety?.signatureImage || (selectedSociety?.isPrimary ? settings.signatureImage || '' : ''),
         });
-    }, [selectedSociety, settings.charityNumber, settings.signatureImage]);
+    }, [selectedSociety?.id, selectedSociety?.charityNumber, selectedSociety?.signatureImage, selectedSociety?.isPrimary, settings.charityNumber, settings.signatureImage, settings.logoUrl]);
 
     useEffect(() => {
-        if (!selectedSociety || selectedSociety.isPrimary || currentUser.role !== 'admin') return;
+        if (!selectedSociety || (!IS_CANADA_MISSION_PREVIEW && (selectedSociety.isPrimary || currentUser.role !== 'admin'))) return;
         if (IS_CANADA_MISSION_PREVIEW) {
             getSupabaseClient(settings.supabaseUrl, settings.supabaseKey)?.from('tenant_receipt_profiles').select('*').maybeSingle().then(({ data, error }) => {
                 if (error) setProfileMessage(error.message);
@@ -109,7 +124,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
             if (!response.ok) throw new Error(result.error || 'Unable to load receipt details.');
             if (result.profile) setReceiptProfile({ ...result.profile, logoImage: settings.logoUrl || '' });
         }).catch(error => setProfileMessage(error.message || 'Unable to load receipt details.'));
-    }, [selectedSociety?.id, currentUser.role, settings.supabaseUrl, settings.logoUrl]);
+    }, [selectedSociety?.id, selectedSociety?.charityNumber, selectedSociety?.signatureImage, currentUser.role, settings.supabaseUrl, settings.supabaseKey, settings.charityNumber, settings.signatureImage, settings.logoUrl]);
 
     const classOptions = useMemo(() => ['all', ...Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1))], [settings.maxClasses]);
 
@@ -216,161 +231,15 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
         setIsGeneratingPdf(true);
         setProfileMessage('');
         try {
-            const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            const margin = 30;
-            const formatAmount = (amount: number) => `${settings.currency || 'CAD'} ${amount.toFixed(2)}`;
-            const methodLabel = (method?: string) => method === 'check' ? 'Cheque' : method === 'e-transfer' ? 'E-Transfer' : method === 'cash' ? 'Cash' : 'Other';
-            const categoryLabel = (type: string) => type.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
-            const addImage = (image: string, x: number, y: number, width: number, height: number) => {
-                if (!image) return;
+            let approvalEnabled = !IS_CANADA_MISSION_PREVIEW;
+            if (IS_CANADA_MISSION_PREVIEW) {
                 try {
-                    const format = image.startsWith('data:image/png') ? 'PNG' : image.startsWith('data:image/webp') ? 'WEBP' : 'JPEG';
-                    pdf.addImage(image, format, x, y, width, height, undefined, 'FAST');
-                } catch {
-                    // Invalid or unsupported images are omitted without blocking receipt generation.
-                }
-            };
-
-            const drawSignature = (image: string, name: string, label: string, x: number, y: number) => {
-                if (image) {
-                    try {
-                        const format = image.startsWith('data:image/png') ? 'PNG' : image.startsWith('data:image/webp') ? 'WEBP' : 'JPEG';
-                        pdf.addImage(image, format, x, y, 90, 25, undefined, 'FAST');
-                    } catch {
-                        pdf.line(x, y + 25, x + 90, y + 25);
-                    }
-                } else {
-                    pdf.line(x, y + 25, x + 90, y + 25);
-                }
-                pdf.setFont('helvetica', 'bold');
-                pdf.setFontSize(7);
-                pdf.text(name || label, x, y + 36);
-                pdf.setFont('helvetica', 'normal');
-                pdf.text(label, x, y + 46);
-            };
-
-            const drawBarcode = (serial: string, x: number, y: number) => {
-                const codes = Array.from(`${serial}-barcode`).map(character => character.charCodeAt(0));
-                let barX = x;
-                pdf.setFillColor(17, 24, 39);
-                codes.forEach((code, index) => {
-                    const width = 1 + (code % 3);
-                    const height = 20 + (code % 14);
-                    if (index % 2 === 0) pdf.rect(barX, y + 34 - height, width, height, 'F');
-                    barX += width + 1;
-                });
-                pdf.setFont('courier', 'normal');
-                pdf.setFontSize(6);
-                pdf.text(serial, x, y + 43);
-            };
-
-            const drawReceiptCopy = (member: MemberTotals, copyLabel: string, top: number) => {
-                const memberRecord = membersById.get(member.memberId);
-                const memberAddress = memberRecord?.address?.trim() || '';
-                const isOfficial = Boolean(memberAddress);
-                pdf.setDrawColor(isOfficial ? 203 : 239, isOfficial ? 213 : 68, isOfficial ? 225 : 68);
-                pdf.setLineWidth(1);
-                pdf.rect(margin, top, pageWidth - margin * 2, 195);
-                pdf.setFillColor(49, 46, 129);
-                pdf.rect(margin, top, pageWidth - margin * 2, 22, 'F');
-                pdf.setTextColor(255, 255, 255);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setFontSize(10);
-                pdf.text('OFFICIAL RECEIPT FOR INCOME TAX PURPOSES', margin + 8, top + 15);
-                pdf.setFontSize(7);
-                pdf.text(copyLabel, pageWidth - margin - 8, top + 15, { align: 'right' });
-
-                pdf.setTextColor(17, 24, 39);
-                addImage(receiptProfile.logoImage, margin + 10, top + 31, 38, 38);
-                pdf.setFontSize(9);
-                pdf.text(orgName, margin + 55, top + 40);
-                pdf.setFont('helvetica', 'normal');
-                pdf.setFontSize(7);
-                pdf.text(pdf.splitTextToSize(orgAddress, 178), margin + 55, top + 52);
-                pdf.text(`Phone: ${orgPhone}`, margin + 55, top + 73);
-                pdf.setFont('courier', 'bold');
-                pdf.text(`BN: ${charityNumber}`, margin + 55, top + 84);
-
-                pdf.setFont('helvetica', 'bold');
-                pdf.setFontSize(8);
-                pdf.text(member.memberName.toUpperCase(), 315, top + 40);
-                pdf.setFont('helvetica', 'normal');
-                pdf.setFontSize(7);
-                pdf.text(`Donor ID: ${member.memberNumber || member.memberId.slice(0, 8)}`, 315, top + 53);
-                pdf.setTextColor(isOfficial ? 55 : 185, isOfficial ? 65 : 28, isOfficial ? 81 : 28);
-                pdf.text(pdf.splitTextToSize(isOfficial ? memberAddress : 'NOT OFFICIAL - No mailing address on file', 180), 315, top + 65);
-                pdf.setTextColor(55, 65, 81);
-                pdf.text(`Issue Date: ${new Date().toISOString().slice(0, 10)}`, 315, top + 88);
-                drawBarcode(member.serial, 480, top + 40);
-
-                drawSignature(receiptProfile.ministerSignature, receiptProfile.ministerName, 'Minister in Charge', margin + 10, top + 117);
-                drawSignature(receiptProfile.treasurerSignature, receiptProfile.treasurerName, 'Finance Treasurer', margin + 135, top + 117);
-                pdf.setFillColor(236, 253, 245);
-                pdf.setDrawColor(34, 197, 94);
-                pdf.roundedRect(390, top + 120, 165, 52, 4, 4, 'FD');
-                pdf.setTextColor(21, 128, 61);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setFontSize(7);
-                pdf.text('TOTAL ELIGIBLE AMOUNT', 472, top + 136, { align: 'center' });
-                pdf.setFontSize(16);
-                pdf.text(formatAmount(member.total), 472, top + 158, { align: 'center' });
-                pdf.setTextColor(17, 24, 39);
-                pdf.setFontSize(6);
-                pdf.text(`Receipt No: ${member.serial} | Tax Year: ${year}`, margin + 10, top + 187);
-            };
-
-            for (let index = 0; index < selectedReceiptMembers.length; index++) {
-                if (index > 0) pdf.addPage('letter', 'portrait');
-                const member = selectedReceiptMembers[index];
-                drawReceiptCopy(member, 'CRA Copy', 24);
-                drawReceiptCopy(member, 'Donor Copy', 229);
-
-                let cursorY = 450;
-                const drawBreakdownHeader = (continued = false) => {
-                    pdf.setFillColor(51, 65, 85);
-                    pdf.rect(margin, cursorY, pageWidth - margin * 2, 20, 'F');
-                    pdf.setTextColor(255, 255, 255);
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.setFontSize(9);
-                    pdf.text(`DETAILED TRANSACTION BREAKDOWN${continued ? ' - CONTINUED' : ''}`, margin + 7, cursorY + 14);
-                    cursorY += 31;
-                    pdf.setTextColor(17, 24, 39);
-                    pdf.setFontSize(7);
-                    pdf.text('Date', margin + 4, cursorY);
-                    pdf.text('Category', margin + 88, cursorY);
-                    pdf.text('Method', margin + 330, cursorY);
-                    pdf.text('Amount', pageWidth - margin - 4, cursorY, { align: 'right' });
-                    cursorY += 8;
-                    pdf.line(margin, cursorY, pageWidth - margin, cursorY);
-                    cursorY += 12;
-                };
-                drawBreakdownHeader();
-                const transactions = [...member.entries].sort((left, right) => left.date.localeCompare(right.date));
-                for (const transaction of transactions) {
-                    if (cursorY > pageHeight - 48) {
-                        pdf.addPage('letter', 'portrait');
-                        cursorY = 30;
-                        drawBreakdownHeader(true);
-                    }
-                    pdf.setFont('helvetica', 'normal');
-                    pdf.setFontSize(7);
-                    pdf.text(transaction.date, margin + 4, cursorY);
-                    pdf.text(categoryLabel(transaction.type), margin + 88, cursorY);
-                    pdf.text(methodLabel(transaction.method), margin + 330, cursorY);
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.text(formatAmount(transaction.amount), pageWidth - margin - 4, cursorY, { align: 'right' });
-                    cursorY += 15;
-                }
-                pdf.line(margin, cursorY, pageWidth - margin, cursorY);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setFontSize(8);
-                pdf.text('TOTAL', margin + 330, cursorY + 14);
-                pdf.text(formatAmount(member.total), pageWidth - margin - 4, cursorY + 14, { align: 'right' });
+                    approvalEnabled = await loadTaxReceiptApproval(getSupabaseClient(settings.supabaseUrl, settings.supabaseKey), selectedSociety?.id || 'gmct');
+                } catch { approvalEnabled = false; }
+                setReceiptApproval(approvalEnabled);
             }
-            const safeSocietyName = orgName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
-            const fileName = `${safeSocietyName}-Tax-Receipts-${year}.pdf`;
+            const { pdf, fileName } = createTaxReceiptsPdf({ selectedReceiptMembers, membersById, receiptProfile, currency: settings.currency,
+                orgName, orgAddress, orgPhone, charityNumber, year, approvalEnabled });
             const blobUrl = URL.createObjectURL(pdf.output('blob'));
             const downloadLink = document.createElement('a');
             downloadLink.href = blobUrl;
@@ -389,12 +258,12 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
     };
 
     const orgName = selectedSociety?.name || settings.orgName || 'Ghana Methodist Church of Toronto';
-    const orgAddress = selectedSociety?.address || settings.orgAddress || '69 Milvan Drive, Toronto, ON M9L 1Y8, Canada';
-    const orgPhone = selectedSociety?.phone || settings.orgPhone || '416-901-5900';
+    const orgAddress = IS_CANADA_MISSION_PREVIEW ? settings.orgAddress || selectedSociety?.address || '' : selectedSociety?.address || settings.orgAddress || '69 Milvan Drive, Toronto, ON M9L 1Y8, Canada';
+    const orgPhone = IS_CANADA_MISSION_PREVIEW ? settings.orgPhone || selectedSociety?.phone || '' : selectedSociety?.phone || settings.orgPhone || '416-901-5900';
     const orgEmail = selectedSociety?.email || settings.orgEmail || '';
     const orgWebsite = 'https://gmct-ca.org/';
     const charityNumber = receiptProfile.charityNumber || 'Registration Pending';
-    const canManageReceiptProfile = currentUser.role === 'admin' && !selectedSociety?.isPrimary;
+    const canManageReceiptProfile = currentUser.role === 'admin' && (IS_CANADA_MISSION_PREVIEW || !selectedSociety?.isPrimary);
 
     const handleImageUpload = (field: 'ministerSignature' | 'treasurerSignature', file?: File) => {
         if (!file) return;
@@ -456,7 +325,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                 <div>
                     <h2 className="text-3xl font-extrabold text-slate-900">Annual Tax Receipts</h2>
                     <p className="text-slate-600">
-                        Generate CRA/charity receipts for {orgName} (≥ ${minAmount.toFixed(0)}) for {year}.
+                        {receiptApproval ? 'Generate tax receipts' : 'Prepare draft receipts'} for {orgName} (≥ ${minAmount.toFixed(0)}) for {year}.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -467,9 +336,13 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                     >
                         ⚙️ Receipt Details
                     </button>}
-                    <button onClick={handleDownloadPdf} disabled={isGeneratingPdf || selectedReceiptMembers.length === 0} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-lg shadow">{isGeneratingPdf ? 'Creating PDF...' : `Download PDF (${selectedReceiptMembers.length})`}</button>
+                    <button onClick={handleDownloadPdf} disabled={isGeneratingPdf || selectedReceiptMembers.length === 0} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-lg shadow">{isGeneratingPdf ? 'Creating PDF...' : `Download ${receiptApproval ? '' : 'draft '}PDF (${selectedReceiptMembers.length})`}</button>
                 </div>
             </div>
+            {IS_CANADA_MISSION_PREVIEW && <div role="status" className={`no-print rounded-xl border p-4 text-sm ${receiptApproval ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+                <strong>{receiptApproval ? 'Official receipts enabled' : 'Draft receipts'}</strong>
+                <p className="mt-1">{receiptApproval ? 'Receipts with a donor mailing address can be generated as official receipts.' : 'Receipts are marked DRAFT - NOT VALID FOR TAX PURPOSES. An administrator can enable official receipts in Settings → Tax receipt approval.'}</p>
+            </div>}
             {profileMessage && <p className="no-print text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">{profileMessage}</p>}
 
             {/* Society Tax Receipt Configuration Box */}
@@ -562,7 +435,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                     {filteredTotals.map(member => {
                         const m = membersById.get(member.memberId);
                         const memberAddress = m?.address || '';
-                        const hasOfficialAddress = Boolean(memberAddress && memberAddress.trim().length > 0);
+                        const receiptStatus = taxReceiptStatus(receiptApproval, memberAddress);
+                        const isOfficial = receiptStatus.official;
+                        const reference = isOfficial ? member.serial : `DRAFT-${member.serial}`;
                         const categoriesEntries = Object.entries(member.categoriesBreakdown).sort((a, b) => b[1] - a[1]);
                         const transactionEntries = [...member.entries].sort((a, b) => a.date.localeCompare(b.date));
                         const issueDate = new Date().toISOString().split('T')[0];
@@ -572,8 +447,9 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                             <div className="p-2 relative">
                                 <div className="text-center mb-2 pb-1 border-b border-slate-300">
                                     {receiptProfile.logoImage && <img src={receiptProfile.logoImage} alt={`${orgName} logo`} className="absolute left-2 top-2 h-10 w-10 object-contain" />}
-                                    <h2 className="text-sm font-extrabold text-slate-900">OFFICIAL RECEIPT FOR INCOME TAX PURPOSES</h2>
-                                    <p className="text-[9px] text-slate-600">Receipt No: {member.serial} | Tax Year: {year}</p>
+                                    <h2 className="text-sm font-extrabold text-slate-900">{receiptStatus.title}</h2>
+                                    <p className="text-[9px] text-slate-600">{isOfficial ? 'Receipt No' : 'Draft Ref'}: {reference} | Tax Year: {year}</p>
+                                    <p className="text-[8px] text-slate-500">{copyLabel}</p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2 mb-2 text-[10px]">
@@ -595,13 +471,13 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                             <div className="text-[10px] flex-1">
                                                 <p className="font-bold text-slate-900">{member.memberName.toUpperCase()}</p>
                                                 <p className="text-slate-600">ID: {member.memberNumber || member.memberId.substring(0, 8)}</p>
-                                                <p className={`text-[10px] ${hasOfficialAddress ? 'text-slate-700' : 'text-red-700 font-bold'}`}>
-                                                    {hasOfficialAddress ? memberAddress : 'No official address on file — receipt is not official'}
+                                                <p className={`text-[10px] ${memberAddress.trim() ? 'text-slate-700' : 'text-red-700 font-bold'}`}>
+                                                    {memberAddress.trim() || 'No mailing address on file'}
                                                 </p>
-                                                <p className="text-slate-600">Issue Date: {issueDate}</p>
+                                                <p className="text-slate-600">{isOfficial ? 'Issue' : 'Prepared'} Date: {issueDate}</p>
                                             </div>
                                             <div className="flex-shrink-0">
-                                                <Barcode serial={member.serial} />
+                                                <Barcode serial={reference} />
                                             </div>
                                         </div>
                                     </div>
@@ -613,13 +489,13 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                         const signature = receiptProfile[`${role}Signature`];
                                         const name = receiptProfile[`${role}Name`] || (role === 'minister' ? 'Minister in Charge' : 'Finance Treasurer');
                                         return <div key={role} className="text-[9px]">
-                                            {signature ? <img src={signature} alt={`${role} signature`} className="h-8 object-contain mb-1" /> : <div className="h-8 border-b border-slate-400" />}
+                                            {isOfficial && signature ? <img src={signature} alt={`${role} signature`} className="h-8 object-contain mb-1" /> : <div className="h-8 border-b border-slate-400" />}
                                             <div className="font-bold text-slate-900">{name}</div>
                                             <div className="text-slate-500">{role === 'minister' ? 'Minister in Charge' : 'Finance Treasurer'}</div>
                                         </div>;
                                     })}
                                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded p-2 text-center">
-                                        <div className="text-[9px] text-slate-600 uppercase font-bold">Total Eligible Amount</div>
+                                        <div className="text-[9px] text-slate-600 uppercase font-bold">{isOfficial ? 'Total Eligible Amount' : 'Donation Total - Draft'}</div>
                                         <div className="text-2xl font-extrabold text-green-700">{formatCurrency(member.total, settings.currency || 'CAD')}</div>
                                         <div className="text-[9px] text-slate-600">{settings.currency || 'CAD'}</div>
                                     </div>
@@ -628,21 +504,21 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                         );
                         
                         return (
-                        <div key={member.memberId} className={`bg-white rounded-lg shadow-lg border-2 p-2 receipt-card ${hasOfficialAddress ? 'border-slate-300' : 'border-red-300 bg-red-50/40'}`}>
-                            {!hasOfficialAddress && (
+                        <div key={member.memberId} className={`relative bg-white rounded-lg shadow-lg border-2 p-2 receipt-card ${isOfficial ? 'border-slate-300' : 'border-red-300 bg-red-50/40'}`}>
+                            {!isOfficial && (
                                 <div className="mb-2 rounded border border-red-300 bg-red-50 text-red-700 text-[9px] font-extrabold uppercase tracking-wide px-2 py-1 text-center">
-                                    NOTE: NOT OFFICIAL — Missing donor address. Update member profile with the official mailing address before issuing this receipt.
+                                    DRAFT - NOT VALID FOR TAX PURPOSES. {receiptStatus.reason}
                                 </div>
                             )}
-                            {!hasOfficialAddress && (
+                            {!isOfficial && (
                                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-30 print:opacity-100">
                                     <span className="transform rotate-45 border-2 border-red-500 px-8 py-2 text-[28px] font-black uppercase tracking-[0.25em] text-red-500/90">
-                                        Not Official
+                                        Draft
                                     </span>
                                 </div>
                             )}
                             {/* SECTION 1 - CRA Copy */}
-                            <SummarySection copyLabel="CRA Copy - Official Tax Receipt" />
+                            <SummarySection copyLabel={isOfficial ? 'CRA Copy - Official Tax Receipt' : 'Review Copy - Draft'} />
                             
                             {/* Dotted Line Separator */}
                             <div className="border-t-2 border-dashed border-slate-400 my-2 relative">
@@ -652,7 +528,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                             </div>
 
                             {/* SECTION 2 - Donor Copy */}
-                            <SummarySection copyLabel="Donor Copy - Official Tax Receipt" />
+                            <SummarySection copyLabel={isOfficial ? 'Donor Copy - Official Tax Receipt' : 'Donor Copy - Draft'} />
                             
                             {/* Dotted Line Separator */}
                             <div className="border-t-2 border-dashed border-slate-400 my-2 relative">
@@ -667,7 +543,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
                                     <div className="bg-indigo-700 text-white font-bold text-[9px] uppercase tracking-widest py-0.5 px-2 inline-block rounded mb-0.5">
                                         Detailed Breakdown
                                     </div>
-                                    <p className="text-[10px] text-slate-700">For: {member.memberName} | Receipt No: {member.serial}</p>
+                                    <p className="text-[10px] text-slate-700">For: {member.memberName} | {isOfficial ? 'Receipt No' : 'Draft Ref'}: {reference}</p>
                                 </div>
 
                                 {/* Donation Categories Table */}

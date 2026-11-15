@@ -100,6 +100,7 @@ export interface Settings {
     orgPhone?: string;
     orgEmail?: string;
     charityNumber?: string;
+    officialTaxReceiptsEnabled?: boolean;
     signatureImage?: string; // Base64 or URL for authorized signature
     // E-Transfer settings
     etransferNotificationEmail?: string; // mailbox that receives Interac notifications

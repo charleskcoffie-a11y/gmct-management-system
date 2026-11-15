@@ -345,6 +345,7 @@ export function sanitizeSettings(raw: any): Settings {
         orgPhone: sanitizeString(raw.orgPhone),
         orgEmail: sanitizeString(raw.orgEmail),
         charityNumber: sanitizeString(raw.charityNumber),
+        officialTaxReceiptsEnabled: raw.officialTaxReceiptsEnabled === true,
         signatureImage: raw.signatureImage ? sanitizeString(raw.signatureImage) : undefined,
         annualLevyAmount: typeof raw.annualLevyAmount === 'number' && !isNaN(raw.annualLevyAmount) ? raw.annualLevyAmount : 0,
         etransferNotificationEmail: sanitizeString(raw.etransferNotificationEmail),
