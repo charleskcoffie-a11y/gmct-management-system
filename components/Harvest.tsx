@@ -722,7 +722,7 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                         </div>
                                     </div>
                                     <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
-                                        {harvestCategories.map(category => (
+                                        {harvestCategories.filter(category => (byType[category.value] || 0) !== 0).map(category => (
                                             <div key={category.value} className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2">
                                                 <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">{category.label}</div>
                                                 <div className="text-sm font-bold text-slate-800">{formatCurrency(byType[category.value] || 0, settings.currency)}</div>
@@ -807,39 +807,13 @@ const Harvest: React.FC<HarvestProps> = ({ members, entries, setEntries, setting
                                 <div>For audit only</div>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-8 gap-2 text-xs">
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Harvest Levy</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-levy'] || 0, settings.currency)}</div>
-                            </div>
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Men's Harvest</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['mens-harvest'] || 0, settings.currency)}</div>
-                            </div>
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Women's Harvest</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['womens-harvest'] || 0, settings.currency)}</div>
-                            </div>
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Youth Harvest Levy</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['youth-harvest-levy'] || 0, settings.currency)}</div>
-                            </div>
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Youth Harvest</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['youth-harvest'] || 0, settings.currency)}</div>
-                            </div>
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Harvest Launch</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-launch'] || 0, settings.currency)}</div>
-                            </div>
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Harvest Pledge</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest-pledge'] || 0, settings.currency)}</div>
-                            </div>
-                            <div className="bg-white/20 rounded-lg p-2 text-white">
-                                <div className="font-bold uppercase tracking-wide">Harvest</div>
-                                <div className="text-sm font-bold">{formatCurrency(summary.activeByType['harvest'] || 0, settings.currency)}</div>
-                            </div>
+                        <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2 text-xs">
+                            {harvestCategories.filter(category => (summary.activeByType[category.value] || 0) !== 0).map(category => (
+                                <div key={category.value} className="bg-white/20 rounded-lg p-2 text-white">
+                                    <div className="font-bold uppercase tracking-wide">{category.label}</div>
+                                    <div className="text-sm font-bold">{formatCurrency(summary.activeByType[category.value], settings.currency)}</div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}

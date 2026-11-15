@@ -613,7 +613,7 @@ const App: React.FC = () => {
             typeDistribution['wesley-hall'] = wesleyHallTotal;
         }
         
-        const chartData = Object.entries(typeDistribution).map(([name, value]) => ({
+        const chartData = Object.entries(typeDistribution).filter(([, value]) => value !== 0).map(([name, value]) => ({
             name: capitalize(name.replace(/-/g, ' ')),
             value
         })).sort((a, b) => b.value - a.value);
@@ -1446,7 +1446,7 @@ const App: React.FC = () => {
                                             </PieChart>
                                         </ResponsiveContainer>
                                     </div>
-                                    <div className="ml-6 flex-grow grid grid-cols-2 gap-x-4 gap-y-2">
+                                    <div className={`ml-6 flex-grow grid gap-x-4 gap-y-2 ${financialSummary.chartData.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                         {financialSummary.chartData.map((item, index) => (
                                             <div key={item.name} className="flex items-center text-sm bg-white bg-opacity-80 px-2 py-1 rounded border-l-4" style={{ borderLeftColor: COLORS[index % COLORS.length] }}>
                                                 <span className="w-3 h-3 rounded-full mr-2 font-bold" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
