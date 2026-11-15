@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import jsPDF from 'jspdf';
 import type { Entry, HarvestEntry, Member, Settings, Society, User } from '../types';
 import { formatCurrency, sanitizeEntryType } from '../utils';
+import { IS_CANADA_MISSION_PREVIEW } from '../constants';
+import { getSupabaseClient } from '../services/supabase';
 
 interface TaxReceiptsProps {
     entries: Entry[];
@@ -88,6 +90,14 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
 
     useEffect(() => {
         if (!selectedSociety || selectedSociety.isPrimary || currentUser.role !== 'admin') return;
+        if (IS_CANADA_MISSION_PREVIEW) {
+            getSupabaseClient(settings.supabaseUrl, settings.supabaseKey)?.from('tenant_receipt_profiles').select('*').maybeSingle().then(({ data, error }) => {
+                if (error) setProfileMessage(error.message);
+                else if (data) setReceiptProfile({ charityNumber: data.charity_number, logoImage: data.logo_image || settings.logoUrl || '', ministerName: data.minister_name,
+                    ministerSignature: data.minister_signature || '', treasurerName: data.treasurer_name, treasurerSignature: data.treasurer_signature || '' });
+            });
+            return;
+        }
         const tenantSession = sessionStorage.getItem('gmct-tenant-session');
         if (!tenantSession) return;
         fetch(`${settings.supabaseUrl}/functions/v1/tenant-gateway/receipt-profile`, {
@@ -401,6 +411,20 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
         if (!selectedSociety || !canManageReceiptProfile) return;
         if (!receiptProfile.charityNumber.trim() || !receiptProfile.ministerName.trim() || !receiptProfile.treasurerName.trim()) {
             setProfileMessage('Charity number, minister name, and treasurer name are required.');
+            return;
+        }
+        if (IS_CANADA_MISSION_PREVIEW) {
+            setIsSavingProfile(true); setProfileMessage('');
+            try {
+                const client = getSupabaseClient(settings.supabaseUrl, settings.supabaseKey);
+                if (!client) throw new Error('Database connection unavailable.');
+                const { error } = await client.from('tenant_receipt_profiles').upsert({ charity_number: receiptProfile.charityNumber,
+                    logo_image: receiptProfile.logoImage, minister_name: receiptProfile.ministerName, minister_signature: receiptProfile.ministerSignature,
+                    treasurer_name: receiptProfile.treasurerName, treasurer_signature: receiptProfile.treasurerSignature, updated_at: new Date().toISOString() });
+                if (error) throw error;
+                setProfileMessage('Receipt signing authority saved.');
+            } catch (error: any) { setProfileMessage(error.message); }
+            finally { setIsSavingProfile(false); }
             return;
         }
         const tenantSession = sessionStorage.getItem('gmct-tenant-session');

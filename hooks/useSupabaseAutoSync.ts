@@ -30,12 +30,13 @@ export function useSupabaseAutoSync(
         setSettings?: (d: Settings) => void;
         setClassLeaders?: (d: ClassLeader[]) => void;
     },
-    societyId?: string
+    societyId?: string,
+    enabled = true
 ): SyncStatus {
     // Initialize state based on whether credentials exist
     const [status, setStatus] = useState<SyncStatus>(() => ({
         // Start in syncing state when configured so UI does not render stale local values first.
-        state: isConfigured(settings) ? 'syncing' : 'offline',
+        state: enabled && isConfigured(settings) ? 'syncing' : 'offline',
         lastSynced: undefined
     }));
     
@@ -51,6 +52,12 @@ export function useSupabaseAutoSync(
 
     // 1. Initial Pull on Mount or Society Change (Smart Merge)
     useEffect(() => {
+        let cancelled = false;
+        if (!enabled) {
+            hasInitialPulled.current = false;
+            setStatus({ state: 'offline' });
+            return;
+        }
         const performInitialPull = async () => {
             if (!isConfigured(settings) || !setters) return;
             if (hasInitialPulled.current) return;
@@ -58,6 +65,7 @@ export function useSupabaseAutoSync(
             setStatus({ state: 'syncing' });
             try {
                 const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey, societyId);
+                if (cancelled) return;
                 const cloudSettings = cloudData.settings
                     ? {
                         ...cloudData.settings,
@@ -89,6 +97,7 @@ export function useSupabaseAutoSync(
                 hasInitialPulled.current = true;
                 setStatus({ state: 'synced', lastSynced: new Date() });
             } catch (e: any) {
+                if (cancelled) return;
                 console.error("Initial Sync Failed:", e);
                 // Even if pull fails, we might want to let the user work offline.
                 hasInitialPulled.current = true;
@@ -99,14 +108,18 @@ export function useSupabaseAutoSync(
         if (isConfigured(settings)) {
             performInitialPull();
         }
-    }, [settings.supabaseUrl, settings.supabaseKey, societyId]); // Run when settings or society changes
+        return () => { cancelled = true; };
+    }, [settings.supabaseUrl, settings.supabaseKey, societyId, enabled]); // Run when settings, society or sign-in changes
 
     // 1.5 Periodic Pull for Multi-User Updates (every 30 seconds)
     useEffect(() => {
+        if (!enabled) return;
+        let cancelled = false;
         const interval = setInterval(async () => {
-            if (!setters) return;
+            if (!setters || !isConfigured(settings)) return;
             try {
                 const cloudData = await downloadDataFromSupabase(settings.supabaseUrl, settings.supabaseKey, societyId);
+                if (cancelled) return;
                 const cloudEntries = cloudData.entries || [];
                 const cloudMembers = cloudData.members || [];
                 const cloudHistory = cloudData.history || [];
@@ -138,8 +151,8 @@ export function useSupabaseAutoSync(
             }
         }, 30000); // Pull every 30 seconds
 
-        return () => clearInterval(interval);
-    }, [settings.supabaseUrl, settings.supabaseKey, societyId]);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, [settings.supabaseUrl, settings.supabaseKey, societyId, enabled]);
 
 
     // 2. Auto-Upload on Data Change (DISABLED for multi-user mode)

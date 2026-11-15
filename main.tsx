@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { AppWithToasts } from './App';
-import { SUPABASE_KEY, SUPABASE_URL } from './constants';
+import { IS_CANADA_MISSION_PREVIEW, SUPABASE_KEY, SUPABASE_URL } from './constants';
 
 const isValidUrl = (value: string) => !!value && /^https?:\/\//i.test(value.trim());
 
@@ -13,6 +13,14 @@ const ensureSupabaseDefaults = () => {
     parsed = raw ? JSON.parse(raw) : {};
   } catch {
     parsed = {};
+  }
+
+  if (IS_CANADA_MISSION_PREVIEW) {
+    window.localStorage.setItem('gmct-settings', JSON.stringify({
+      ...parsed, supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY,
+    }));
+    document.title = 'Canada Mission Management | Preview';
+    return;
   }
 
   const url = typeof parsed?.supabaseUrl === 'string' ? parsed.supabaseUrl.trim() : '';
@@ -71,6 +79,9 @@ clearServiceWorkerCaches();
 const root = createRoot(document.getElementById('root')!);
 root.render(
   <React.StrictMode>
+    {IS_CANADA_MISSION_PREVIEW && <div role="status" style={{ background: '#172554', color: '#fff', textAlign: 'center', padding: '10px 16px', font: '600 13px system-ui' }}>
+      CANADA MISSION MANAGEMENT · PREVIEW · Separate database
+    </div>}
     <AppWithToasts />
   </React.StrictMode>
 );

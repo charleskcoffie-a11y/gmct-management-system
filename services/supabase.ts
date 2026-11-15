@@ -1,5 +1,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { IS_CANADA_MISSION_PREVIEW, SUPABASE_URL, SUPABASE_KEY } from '../constants';
+import { managementFetch, installManagementDataAdapter, loadManagementAccess } from './managementClient';
 import type { Member, Entry, WeeklyHistoryRecord, User, DevelopmentFundEntry, MonthLock, WesleyHallReceipt, ParkingReceipt, ETransfer, Requisition, RequisitionItem, RequisitionApproval, Settings, OrganizationFundOrganization, OrganizationFundTransaction } from '../types';
 
 // --- Singleton Client Helper ---
@@ -9,6 +11,7 @@ let currentKey = '';
 
 export const getSupabaseClient = (url: string, key: string): SupabaseClient | null => {
     if (!url || !key) return null;
+    if (IS_CANADA_MISSION_PREVIEW && (url !== SUPABASE_URL || key !== SUPABASE_KEY)) return null;
     
     // Return existing instance if credentials haven't changed
     if (supabaseInstance && url === currentUrl && key === currentKey) {
@@ -17,11 +20,14 @@ export const getSupabaseClient = (url: string, key: string): SupabaseClient | nu
 
     try {
         supabaseInstance = createClient(url, key, {
+            ...(IS_CANADA_MISSION_PREVIEW ? { global: { fetch: managementFetch } } : {}),
             auth: {
                 persistSession: true,
                 autoRefreshToken: true,
+                ...(IS_CANADA_MISSION_PREVIEW ? { storageKey: 'cmms-auth-v1' } : {}),
             }
         });
+        if (IS_CANADA_MISSION_PREVIEW) installManagementDataAdapter(supabaseInstance);
         currentUrl = url;
         currentKey = key;
         return supabaseInstance;
@@ -58,7 +64,8 @@ export const testSupabaseConnection = async (url: string, key: string) => {
 
         const connectionPromise = async () => {
              // Create a temp client for testing to avoid resetting the singleton unnecessarily
-             const supabase = createClient(url, key);
+             const supabase = getSupabaseClient(url, key);
+             if (!supabase) throw new Error('The separate preview database is not configured.');
              const { error } = await supabase.from('members').select('*', { count: 'exact', head: true });
              
              if (error) {
@@ -436,7 +443,7 @@ export const downloadDataFromSupabase = async (url: string, key: string, society
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error("Invalid Supabase configuration");
 
-    const usesTenantGateway = !!societyId && societyId.toLowerCase() !== 'gmct';
+    const usesTenantGateway = !IS_CANADA_MISSION_PREVIEW && !!societyId && societyId.toLowerCase() !== 'gmct';
     let members: Member[] = [];
     if (usesTenantGateway) {
         const membersDB = await tenantGatewayRequest(url, { resource: 'members', operation: 'list' });
@@ -465,6 +472,12 @@ export const downloadDataFromSupabase = async (url: string, key: string, society
     }
     const entries = entriesDB?.map(mapEntryFromDB) || [];
 
+    let users: User[] = [];
+    if (IS_CANADA_MISSION_PREVIEW) {
+        users = (await loadManagementAccess(supabase)).filter(a => a.active && (a.society_id === societyId || a.role === 'software-admin')).map(a => ({
+            username: a.email, role: a.role, societyId: a.society_id, assignedClass: a.class_number, classLed: a.class_number,
+        }));
+    } else {
     let userQuery = supabase.from('app_users').select('*');
     if (societyId) {
         if (societyId.toLowerCase() === 'gmct') {
@@ -477,7 +490,8 @@ export const downloadDataFromSupabase = async (url: string, key: string, society
     if (userErr && !(userErr.message?.includes('society_id') || (userErr as any).code === '42703')) {
         throw new Error(`Fetch Users failed: ${userErr.message}`);
     }
-    const users = usersDB?.map(mapUserFromDB) || [];
+    users = usersDB?.map(mapUserFromDB) || [];
+    }
 
     let history: WeeklyHistoryRecord[] = [];
     if (usesTenantGateway) {
@@ -486,7 +500,7 @@ export const downloadDataFromSupabase = async (url: string, key: string, society
     } else {
         let histQuery = supabase.from('weekly_history').select('*');
         if (societyId) {
-            histQuery = histQuery.or('society_id.eq.gmct,society_id.is.null');
+            histQuery = IS_CANADA_MISSION_PREVIEW ? histQuery.eq('society_id', societyId) : histQuery.or('society_id.eq.gmct,society_id.is.null');
         }
         const { data: historyDB, error: histErr } = await histQuery;
         if (histErr) throw new Error(`Fetch History failed: ${histErr.message}`);
@@ -819,7 +833,7 @@ export const deleteOrganizationFundTransaction = async (url: string, key: string
 };
 
 export const loadRequisitions = async (url: string, key: string, societyId?: string): Promise<Requisition[]> => {
-    if (societyId && societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (societyId && societyId.toLowerCase() !== 'gmct')) {
         try {
             const data = await tenantGatewayRequest(url, { resource: 'requisitions', operation: 'list' });
             return (data || []).map(mapRequisitionFromDB);
@@ -905,7 +919,7 @@ export const saveEntryToSupabase = async (url: string, key: string, entry: Entry
     const societyId = entry.societyId?.trim();
     if (!societyId) throw new Error('Entry society is required. Reload the selected society and try again.');
 
-    if (societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (societyId.toLowerCase() !== 'gmct')) {
         await tenantGatewayRequest(url, { resource: 'entries', operation: 'upsert', record: mapEntryToDB(entry) });
         return { success: true };
     }
@@ -943,7 +957,7 @@ export const saveEntryToSupabase = async (url: string, key: string, entry: Entry
 export const checkEntryDuplicateInSupabase = async (url: string, key: string, entry: Entry): Promise<boolean> => {
     if (!entry.memberID || !entry.date || !entry.type) return false;
 
-    if (entry.societyId && entry.societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (entry.societyId && entry.societyId.toLowerCase() !== 'gmct')) {
         try {
             return Boolean(await tenantGatewayRequest(url, {
                 resource: 'entries',
@@ -988,7 +1002,7 @@ export const markEntryAsDeletedInSupabase = async (
     deletedReason: string,
     entry?: Entry
 ) => {
-    if (entry?.societyId && entry.societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (entry?.societyId && entry.societyId.toLowerCase() !== 'gmct')) {
         await tenantGatewayRequest(url, {
             resource: 'entries',
             operation: 'mark-deleted',
@@ -1024,7 +1038,7 @@ export const logEntryDeletionToSupabase = async (
     deletedBy: string,
     deletionReason: string
 ) => {
-    if (entry.societyId && entry.societyId.toLowerCase() !== 'gmct') return { success: true };
+    if (!IS_CANADA_MISSION_PREVIEW && (entry.societyId && entry.societyId.toLowerCase() !== 'gmct')) return { success: true };
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
 
@@ -1056,7 +1070,7 @@ export const deleteEntryFromSupabase = async (url: string, key: string, entryId:
 };
 
 export const loadEntriesFromSupabase = async (url: string, key: string, societyId?: string): Promise<Entry[]> => {
-    if (societyId && societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (societyId && societyId.toLowerCase() !== 'gmct')) {
         try {
             const data = await tenantGatewayRequest(url, { resource: 'entries', operation: 'list' });
             return (data || []).map(mapEntryFromDB);
@@ -1077,7 +1091,7 @@ export const loadEntriesFromSupabase = async (url: string, key: string, societyI
 };
 
 export const loadMembersFromSupabase = async (url: string, key: string, societyId?: string): Promise<Member[]> => {
-    if (societyId && societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (societyId && societyId.toLowerCase() !== 'gmct')) {
         try {
             const data = await tenantGatewayRequest(url, { resource: 'members', operation: 'list' });
             return (data || []).map(mapMemberFromDB);
@@ -1115,7 +1129,7 @@ export const loadMembersFromSupabase = async (url: string, key: string, societyI
 };
 
 export const saveMemberToSupabase = async (url: string, key: string, member: Member) => {
-    if (member.societyId && member.societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (member.societyId && member.societyId.toLowerCase() !== 'gmct')) {
         const data = await tenantGatewayRequest(url, { resource: 'members', operation: 'upsert', record: mapMemberToDB(member) });
         return { success: true, member: mapMemberFromDB(data) } as { success: true; member: Member };
     }
@@ -1259,6 +1273,16 @@ export const uploadRequisitionAttachment = async (
 ): Promise<string> => {
     const supabase = getSupabaseClient(url, key);
     if (!supabase) throw new Error('Invalid Supabase configuration');
+
+    if (IS_CANADA_MISSION_PREVIEW) {
+        if (file.size > 5 * 1024 * 1024) throw new Error('Please use an attachment smaller than 5 MB.');
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error('Unable to read the attachment.'));
+            reader.readAsDataURL(file);
+        });
+    }
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${requisitionId}/${Date.now()}-${safeName}`;
@@ -1854,7 +1878,7 @@ export const loadAttendanceReport = async (url: string, key: string, startDate: 
 };
 
 export const saveWeeklyHistoryToSupabase = async (url: string, key: string, record: WeeklyHistoryRecord) => {
-    if (record.societyId && record.societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (record.societyId && record.societyId.toLowerCase() !== 'gmct')) {
         await tenantGatewayRequest(url, { resource: 'weekly_history', operation: 'upsert', record: mapHistoryToDB(record) });
         return { success: true };
     }
@@ -1867,7 +1891,7 @@ export const saveWeeklyHistoryToSupabase = async (url: string, key: string, reco
 };
 
 export const deleteWeeklyHistoryFromSupabase = async (url: string, key: string, id: string, societyId?: string) => {
-    if (societyId && societyId.toLowerCase() !== 'gmct') {
+    if (!IS_CANADA_MISSION_PREVIEW && (societyId && societyId.toLowerCase() !== 'gmct')) {
         await tenantGatewayRequest(url, { resource: 'weekly_history', operation: 'delete', recordId: id });
         return { success: true };
     }

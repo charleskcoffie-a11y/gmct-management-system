@@ -113,6 +113,7 @@ export type UserRole = 'software-admin' | 'admin' | 'finance-chair' | 'finance-t
 
 export interface User {
     username: string;
+    managementRole?: UserRole;
     password?: string; // Should be hashed in a real app, but plain for this exercise
     role: UserRole;
     classLed?: string; // For class-leader role: which class they manage

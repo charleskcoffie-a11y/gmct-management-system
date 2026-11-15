@@ -7,6 +7,11 @@ import EntryModal from './components/EntryModal';
 import ConfirmationModal from './components/ConfirmationModal';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import Login from './components/Login';
+import ManagementLogin from './components/ManagementLogin';
+import ManagementAccess from './components/ManagementAccess';
+import ManagementSettings from './components/ManagementSettings';
+import { setManagementSociety } from './services/managementClient';
+import { getSupabaseClient } from './services/supabase';
 import EntryWindowBanner from './components/EntryWindowBanner';
 import { ToastProvider } from './components/ToastProvider';
 import PasswordChangeModal from './components/PasswordChangeModal';
@@ -16,7 +21,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseAutoSync } from './hooks/useSupabaseAutoSync';
 import { sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeWeeklyHistoryRecord, capitalize, sanitizeDevelopmentFundEntry, formatCurrency, isMonthLocked, sanitizeNoNameEntry, sanitizeHarvestEntry, getNowEST, getTodayEST, isEntryWindowOpen, formatMethod } from './utils';
 import type { Entry, Member, Settings, User, UserRole, Tab, CloudState, WeeklyHistoryRecord, DevelopmentFundEntry, EntryType, MonthLock, NoNameEntry, HarvestEntry, ClassLeader, SundayLock, Requisition, ParkingReceipt, WesleyHallReceipt, Society } from './types';
-import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY, CANADA_MISSION_SOCIETIES, DEFAULT_SOCIETY } from './constants';
+import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES, SUPABASE_URL, SUPABASE_KEY, CANADA_MISSION_SOCIETIES, DEFAULT_SOCIETY, IS_CANADA_MISSION_PREVIEW } from './constants';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { saveEntryToSupabase, saveHarvestPledgeToSupabase, saveHarvestPledgePayment, loadHarvestPledgesFromSupabase, loadMembersFromSupabase, loadEntriesFromSupabase, loadRequisitions, loadParkingReceipts, loadWesleyHallReceipts, saveUserToSupabase, checkEntryDuplicateInSupabase, loadSocietiesFromSupabase } from './services/supabase';
 import type { HarvestPledge } from './services/supabase';
@@ -116,22 +121,24 @@ const App: React.FC = () => {
     // --- State Management (Database-Driven - No localStorage for data) ---
     const [entries, setEntries] = useState<Entry[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
-    const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+    const [users, setUsers] = useState<User[]>(IS_CANADA_MISSION_PREVIEW ? [] : INITIAL_USERS);
     const [classLeaders, setClassLeaders] = useState<ClassLeader[]>([]);
     const [storedSettings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
 
     // Multi-tenant Canada Mission Society Selection
     const [selectedSocietyId, setSelectedSocietyId] = useLocalStorage<string>('canada-mission-society-id', 'gmct');
-    const [isSelectingSociety, setIsSelectingSociety] = useState(false);
+    const [isSelectingSociety, setIsSelectingSociety] = useState(IS_CANADA_MISSION_PREVIEW);
     const [societies, setSocieties] = useState<Society[]>(CANADA_MISSION_SOCIETIES);
 
     const selectedSociety: Society = useMemo(() => {
         return societies.find(s => s.id === selectedSocietyId) || DEFAULT_SOCIETY;
     }, [selectedSocietyId, societies]);
+    if (IS_CANADA_MISSION_PREVIEW) setManagementSociety(selectedSociety.id);
 
     const settings = useMemo<Settings>(() => ({
         ...storedSettings,
-        maxClasses: selectedSociety.isPrimary
+        ...(IS_CANADA_MISSION_PREVIEW ? { supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY } : {}),
+        maxClasses: IS_CANADA_MISSION_PREVIEW ? storedSettings.maxClasses : selectedSociety.isPrimary
             ? storedSettings.maxClasses
             : selectedSociety.features.maxClasses ?? 5,
     }), [storedSettings, selectedSociety]);
@@ -208,12 +215,26 @@ const App: React.FC = () => {
         entries, members, history: weeklyHistory, users, monthLocks, sundayLocks, classLeaders
     }, {
         setEntries, setMembers, setHistory: setWeeklyHistory, setUsers, setMonthLocks, setSundayLocks, setSettings, setClassLeaders
-    }, selectedSociety.id);
+    }, selectedSociety.id, !IS_CANADA_MISSION_PREVIEW || !!currentUser);
     // Track whether we've ever reached a connected state; after that, don't block UI entirely
     const [hasConnected, setHasConnected] = useState(false);
     useEffect(() => {
         if (syncStatus.state === 'synced') setHasConnected(true);
     }, [syncStatus.state]);
+
+    useEffect(() => {
+        if (!IS_CANADA_MISSION_PREVIEW) return;
+        const client = getSupabaseClient(settings.supabaseUrl, settings.supabaseKey);
+        if (!client) return;
+        loadSocietiesFromSupabase(settings.supabaseUrl, settings.supabaseKey).then(setSocieties);
+        const { data } = client.auth.onAuthStateChange((_event, session) => {
+            if (!session) {
+                setCurrentUser(null); setHasConnected(false);
+                setEntries([]); setMembers([]); setWeeklyHistory([]); setUsers([]);
+            }
+        });
+        return () => data.subscription.unsubscribe();
+    }, [settings.supabaseUrl, settings.supabaseKey]);
     
     // --- Load All Data from Database on mount or when connection is ready / society changes ---
     useEffect(() => {
@@ -266,6 +287,7 @@ const App: React.FC = () => {
 
     // --- Seed ClassLeader user to database if it doesn't exist ---
     useEffect(() => {
+        if (IS_CANADA_MISSION_PREVIEW) return;
         if (!settings.supabaseUrl || !settings.supabaseKey || syncStatus.state !== 'synced') return;
         if (users.length === 0) return; // Wait for users to load
         
@@ -338,6 +360,7 @@ const App: React.FC = () => {
 
     // --- Load Harvest Pledges from Supabase on startup ---
     useEffect(() => {
+        if (IS_CANADA_MISSION_PREVIEW && !currentUser) return;
         if (!settings.supabaseUrl || !settings.supabaseKey) return;
         if (harvestPledges.length > 0) return; // Only load if empty
         
@@ -819,7 +842,13 @@ const App: React.FC = () => {
         }
     }, [currentUser]);
 
-    const handleLogout = () => setCurrentUser(null);
+    const handleLogout = () => {
+        setCurrentUser(null);
+        if (IS_CANADA_MISSION_PREVIEW) {
+            setEntries([]); setMembers([]); setWeeklyHistory([]); setUsers([]); setHasConnected(false);
+            getSupabaseClient(settings.supabaseUrl, settings.supabaseKey)?.auth.signOut({ scope: 'local' });
+        }
+    };
 
     // Keyboard shortcut navigation
     const handleNavigate = (page: string) => {
@@ -992,6 +1021,28 @@ const App: React.FC = () => {
     // --- Connection Gate: require cloud connection before using the app ---
     const isConfigured = !!settings.supabaseUrl && settings.supabaseUrl.trim() !== '' && !!settings.supabaseKey && settings.supabaseKey.trim() !== '';
 
+    if (IS_CANADA_MISSION_PREVIEW && !currentUser && isSelectingSociety) {
+        return <SocietySelector currentSocietyId={selectedSocietyId} societies={societies} logoUrl={settings.logoUrl}
+            onSelectSociety={society => { setSelectedSocietyId(society.id); setIsSelectingSociety(false); }} />;
+    }
+
+    if (IS_CANADA_MISSION_PREVIEW && !isConfigured) {
+        return <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6 text-slate-100">
+            <div className="max-w-xl rounded-3xl border border-indigo-400/30 bg-slate-900 p-8 text-center shadow-xl">
+                <p className="text-sm font-semibold text-indigo-300 mb-3">{selectedSociety.name}</p>
+                <h1 className="text-2xl font-bold mb-4">Your preview is ready for its database</h1>
+                <p className="text-slate-300 mb-6">A separate database must be connected before sign-in and records are available. This preview has no connection to the live GMCT database.</p>
+                <button className="rounded-xl bg-indigo-500 px-5 py-3 font-semibold hover:bg-indigo-400" onClick={() => setIsSelectingSociety(true)}>Choose another society</button>
+            </div>
+        </div>;
+    }
+
+    if (IS_CANADA_MISSION_PREVIEW && !currentUser) {
+        return <ManagementLogin settings={settings} society={selectedSociety}
+            onChangeSociety={() => setIsSelectingSociety(true)}
+            onSignedIn={user => { setCurrentUser(user); setActiveTab(user.role === 'statistician' ? 'weekly-history' : user.role === 'class-leader' ? 'attendance' : 'home'); }} />;
+    }
+
     if (!isConfigured) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50 p-6">
@@ -1057,6 +1108,13 @@ const App: React.FC = () => {
     const ENTRY_TYPES: EntryType[] = ["tithe", "offering", "thanksgiving-offering", "pledge", "harvest-levy", "womens-harvest", "mens-harvest", "youth-harvest", "youth-harvest-levy", "organizational-anniversary", "day-born", "lent-donation", "covenant", "development-fund", "childrens-ministry", "other"];
 
     const renderTabContent = () => {
+        if (IS_CANADA_MISSION_PREVIEW && (activeTab === 'users' || activeTab === 'settings')) {
+            if (currentUser.role !== 'admin') return <p className="p-8">Administrator access required.</p>;
+            if (activeTab === 'settings') return <ManagementSettings settings={settings} setSettings={setSettings} society={selectedSociety}
+                onSocietiesChanged={setSocieties} softwareAdmin={currentUser.managementRole === 'software-admin'} />;
+            return <ManagementAccess settings={settings} societies={societies} societyId={selectedSociety.id}
+                softwareAdmin={currentUser.managementRole === 'software-admin'} />;
+        }
         // Class leaders are restricted to attendance only
         if (currentUser.role === 'class-leader' && activeTab !== 'attendance') {
             return <div className="p-8 text-center text-slate-500">Access Denied. Class Leaders can only take attendance for their class.</div>;
@@ -2068,6 +2126,8 @@ const App: React.FC = () => {
     ];
 
     const isFeatureEnabled = (itemId: string): boolean => {
+        if (IS_CANADA_MISSION_PREVIEW && itemId === 'utilities') return false;
+        if (IS_CANADA_MISSION_PREVIEW && itemId === 'settings') return currentUser.role === 'admin';
         const features = selectedSociety.features || {};
         // Global system settings and database utilities are strictly reserved for GMCT primary admin
         if (itemId === 'settings' || itemId === 'utilities') return !!selectedSociety.isPrimary && currentUser.role === 'software-admin';
@@ -2087,7 +2147,7 @@ const App: React.FC = () => {
     const visibleSections = navSections
         .map(section => ({
             ...section,
-            items: section.items.filter(item => item.roles.includes(currentUser.role) && isFeatureEnabled(item.id))
+            items: section.items.filter(item => (item.roles.includes(currentUser.role) || (IS_CANADA_MISSION_PREVIEW && item.id === 'settings' && currentUser.role === 'admin')) && isFeatureEnabled(item.id))
         }))
         .filter(section => 
             section.items.length > 0 && section.roles.some(role => currentUser.role === role)

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import type { User, Settings } from '../types';
+import { IS_CANADA_MISSION_PREVIEW } from '../constants';
+import { getSupabaseClient } from '../services/supabase';
 import { saveUserToSupabase } from '../services/supabase';
 
 interface PasswordChangeModalProps {
@@ -28,7 +30,7 @@ const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ currentUser, 
         }
 
         // Validate new password - for class leaders, must be 4 digits
-        const isClassLeader = currentUser.role === 'class-leader';
+        const isClassLeader = !IS_CANADA_MISSION_PREVIEW && currentUser.role === 'class-leader';
         if (!newPassword) {
             setError('New password is required.');
             return;
@@ -42,8 +44,8 @@ const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ currentUser, 
             }
         } else {
             // Other roles: at least 4 characters
-            if (newPassword.trim().length < 4) {
-                setError('New password must be at least 4 characters.');
+            if (newPassword.trim().length < (IS_CANADA_MISSION_PREVIEW ? 8 : 4)) {
+                setError(IS_CANADA_MISSION_PREVIEW ? 'New password must be at least 8 characters.' : 'New password must be at least 4 characters.');
                 return;
             }
         }
@@ -61,6 +63,15 @@ const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ currentUser, 
         setIsSubmitting(true);
 
         try {
+            if (IS_CANADA_MISSION_PREVIEW) {
+                const client = getSupabaseClient(settings.supabaseUrl, settings.supabaseKey);
+                if (!client) throw new Error('Account connection unavailable.');
+                const { error } = await client.auth.updateUser({ password: newPassword });
+                if (error) throw error;
+                alert('Your shared Canada Mission account password has been updated.');
+                onClose();
+                return;
+            }
             const updatedUser: User = {
                 ...currentUser,
                 password: newPassword
@@ -86,8 +97,9 @@ const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ currentUser, 
                 <form onSubmit={handleSubmit}>
                     <div className="p-6 border-b">
                         <h2 className="text-xl font-bold text-gray-800">Change Password</h2>
+                        {IS_CANADA_MISSION_PREVIEW && <p className="mt-2 text-sm text-indigo-700">This updates the shared account password used wherever you sign in to Canada Mission.</p>}
                         <p className="text-sm text-gray-600 mt-1">Update your password for user: <span className="font-semibold">{currentUser.username}</span></p>
-                        {currentUser.role === 'class-leader' && (
+                        {!IS_CANADA_MISSION_PREVIEW && currentUser.role === 'class-leader' && (
                             <p className="text-sm text-blue-600 bg-blue-50 rounded p-2 mt-2 border border-blue-200">📱 Enter a 4-digit PIN number (0-9 only)</p>
                         )}
                     </div>
