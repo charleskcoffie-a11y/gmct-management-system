@@ -338,7 +338,7 @@ const mapSettingsToDB = (s: Settings) => ({
     org_phone: s.orgPhone,
     org_email: s.orgEmail,
     charity_number: s.charityNumber,
-    ...(IS_CANADA_MISSION_PREVIEW ? { official_tax_receipts_enabled: s.officialTaxReceiptsEnabled === true } : {}),
+    ...(IS_CANADA_MISSION_PREVIEW && typeof s.officialTaxReceiptsEnabled === 'boolean' ? { official_tax_receipts_enabled: s.officialTaxReceiptsEnabled } : {}),
     signature_image: s.signatureImage,
     annual_levy_amount: s.annualLevyAmount,
     etransfer_notification_email: s.etransferNotificationEmail,

@@ -341,7 +341,7 @@ const TaxReceipts: React.FC<TaxReceiptsProps> = ({ entries, harvestEntries, memb
             </div>
             {IS_CANADA_MISSION_PREVIEW && <div role="status" className={`no-print rounded-xl border p-4 text-sm ${receiptApproval ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
                 <strong>{receiptApproval ? 'Official receipts enabled' : 'Draft receipts'}</strong>
-                <p className="mt-1">{receiptApproval ? 'Receipts with a donor mailing address can be generated as official receipts.' : 'Receipts are marked DRAFT - NOT VALID FOR TAX PURPOSES. An administrator can enable official receipts in Settings → Tax receipt approval.'}</p>
+                <p className="mt-1">{receiptApproval ? 'Receipts with a donor mailing address can be generated as official receipts.' : 'Receipts are marked DRAFT - NOT VALID FOR TAX PURPOSES. An administrator can enable official receipts in Settings → Tax receipts → Tax receipt approval.'}</p>
             </div>}
             {profileMessage && <p className="no-print text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">{profileMessage}</p>}
 

@@ -40,13 +40,13 @@ Management sessions use a separate browser storage key. Changing a password upda
 
 ## Society page controls
 
-The Software Administrator can open **Settings → Pages for each society**, select any society and choose its pages. **Basic pages** selects financial records, members, financial reports, weekly history and tax receipts; **All pages** enables every optional page. Neither preset is applied until **Save society pages** is pressed.
+The Software Administrator can open **Settings → Society pages → Pages for each society**, select any society and choose its pages. **Basic pages** selects financial records, members, financial reports, weekly history and tax receipts; **All pages** enables every optional page. Neither preset is applied until **Save society pages** is pressed.
 
 Class attendance controls both entry and attendance reports. The same page map filters the navigation and checks pages opened by shortcuts. Home, Settings and Manage Users remain available to their permitted administrator roles. Existing explicit feature choices are preserved; attendance defaults off for a smaller society when it has no saved choice. Newly created societies start with Basic pages.
 
 ## Tax receipt approval
 
-Tax receipts start in draft mode for every society in the isolated preview. A Society Administrator or Software Administrator opens **Settings → Tax receipt approval**, enables **official tax receipts**, and saves settings for the current society. This approval is separate from the Tax Receipts page switch. Finance Chairs can read approval but cannot change it. The receipt page refreshes approval when opened, focused, and periodically; PDF downloads recheck the database and fall back to drafts when verification fails. A missing donor mailing address also keeps that donor's receipt in draft mode.
+Tax receipts start in draft mode for every society in the isolated preview. A Society Administrator or Software Administrator opens **Settings → Tax receipts → Tax receipt approval**, enables **official tax receipts**, and saves settings for the current society. This approval is separate from the Tax Receipts page switch. Finance Chairs can read approval but cannot change it. The receipt page refreshes approval when opened, focused, and periodically; PDF downloads recheck the database and fall back to drafts when verification fails. A missing donor mailing address also keeps that donor's receipt in draft mode.
 
 Draft screen and PDF copies use draft references, clearly say **DRAFT - NOT VALID FOR TAX PURPOSES**, omit signature images, and mark continued PDF breakdown pages. Enabling approval does not alter previously downloaded files; generate a new PDF after approval. `sql/cmms_tax_receipt_approval.sql` adds only the management settings flag and preserves the existing admin-only policies and redacted API view.
 
