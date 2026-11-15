@@ -30,3 +30,34 @@ test('every management network request includes the selected society', async () 
         assert.equal(sent.get('Authorization'), 'Bearer test-only');
     } finally { globalThis.fetch = originalFetch; }
 });
+
+test('member saves can select, filter by ID and limit the returned saved rows', async () => {
+    const saved = [{ id: 'other-member', name: 'Other' }, { id: 'new-member', name: 'New member' }];
+    let writes = 0;
+    const client = {
+        from() { return {}; },
+        async rpc(name, payload) {
+            writes++;
+            assert.equal(name, 'cmms_upsert_records');
+            assert.equal(payload.target_table, 'members');
+            assert.deepEqual(payload.records, saved);
+            return { data: saved, error: null };
+        },
+    };
+    installManagementDataAdapter(client);
+    const result = await client.from('members').upsert(saved, { onConflict: 'id' })
+        .select('*').eq('id', 'new-member').limit(1);
+    assert.equal(writes, 1);
+    assert.deepEqual(result.data, [saved[1]]);
+    assert.equal(result.error, null);
+});
+
+test('filtered member saves preserve database errors', async () => {
+    const failure = { message: 'Member save denied', code: '42501' };
+    const client = { from() { return {}; }, async rpc() { return { data: null, error: failure }; } };
+    installManagementDataAdapter(client);
+    const result = await client.from('members').upsert({ id: 'member-id' })
+        .select('*').eq('id', 'member-id').limit(1);
+    assert.equal(result.data, null);
+    assert.equal(result.error, failure);
+});

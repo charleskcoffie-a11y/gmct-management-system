@@ -27,12 +27,20 @@ export function installManagementDataAdapter(client: SupabaseClient) {
                 };
                 if (property === 'upsert') return (values: unknown) => {
                     let singular = false;
+                    const filters: Array<(row: any) => boolean> = [];
+                    let maxRows: number | undefined;
                     const run = async () => {
                         const response = await client.rpc('cmms_upsert_records', { target_table: relation, records: values });
-                        return { ...response, data: singular ? response.data?.[0] ?? null : response.data };
+                        if (response.error || !Array.isArray(response.data)) return response;
+                        // These modifiers shape only returned rows; the RPC enforces society access for every write.
+                        let rows = response.data.filter(row => filters.every(matches => matches(row)));
+                        if (maxRows !== undefined) rows = rows.slice(0, maxRows);
+                        return { ...response, data: singular ? rows[0] ?? null : rows };
                     };
                     const operation: any = {
                         select: () => operation,
+                        eq: (column: string, value: unknown) => { filters.push(row => row[column] === value); return operation; },
+                        limit: (count: number) => { maxRows = Math.max(0, Math.floor(count)); return operation; },
                         single: () => { singular = true; return operation; },
                         maybeSingle: () => { singular = true; return operation; },
                         then: (resolve: any, reject: any) => run().then(resolve, reject),

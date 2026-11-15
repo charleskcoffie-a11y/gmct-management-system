@@ -153,11 +153,10 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings, entrie
                 'success',
                 3000
             );
+            setIsModalOpen(false);
         } catch (e: any) {
             showToast(`❌ Save failed: ${e.message || e}`, 'error', 5000);
         }
-        
-        setIsModalOpen(false);
     };
 
     // Auto-hide the sync confirmation after a short duration
