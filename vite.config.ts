@@ -7,7 +7,7 @@ const base = process.env.VITE_BASE ?? "/";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
-  const isPreview = env.VITE_CANADA_MISSION_PREVIEW === 'true';
+  const isPreview = env.VITE_CANADA_MISSION_PREVIEW !== 'false';
   const database = resolvePreviewDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
   const connectSources = ["'self'"];
   if (database.ready) connectSources.push(database.url, database.url.replace('https:', 'wss:'));

@@ -2,7 +2,7 @@
 import type { Society } from './types';
 import { resolvePreviewDatabase } from './services/previewDatabase';
 
-export const IS_CANADA_MISSION_PREVIEW = import.meta.env.VITE_CANADA_MISSION_PREVIEW === 'true';
+export const IS_CANADA_MISSION_PREVIEW = import.meta.env.VITE_CANADA_MISSION_PREVIEW !== 'false';
 const previewDatabase = resolvePreviewDatabase(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 // --- App Defaults ---

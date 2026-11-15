@@ -21,7 +21,7 @@ VITE_SUPABASE_URL=https://wqdcxqnagftyshqxltec.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-Use the project publishable key, never a service-role or secret key. Missing configuration keeps the preview disconnected. The preview rejects the live GMCT project and pins its connection to the configured project. Its content-security policy permits connections only to its own origin and the selected Supabase project.
+Use the project publishable key, never a service-role or secret key. Management mode is the default on this feature branch. Missing configuration keeps the preview disconnected; starting locally without an environment file never falls back to GMCT. The preview rejects the live GMCT project and pins its connection to the configured project. Its content-security policy permits connections only to its own origin and the selected Supabase project.
 
 ```sh
 npm ci
