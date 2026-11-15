@@ -38,6 +38,12 @@ npm run dev
 
 Management sessions use a separate browser storage key. Changing a password updates the shared account password. Signing out of management clears that management session.
 
+## Society page controls
+
+The Software Administrator can open **Settings → Pages for each society**, select any society and choose its pages. **Basic pages** selects financial records, members, financial reports, weekly history and tax receipts; **All pages** enables every optional page. Neither preset is applied until **Save society pages** is pressed.
+
+Class attendance controls both entry and attendance reports. The same page map filters the navigation and checks pages opened by shortcuts. Home, Settings and Manage Users remain available to their permitted administrator roles. Existing explicit feature choices are preserved; attendance defaults off for a smaller society when it has no saved choice. Newly created societies start with Basic pages.
+
 ## Database setup history
 
 The scripts are saved for review and reproducibility; do not rerun bootstrap on an initialized schema.
@@ -51,7 +57,7 @@ The private credential compatibility tables are not exposed to browser clients. 
 ## Validation
 
 ```sh
-node --test tests/preview-database.test.mjs tests/management-client.test.mjs
+node --test tests/preview-database.test.mjs tests/management-client.test.mjs tests/society-pages.test.mjs
 npm run build
 ```
 

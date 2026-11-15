@@ -123,6 +123,15 @@ export interface User {
 
 export interface SocietyFeatures {
     maxClasses?: number;
+    financialRecords?: boolean;
+    memberDirectory?: boolean;
+    attendance?: boolean;
+    noName?: boolean;
+    financialControl?: boolean;
+    insights?: boolean;
+    financialReports?: boolean;
+    weeklyHistory?: boolean;
+    upcomingBirthdays?: boolean;
     wesleyHall?: boolean;
     parking?: boolean;
     etransfers?: boolean;

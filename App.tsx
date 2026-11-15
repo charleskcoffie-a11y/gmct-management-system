@@ -11,6 +11,7 @@ import ManagementLogin from './components/ManagementLogin';
 import ManagementAccess from './components/ManagementAccess';
 import ManagementSettings from './components/ManagementSettings';
 import { setManagementSociety } from './services/managementClient';
+import { isSocietyPageEnabled } from './services/societyPages';
 import { getSupabaseClient } from './services/supabase';
 import EntryWindowBanner from './components/EntryWindowBanner';
 import { ToastProvider } from './components/ToastProvider';
@@ -1110,10 +1111,13 @@ const App: React.FC = () => {
     const renderTabContent = () => {
         if (IS_CANADA_MISSION_PREVIEW && (activeTab === 'users' || activeTab === 'settings')) {
             if (currentUser.role !== 'admin') return <p className="p-8">Administrator access required.</p>;
-            if (activeTab === 'settings') return <ManagementSettings settings={settings} setSettings={setSettings} society={selectedSociety}
+            if (activeTab === 'settings') return <ManagementSettings settings={settings} setSettings={setSettings} society={selectedSociety} societies={societies}
                 onSocietiesChanged={setSocieties} softwareAdmin={currentUser.managementRole === 'software-admin'} />;
             return <ManagementAccess settings={settings} societies={societies} societyId={selectedSociety.id}
                 softwareAdmin={currentUser.managementRole === 'software-admin'} />;
+        }
+        if (IS_CANADA_MISSION_PREVIEW && !isSocietyPageEnabled(activeTab, selectedSociety.features || {}, !!selectedSociety.isPrimary)) {
+            return <div className="mx-auto my-8 max-w-xl rounded-2xl border bg-white p-8 text-center"><h2 className="text-xl font-bold">This page is not enabled</h2><p className="mt-3 text-slate-600">Your administrator can enable it for {selectedSociety.name} in Settings.</p></div>;
         }
         // Class leaders are restricted to attendance only
         if (currentUser.role === 'class-leader' && activeTab !== 'attendance') {
@@ -2128,6 +2132,7 @@ const App: React.FC = () => {
     const isFeatureEnabled = (itemId: string): boolean => {
         if (IS_CANADA_MISSION_PREVIEW && itemId === 'utilities') return false;
         if (IS_CANADA_MISSION_PREVIEW && itemId === 'settings') return currentUser.role === 'admin';
+        if (IS_CANADA_MISSION_PREVIEW) return isSocietyPageEnabled(itemId, selectedSociety.features || {}, !!selectedSociety.isPrimary);
         const features = selectedSociety.features || {};
         // Global system settings and database utilities are strictly reserved for GMCT primary admin
         if (itemId === 'settings' || itemId === 'utilities') return !!selectedSociety.isPrimary && currentUser.role === 'software-admin';

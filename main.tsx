@@ -80,7 +80,7 @@ const root = createRoot(document.getElementById('root')!);
 root.render(
   <React.StrictMode>
     {IS_CANADA_MISSION_PREVIEW && <div role="status" style={{ background: '#172554', color: '#fff', textAlign: 'center', padding: '10px 16px', font: '600 13px system-ui' }}>
-      CANADA MISSION MANAGEMENT · PREVIEW · Separate database
+      CANADA MISSION · PREVIEW
     </div>}
     <AppWithToasts />
   </React.StrictMode>
